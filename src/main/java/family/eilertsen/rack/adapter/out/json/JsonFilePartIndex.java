@@ -2,6 +2,7 @@ package family.eilertsen.rack.adapter.out.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.SearchHit;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
@@ -15,8 +16,10 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -96,7 +99,37 @@ public class JsonFilePartIndex implements PartIndex {
 
     @Override
     public List<SearchHit> searchByKeyword(String query) {
-        return List.of();
+        if (query == null || query.isBlank()) return List.of();
+        String q = query.toLowerCase(Locale.ROOT);
+        List<SearchHit> hits = new ArrayList<>();
+        for (Map.Entry<ContainerId, Map<SlotId, Slot>> e : byContainer.entrySet()) {
+            ContainerId cid = e.getKey();
+            for (Slot slot : e.getValue().values()) {
+                for (Item item : slot.items()) {
+                    double score = matchScore(item, q);
+                    if (score > 0) {
+                        hits.add(new SearchHit(cid, slot.id(), item, score, slot.lastVerified()));
+                    }
+                }
+            }
+        }
+        hits.sort((a, b) -> Double.compare(b.score(), a.score()));
+        return hits;
+    }
+
+    private static double matchScore(Item item, String q) {
+        double score = 0;
+        if (contains(item.partNumber(), q)) score += 3;
+        if (contains(item.description(), q)) score += 2;
+        if (contains(item.category(), q)) score += 1;
+        if (item.tags() != null) {
+            for (String tag : item.tags()) if (contains(tag, q)) { score += 1; break; }
+        }
+        return score;
+    }
+
+    private static boolean contains(String s, String q) {
+        return s != null && s.toLowerCase(Locale.ROOT).contains(q);
     }
 
     @Override
