@@ -100,7 +100,9 @@
 
       sugHeading.hidden = false;
       if (sugs.length) {
-        suggestions.innerHTML = sugs.map((s, i) => renderSuggestion(s, i === 0)).join('');
+        suggestions.innerHTML =
+          sugs.map((s, i) => renderSuggestion(s, i === 0)).join('') +
+          '<li class="none">None of these? <a href="/put.html">Pick another slot</a>.</li>';
       } else {
         suggestions.innerHTML =
           '<li class="none">Nothing similar filed yet. ' +
