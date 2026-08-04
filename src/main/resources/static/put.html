@@ -376,14 +376,19 @@
       const file = photo.files[0];
       if (!file) return;
 
-      pendingPhoto = await resize(file);
-      photo.value = '';
+      // Show the preview + status FIRST so mobile paints immediately.
       preview.innerHTML = '<img src="' + URL.createObjectURL(file) + '">';
       extractedEl.innerHTML = '';
       suggestionsEl.innerHTML = '';
       extractedHeading.hidden = true;
       pickHeading.hidden = true;
       captureLabel.textContent = 'Not what you wanted? Retake';
+      setStatus('', 'Preparing photo…');
+      // Yield a frame so the paint above lands before we start heavy work.
+      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+      pendingPhoto = await resize(file);
+      photo.value = '';
       updateManualFileBtn();
 
       if (selectedContainer && selectedSlot) {
