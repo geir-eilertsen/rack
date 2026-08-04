@@ -71,6 +71,8 @@
 
     let controller = null;
     let debounce = null;
+    let containers = [];
+    fetch('/c').then(r => r.ok ? r.json() : []).then(list => containers = list).catch(() => {});
 
     q.addEventListener('input', () => {
       clearTimeout(debounce);
@@ -180,6 +182,16 @@
               '<button class="btn ask-btn">Ask</button>' +
             '</div>' +
           '</div>' +
+          '<details class="move-panel">' +
+            '<summary>Move to another slot…</summary>' +
+            '<div class="move-body">' +
+              '<div class="picker-label">Container</div>' +
+              '<div class="containers move-containers"></div>' +
+              '<div class="picker-label">Slot</div>' +
+              '<div class="slots-grid move-slots"></div>' +
+              '<button class="btn primary move-btn" disabled>Pick a destination</button>' +
+            '</div>' +
+          '</details>' +
         '</div>' +
       '</li>';
     }
@@ -242,6 +254,99 @@
       hits.querySelectorAll('.remove').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); removeHit(b.closest('li')); }));
       hits.querySelectorAll('.ask-btn').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); askHit(b.closest('li')); }));
       hits.querySelectorAll('.ai-q').forEach(inp => inp.addEventListener('click', e => e.stopPropagation()));
+      hits.querySelectorAll('.move-panel').forEach(panel => wireMovePanel(panel));
+    }
+
+    function wireMovePanel(panel) {
+      const containersHost = panel.querySelector('.move-containers');
+      const slotsHost = panel.querySelector('.move-slots');
+      const moveBtn = panel.querySelector('.move-btn');
+      const li = panel.closest('li');
+      const srcContainer = li.dataset.container;
+      const srcSlot = li.dataset.slot;
+      let picked = { container: null, slot: null };
+
+      panel.addEventListener('click', ev => ev.stopPropagation());
+      panel.addEventListener('toggle', () => {
+        if (panel.open && !containersHost.children.length) drawContainers();
+      });
+
+      function drawContainers() {
+        containersHost.innerHTML = '';
+        containers.forEach(c => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'container-btn';
+          btn.textContent = c.name || c.id;
+          btn.addEventListener('click', ev => { ev.stopPropagation(); pickContainer(c, btn); });
+          containersHost.appendChild(btn);
+        });
+      }
+
+      async function pickContainer(c, btn) {
+        picked.container = c;
+        picked.slot = null;
+        containersHost.querySelectorAll('.container-btn').forEach(el => el.classList.toggle('selected', el === btn));
+        slotsHost.innerHTML = '<span style="font-size:.8rem;color:var(--muted)">Loading…</span>';
+        moveBtn.disabled = true;
+        moveBtn.textContent = 'Pick a destination';
+        let filled = new Set();
+        try {
+          const res = await fetch('/c/' + c.id + '/summary');
+          if (res.ok) {
+            const summary = await res.json();
+            filled = new Set(summary.filter(s => s.item_count > 0).map(s => s.slot));
+          }
+        } catch (e) { /* ignore */ }
+        drawSlots(c, filled);
+      }
+
+      function drawSlots(c, filled) {
+        slotsHost.innerHTML = '';
+        (c.slots || []).forEach(sid => {
+          const isCurrent = c.id === srcContainer && sid === srcSlot;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'slot-btn' + (filled.has(sid) ? ' filled' : '') + (isCurrent ? ' selected' : '');
+          btn.textContent = sid;
+          btn.disabled = isCurrent;
+          if (isCurrent) btn.title = 'current slot';
+          btn.addEventListener('click', ev => { ev.stopPropagation(); pickSlot(sid, btn); });
+          slotsHost.appendChild(btn);
+        });
+      }
+
+      function pickSlot(sid, btn) {
+        picked.slot = sid;
+        slotsHost.querySelectorAll('.slot-btn').forEach(el => el.classList.toggle('selected', el === btn));
+        moveBtn.disabled = false;
+        moveBtn.textContent = 'Move to ' + picked.container.id + '.' + sid;
+      }
+
+      moveBtn.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        if (!picked.container || !picked.slot) return;
+        const idx = +li.dataset.index;
+        const original = moveBtn.textContent;
+        moveBtn.disabled = true;
+        moveBtn.textContent = 'Moving…';
+        try {
+          const res = await fetch('/c/' + srcContainer + '/' + srcSlot + '/items/' + idx + '/move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target_container: picked.container.id, target_slot: picked.slot })
+          });
+          if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+          status.className = 'status ok';
+          status.textContent = '✓ Moved to ' + picked.container.id + '.' + picked.slot + '.';
+          runSearch();
+        } catch (e) {
+          status.className = 'status error';
+          status.textContent = 'Move failed: ' + e.message;
+          moveBtn.disabled = false;
+          moveBtn.textContent = original;
+        }
+      });
     }
 
     async function askHit(li) {

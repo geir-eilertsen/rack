@@ -4,6 +4,7 @@ import family.eilertsen.rack.application.AddPhotoToSlot;
 import family.eilertsen.rack.application.AskAboutItem;
 import family.eilertsen.rack.application.ContainerRegistry;
 import family.eilertsen.rack.application.EditItem;
+import family.eilertsen.rack.application.MoveItem;
 import family.eilertsen.rack.application.RegisterContainer;
 import family.eilertsen.rack.application.RemoveItem;
 import family.eilertsen.rack.domain.model.Container;
@@ -41,18 +42,20 @@ public class ContainerController {
     private final RegisterContainer registerContainer;
     private final RemoveItem removeItem;
     private final EditItem editItem;
+    private final MoveItem moveItem;
     private final AskAboutItem askAboutItem;
     private final ImageStore images;
 
     public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto,
                                 RegisterContainer registerContainer, RemoveItem removeItem,
-                                EditItem editItem, AskAboutItem askAboutItem, ImageStore images) {
+                                EditItem editItem, MoveItem moveItem, AskAboutItem askAboutItem, ImageStore images) {
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
         this.registerContainer = registerContainer;
         this.removeItem = removeItem;
         this.editItem = editItem;
+        this.moveItem = moveItem;
         this.askAboutItem = askAboutItem;
         this.images = images;
     }
@@ -148,6 +151,27 @@ public class ContainerController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
         }
     }
+
+    @PostMapping("/{container}/{slot}/items/{index}/move")
+    public Slot moveItem(@PathVariable String container,
+                          @PathVariable String slot,
+                          @PathVariable int index,
+                          @RequestBody MoveRequest req) {
+        ContainerId srcC = new ContainerId(container);
+        SlotId srcS = new SlotId(slot);
+        requireContainerExists(srcC);
+        ContainerId dstC = new ContainerId(req.targetContainer());
+        SlotId dstS = new SlotId(req.targetSlot());
+        try {
+            return moveItem.execute(srcC, srcS, index, dstC, dstS);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        } catch (IndexOutOfBoundsException | java.util.NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+        }
+    }
+
+    public record MoveRequest(String targetContainer, String targetSlot) {}
 
     @PostMapping("/{container}/{slot}/items/{index}/ask")
     public Slot askItem(@PathVariable String container,

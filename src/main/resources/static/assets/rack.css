@@ -413,3 +413,12 @@ label.field {
 .qa-history > summary { cursor: pointer; font-size: .78rem; color: var(--muted); padding: .25rem 0; }
 .qa-history > summary:hover { color: var(--text); }
 .qa-history[open] > summary { margin-bottom: .35rem; }
+
+/* Move-item panel inside an item's edit form */
+.move-panel { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--border); }
+.move-panel > summary { cursor: pointer; font-size: .7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: .25rem 0; }
+.move-panel > summary:hover { color: var(--text); }
+.move-panel[open] > summary { margin-bottom: .5rem; }
+.move-panel .move-body > .picker-label { margin-top: .5rem; }
+.move-panel .move-body > .picker-label:first-child { margin-top: 0; }
+.move-panel .move-btn { display: block; width: 100%; margin-top: .6rem; }
