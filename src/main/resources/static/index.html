@@ -7,24 +7,39 @@
   <style>
     body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 1rem; max-width: 640px; color: #222; }
     h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
-    .subtitle { color: #666; margin: 0 0 1.5rem; font-size: .9rem; }
+    .subtitle { color: #666; margin: 0 0 .5rem; font-size: .9rem; }
+    .hint { color: #666; font-size: .8rem; margin: 0 0 1.25rem; padding: .5rem .75rem; background: #f0f5ff; border-left: 3px solid #4a76c4; border-radius: 3px; }
     ul { list-style: none; padding: 0; margin: 0; }
     li { margin: 0 0 .75rem; }
     a.card { display: block; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; text-decoration: none; color: inherit; background: #fafafa; }
     a.card:hover, a.card:focus { border-color: #999; background: #f0f0f0; }
     a.card h2 { margin: 0 0 .25rem; font-size: 1.05rem; }
     a.card p { margin: 0; color: #666; font-size: .85rem; }
+    .section { color: #666; font-size: .75rem; margin: 1.25rem 0 .5rem; text-transform: uppercase; letter-spacing: .05em; }
   </style>
 </head>
 <body>
   <h1>rack</h1>
   <p class="subtitle">drawer inventory</p>
+  <p class="hint">Tip: scan a drawer's QR to jump straight to that slot. No QR? Every action also has a manual picker.</p>
 
   <ul>
     <li>
       <a class="card" href="/find.html">
         <h2>Find something</h2>
-        <p>Search all filed slots by keyword. Shows what's where.</p>
+        <p>Search all filed slots by keyword.</p>
+      </a>
+    </li>
+    <li>
+      <a class="card" href="/put.html">
+        <h2>Remove from a slot</h2>
+        <p>Pick or scan a slot, tap &times; on the item you took out.</p>
+      </a>
+    </li>
+    <li>
+      <a class="card" href="/put.html">
+        <h2>Add to a slot</h2>
+        <p>Pick or scan a slot, take a photo, contents get filed.</p>
       </a>
     </li>
     <li>
@@ -36,19 +51,17 @@
     <li>
       <a class="card" href="/identify.html">
         <h2>Identify a part</h2>
-        <p>Take a photo, get back what it is.</p>
+        <p>Take a photo, get back what it is. Doesn't touch inventory.</p>
       </a>
     </li>
+  </ul>
+
+  <div class="section">Setup</div>
+  <ul>
     <li>
       <a class="card" href="/register.html">
         <h2>Register a container</h2>
         <p>Add a new rack, bin, or shelf. Pick a shape, get labels for it.</p>
-      </a>
-    </li>
-    <li>
-      <a class="card" href="/put.html">
-        <h2>Add to slot</h2>
-        <p>Pick a container and slot, take a photo, contents get filed.</p>
       </a>
     </li>
     <li>
