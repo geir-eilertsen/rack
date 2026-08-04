@@ -412,7 +412,7 @@
     }
 
     async function fileToSelectedSlot() {
-      setStatus('', 'Filing into ' + selectedContainer.id + '.' + selectedSlot + '...');
+      setStatus('', 'Filing into ' + selectedContainer.id + '.' + selectedSlot + ' — Claude is extracting…');
       const form = new FormData();
       form.append('photo', pendingPhoto);
       try {
@@ -421,10 +421,13 @@
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const data = await res.json();
         const extracted = data.extracted || [];
-        setStatus('ok', 'Filed ' + extracted.length + ' item(s) into ' + selectedContainer.id + '.' + selectedSlot + '.');
+        const count = extracted.length;
+        setStatus('ok', '✓ Filed ' + count + ' item' + (count === 1 ? '' : 's') + ' into ' + selectedContainer.id + '.' + selectedSlot + '.');
         renderExtracted(extracted);
         pendingPhoto = null;
+        preview.innerHTML = '';
         refreshUiForSelection();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (e) {
         setStatus('error', 'Failed: ' + e.message);
       }
@@ -455,7 +458,7 @@
         '</li>';
       }).join('');
       suggestionsEl.querySelectorAll('button').forEach(btn => {
-        btn.addEventListener('click', () => fileToPicked(btn.dataset.c, btn.dataset.s));
+        btn.addEventListener('click', () => fileToPicked(btn.dataset.c, btn.dataset.s, btn));
       });
     }
 
@@ -511,13 +514,18 @@
 
     fileManualBtn.addEventListener('click', () => {
       if (selectedContainer && selectedSlot && pendingPhoto) {
-        fileToPicked(selectedContainer.id, selectedSlot);
+        fileToPicked(selectedContainer.id, selectedSlot, fileManualBtn);
       }
     });
 
-    async function fileToPicked(containerId, slotId) {
+    async function fileToPicked(containerId, slotId, triggerBtn) {
       if (!pendingPhoto) { setStatus('error', 'No photo to file.'); return; }
-      setStatus('', 'Filing into ' + containerId + '.' + slotId + '...');
+      const originalText = triggerBtn ? triggerBtn.textContent : '';
+      const allBtns = [];
+      suggestionsEl.querySelectorAll('button').forEach(b => { b.disabled = true; allBtns.push(b); });
+      if (fileManualBtn && !fileManualBtn.disabled) { fileManualBtn.disabled = true; allBtns.push(fileManualBtn); }
+      if (triggerBtn) triggerBtn.textContent = 'Filing…';
+      setStatus('', 'Filing into ' + containerId + '.' + slotId + ' — Claude is extracting…');
       const form = new FormData();
       form.append('photo', pendingPhoto);
       try {
@@ -525,15 +533,20 @@
         const res = await fetch(url, { method: 'POST', body: form });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const data = await res.json();
-        setStatus('ok', 'Filed ' + (data.extracted || []).length + ' item(s) into ' + containerId + '.' + slotId + '.');
+        const count = (data.extracted || []).length;
+        setStatus('ok', '✓ Filed ' + count + ' item' + (count === 1 ? '' : 's') + ' into ' + containerId + '.' + slotId + '.');
         pendingPhoto = null;
         suggestionsEl.innerHTML = '';
         pickHeading.hidden = true;
+        preview.innerHTML = '';
         selectedContainer = containers.find(c => c.id === containerId) || selectedContainer;
         selectedSlot = slotId;
         refreshUiForSelection();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (e) {
         setStatus('error', 'Failed: ' + e.message);
+        allBtns.forEach(b => b.disabled = false);
+        if (triggerBtn) triggerBtn.textContent = originalText;
       }
     }
 
