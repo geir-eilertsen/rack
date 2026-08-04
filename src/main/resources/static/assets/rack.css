@@ -338,12 +338,24 @@ label.field {
   transition: background .15s ease, border-color .15s ease;
 }
 .slot-btn:hover { background: var(--primary-soft); border-color: var(--border-strong); }
+.slot-btn.filled {
+  background: var(--primary-soft);
+  border-color: var(--border-strong);
+  color: var(--primary-hover);
+  font-weight: 600;
+}
+.slot-btn.filled:hover { background: #f7d4bb; }
 .slot-btn.selected {
   background: var(--primary);
   color: #fff;
   border-color: var(--primary);
   font-weight: 700;
 }
+.slot-btn.selected:hover { background: var(--primary-hover); }
+.slots-legend { font-size: .72rem; color: var(--muted); margin: .35rem 0 .3rem; display: flex; gap: .8rem; }
+.slots-legend .swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; vertical-align: middle; margin-right: .25rem; }
+.slots-legend .swatch.empty { background: var(--card); border: 1px solid var(--border); }
+.slots-legend .swatch.filled { background: var(--primary-soft); border: 1px solid var(--border-strong); }
 
 /* Sections */
 .section-title {

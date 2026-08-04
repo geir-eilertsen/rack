@@ -78,6 +78,30 @@ public class ContainerController {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown container: " + container));
     }
 
+    @GetMapping("/{container}/summary")
+    public List<SlotSummary> summary(@PathVariable String container) {
+        ContainerId cid = new ContainerId(container);
+        Container c = registry.get(cid)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown container: " + container));
+        java.util.Map<SlotId, Slot> byId = new java.util.HashMap<>();
+        for (Slot s : index.all(cid)) byId.put(s.id(), s);
+        return c.slots().stream()
+            .map(sid -> {
+                Slot s = byId.get(sid);
+                if (s == null) return new SlotSummary(sid.value(), 0, 0, false, null);
+                return new SlotSummary(
+                    sid.value(),
+                    s.items() == null ? 0 : s.items().size(),
+                    s.photos() == null ? 0 : s.photos().size(),
+                    s.printedAt() != null,
+                    s.lastVerified()
+                );
+            })
+            .toList();
+    }
+
+    public record SlotSummary(String slot, int itemCount, int photoCount, boolean printed, java.time.Instant lastVerified) {}
+
     @GetMapping("/{container}/{slot}")
     public Slot getSlot(@PathVariable String container, @PathVariable String slot) {
         ContainerId cid = new ContainerId(container);

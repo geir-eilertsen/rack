@@ -93,6 +93,7 @@
       <div class="picker-label">Container</div>
       <div class="containers" id="containers"></div>
       <div class="picker-label" id="slotsLabel" hidden>Slot</div>
+      <div class="slots-legend" id="slotsLegend" hidden><span><span class="swatch empty"></span>empty</span><span><span class="swatch filled"></span>has items</span></div>
       <div class="slots-grid" id="slots"></div>
       <button class="btn primary block" id="fileManual" style="margin-top:.75rem" hidden>File in selected slot</button>
     </details>
@@ -119,6 +120,7 @@
     const manual = document.getElementById('manual');
     const containersEl = document.getElementById('containers');
     const slotsLabel = document.getElementById('slotsLabel');
+    const slotsLegend = document.getElementById('slotsLegend');
     const slotsEl = document.getElementById('slots');
     const fileManualBtn = document.getElementById('fileManual');
 
@@ -482,24 +484,37 @@
       });
     }
 
-    function selectContainer(c, refreshUi) {
+    async function selectContainer(c, refreshUi) {
       selectedContainer = c;
       selectedSlot = null;
       document.querySelectorAll('.container-btn').forEach(el => el.classList.toggle('selected', el.textContent === (c.name || c.id)));
       slotsLabel.hidden = false;
-      renderSlotPicker(c.slots || []);
+      slotsLegend.hidden = false;
+      renderSlotPicker(c.slots || [], new Set());
       if (refreshUi) {
         updateManualFileBtn();
         refreshUiForSelection();
       }
+      // Load per-slot state and repaint the picker with filled markers.
+      try {
+        const res = await fetch('/c/' + c.id + '/summary');
+        if (res.ok) {
+          const summary = await res.json();
+          const filled = new Set(summary.filter(s => s.item_count > 0).map(s => s.slot));
+          renderSlotPicker(c.slots || [], filled);
+          if (selectedSlot) {
+            slotsEl.querySelectorAll('.slot-btn').forEach(el => el.classList.toggle('selected', el.dataset.slot === selectedSlot));
+          }
+        }
+      } catch (e) { /* summary is nice-to-have; keep picker without markers */ }
     }
 
-    function renderSlotPicker(slots) {
+    function renderSlotPicker(slots, filledSet) {
       slotsEl.innerHTML = '';
       slots.forEach(sid => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'slot-btn';
+        btn.className = 'slot-btn' + (filledSet && filledSet.has(sid) ? ' filled' : '');
         btn.textContent = sid;
         btn.dataset.slot = sid;
         btn.addEventListener('click', () => selectSlot(sid, true));
