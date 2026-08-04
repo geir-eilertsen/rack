@@ -1,13 +1,14 @@
 package family.eilertsen.rack.domain.port;
 
-import family.eilertsen.rack.domain.model.DrawerId;
+import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.SlotId;
 
 import java.util.List;
 
 public interface ImageStore {
-    String store(DrawerId drawer, byte[] image, String contentType);
+    String store(ContainerId container, SlotId slot, byte[] image, String contentType);
 
-    byte[] read(DrawerId drawer, String filename);
+    byte[] read(ContainerId container, SlotId slot, String filename);
 
-    List<String> list(DrawerId drawer);
+    List<String> list(ContainerId container, SlotId slot);
 }

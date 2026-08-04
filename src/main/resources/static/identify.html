@@ -53,7 +53,7 @@
       status.textContent = 'Identifying...';
 
       const form = new FormData();
-      form.append('photo', file);
+      form.append('photo', await resize(file));
       try {
         const res = await fetch('/identify', { method: 'POST', body: form });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
@@ -80,6 +80,17 @@
 
     function esc(s) {
       return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function resize(file, maxDim = 1600, quality = 0.85) {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+      if (scale >= 1 && file.size < 3_000_000) return file;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      return new Promise(resolve => canvas.toBlob(b => resolve(new File([b], 'photo.jpg', { type: 'image/jpeg' })), 'image/jpeg', quality));
     }
   </script>
 </body>

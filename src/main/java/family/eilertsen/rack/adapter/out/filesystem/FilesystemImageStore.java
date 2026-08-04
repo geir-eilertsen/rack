@@ -1,6 +1,7 @@
 package family.eilertsen.rack.adapter.out.filesystem;
 
-import family.eilertsen.rack.domain.model.DrawerId;
+import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.port.ImageStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -28,9 +29,9 @@ public class FilesystemImageStore implements ImageStore {
     }
 
     @Override
-    public String store(DrawerId drawer, byte[] image, String contentType) {
+    public String store(ContainerId container, SlotId slot, byte[] image, String contentType) {
         try {
-            Path dir = dataDir.resolve(drawer.value());
+            Path dir = photoDir(container, slot);
             Files.createDirectories(dir);
             String filename = LocalDateTime.now().format(STAMP) + extensionFor(contentType);
             Files.write(dir.resolve(filename), image, StandardOpenOption.CREATE_NEW);
@@ -41,23 +42,27 @@ public class FilesystemImageStore implements ImageStore {
     }
 
     @Override
-    public byte[] read(DrawerId drawer, String filename) {
+    public byte[] read(ContainerId container, SlotId slot, String filename) {
         try {
-            return Files.readAllBytes(dataDir.resolve(drawer.value()).resolve(filename));
+            return Files.readAllBytes(photoDir(container, slot).resolve(filename));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     @Override
-    public List<String> list(DrawerId drawer) {
-        Path dir = dataDir.resolve(drawer.value());
+    public List<String> list(ContainerId container, SlotId slot) {
+        Path dir = photoDir(container, slot);
         if (!Files.isDirectory(dir)) return List.of();
         try (Stream<Path> s = Files.list(dir)) {
             return s.filter(Files::isRegularFile).map(p -> p.getFileName().toString()).sorted().toList();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private Path photoDir(ContainerId container, SlotId slot) {
+        return dataDir.resolve(container.value()).resolve(slot.value());
     }
 
     private static String extensionFor(String contentType) {

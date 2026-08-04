@@ -3,17 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rack — add to drawer</title>
+  <title>rack — add to slot</title>
   <style>
     body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 1rem; max-width: 640px; color: #222; }
     .back { color: #666; text-decoration: none; font-size: .85rem; }
     .back:hover { color: #222; }
     h1 { font-size: 1.2rem; margin: .25rem 0 1rem; }
-    h2 { font-size: .9rem; color: #666; margin: 1.2rem 0 .5rem; text-transform: uppercase; letter-spacing: .05em; }
+    h2 { font-size: .85rem; color: #666; margin: 1.2rem 0 .5rem; text-transform: uppercase; letter-spacing: .05em; }
+    .containers { display: flex; flex-wrap: wrap; gap: .3rem; }
+    .container-btn { padding: .5rem .9rem; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: .9rem; }
+    .container-btn:hover { background: #f0f0f0; }
+    .container-btn.selected { background: #333; color: #fff; border-color: #333; }
     .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: .3rem; }
-    .drawer-btn { padding: .6rem 0; text-align: center; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: .85rem; }
-    .drawer-btn:hover { background: #f0f0f0; }
-    .drawer-btn.selected { background: #333; color: #fff; border-color: #333; }
+    .slot-btn { padding: .55rem 0; text-align: center; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: .8rem; }
+    .slot-btn:hover { background: #f0f0f0; }
+    .slot-btn.selected { background: #333; color: #fff; border-color: #333; }
     .capture { display: block; width: 100%; padding: 1.4rem; font-size: 1rem; border: 2px dashed #666; border-radius: 8px; text-align: center; background: #f8f8f8; cursor: pointer; box-sizing: border-box; }
     .capture[hidden] { display: none; }
     .capture input { display: none; }
@@ -32,12 +36,15 @@
 </head>
 <body>
   <a class="back" href="/">&larr; rack</a>
-  <h1>add to drawer</h1>
+  <h1>add to slot</h1>
 
-  <h2>1. pick a drawer</h2>
-  <div class="grid" id="grid"></div>
+  <h2 id="containerHeading">1. pick a container</h2>
+  <div class="containers" id="containers"></div>
 
-  <h2 id="step2" hidden>2. take a photo</h2>
+  <h2 id="slotHeading" hidden>2. pick a slot</h2>
+  <div class="grid" id="slots"></div>
+
+  <h2 id="photoHeading" hidden>3. take a photo</h2>
   <label class="capture" hidden id="capture">
     Take a photo
     <input type="file" accept="image/*" capture="environment" id="photo">
@@ -48,43 +55,103 @@
   <ul class="items" id="items"></ul>
 
   <script>
-    const grid = document.getElementById('grid');
-    const step2 = document.getElementById('step2');
+    const containersEl = document.getElementById('containers');
+    const containerHeading = document.getElementById('containerHeading');
+    const slotHeading = document.getElementById('slotHeading');
+    const slotsEl = document.getElementById('slots');
+    const photoHeading = document.getElementById('photoHeading');
     const capture = document.getElementById('capture');
     const photo = document.getElementById('photo');
     const preview = document.getElementById('preview');
     const status = document.getElementById('status');
     const items = document.getElementById('items');
-    let selected = null;
 
-    for (const col of 'ABCDE') {
-      for (let row = 1; row <= 12; row++) {
-        const id = col + row;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'drawer-btn';
-        btn.textContent = id;
-        btn.addEventListener('click', () => selectDrawer(id, btn));
-        grid.appendChild(btn);
+    let selectedContainer = null;
+    let selectedSlot = null;
+
+    const params = new URLSearchParams(location.search);
+    const preC = params.get('c');
+    const preS = params.get('s');
+
+    init();
+
+    async function init() {
+      try {
+        const res = await fetch('/c');
+        const containers = await res.json();
+        renderContainers(containers);
+        if (preC) {
+          const c = containers.find(x => x.id === preC);
+          if (c) selectContainer(c);
+        } else if (containers.length === 1) {
+          selectContainer(containers[0]);
+        }
+      } catch (e) {
+        status.className = 'status error';
+        status.textContent = 'Failed to load containers: ' + e.message;
       }
     }
 
-    function selectDrawer(id, btn) {
-      selected = id;
+    function renderContainers(containers) {
+      containersEl.innerHTML = '';
+      containers.forEach(c => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'container-btn';
+        btn.textContent = c.name || c.id;
+        btn.addEventListener('click', () => selectContainer(c));
+        containersEl.appendChild(btn);
+      });
+    }
+
+    function selectContainer(c) {
+      selectedContainer = c;
+      selectedSlot = null;
       photo.value = '';
-      document.querySelectorAll('.drawer-btn.selected').forEach(el => el.classList.remove('selected'));
-      btn.classList.add('selected');
-      step2.hidden = false;
-      capture.hidden = false;
+      document.querySelectorAll('.container-btn').forEach((el, i) => {
+        el.classList.toggle('selected', el.textContent === (c.name || c.id));
+      });
+      slotHeading.hidden = false;
+      renderSlots(c.slots || []);
+      photoHeading.hidden = true;
+      capture.hidden = true;
+      preview.innerHTML = '';
+      items.innerHTML = '';
       status.className = 'status';
       status.textContent = '';
-      items.innerHTML = '';
+      if (preS && (c.slots || []).includes(preS)) {
+        selectSlot(preS);
+      }
+    }
+
+    function renderSlots(slots) {
+      slotsEl.innerHTML = '';
+      slots.forEach(sid => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'slot-btn';
+        btn.textContent = sid;
+        btn.dataset.slot = sid;
+        btn.addEventListener('click', () => selectSlot(sid));
+        slotsEl.appendChild(btn);
+      });
+    }
+
+    function selectSlot(sid) {
+      selectedSlot = sid;
+      photo.value = '';
+      slotsEl.querySelectorAll('.slot-btn').forEach(el => el.classList.toggle('selected', el.dataset.slot === sid));
+      photoHeading.hidden = false;
+      capture.hidden = false;
       preview.innerHTML = '';
+      items.innerHTML = '';
+      status.className = 'status';
+      status.textContent = '';
     }
 
     photo.addEventListener('change', async () => {
       const file = photo.files[0];
-      if (!file || !selected) return;
+      if (!file || !selectedContainer || !selectedSlot) return;
 
       preview.innerHTML = '<img src="' + URL.createObjectURL(file) + '">';
       items.innerHTML = '';
@@ -92,14 +159,15 @@
       status.textContent = 'Uploading and identifying...';
 
       const form = new FormData();
-      form.append('photo', file);
+      form.append('photo', await resize(file));
       try {
-        const res = await fetch('/drawers/' + selected + '/photo', { method: 'POST', body: form });
+        const url = '/c/' + selectedContainer.id + '/' + selectedSlot + '/photo';
+        const res = await fetch(url, { method: 'POST', body: form });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const data = await res.json();
         const extracted = data.extracted || [];
         status.className = 'status ok';
-        status.textContent = 'Filed ' + extracted.length + ' item(s) into ' + selected + ' (photo: ' + data.photo_filename + ')';
+        status.textContent = 'Filed ' + extracted.length + ' item(s) into ' + selectedContainer.id + '.' + selectedSlot + ' (photo: ' + data.photo_filename + ')';
         items.innerHTML = extracted.map(renderItem).join('');
       } catch (e) {
         status.className = 'status error';
@@ -119,6 +187,17 @@
       '</li>';
     }
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+    async function resize(file, maxDim = 1600, quality = 0.85) {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+      if (scale >= 1 && file.size < 3_000_000) return file;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      return new Promise(resolve => canvas.toBlob(b => resolve(new File([b], 'photo.jpg', { type: 'image/jpeg' })), 'image/jpeg', quality));
+    }
   </script>
 </body>
 </html>

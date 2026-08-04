@@ -1,19 +1,20 @@
 package family.eilertsen.rack.domain.port;
 
-import family.eilertsen.rack.domain.model.Drawer;
-import family.eilertsen.rack.domain.model.DrawerId;
+import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.SearchHit;
+import family.eilertsen.rack.domain.model.Slot;
+import family.eilertsen.rack.domain.model.SlotId;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface PartIndex {
-    Optional<Drawer> get(DrawerId id);
+    Optional<Slot> get(ContainerId container, SlotId slot);
 
-    void save(Drawer drawer);
+    void save(ContainerId container, Slot slot);
 
-    Collection<Drawer> all();
+    Collection<Slot> all(ContainerId container);
 
     List<SearchHit> searchByKeyword(String query);
 

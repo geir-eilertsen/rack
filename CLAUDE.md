@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Scaffold in place: Maven, Java 21, Spring Boot 3.4, Spring AI 1.0. Domain records (`Drawer`, `DrawerId`, `Item`, `SearchHit`) and the three ports (`ImageStore`, `PartExtractor`, `PartIndex`) exist under `family.eilertsen.rack.domain`. No adapters yet — those are the open items below.
+Live at https://rack.apalveien5.eilertsen.family/. Three use cases work end-to-end: identify a part, add a photo to a slot, print QR labels (with per-container scale + printed-state tracking).
 
 ## Build and run
 
 ```
 ./mvnw spring-boot:run                        # run the app
 ./mvnw test                                   # all tests
-./mvnw -Dtest=DrawerIdTest test               # single test class
-./mvnw -Dtest=DrawerIdTest#acceptsCornersOfTheGrid test   # single method
+./mvnw -Dtest=SlotIdTest test                 # single test class
+./mvnw -Dtest=SlotIdTest#acceptsCommonForms test   # single method
 ./mvnw package                                # jar in target/
 ```
 
@@ -31,29 +31,37 @@ Chat model is `claude-sonnet-4-6` (see `spring.ai.anthropic.chat.options.model` 
 
 ## Purpose
 
-Small parts-inventory system for a rack of 60 drawers (5 wide × 12 down, positions A1–E12) holding electronics components, fasteners, and connectors. Workflow: photograph drawer contents → vision-model extraction → structured JSON → searchable index. The photo is ground truth; the extracted data is an index over it.
+Small-parts inventory system. Photograph the contents of a slot in a physical storage container, a vision model extracts what's there into structured JSON, everything is searchable. Originally a rack of 60 drawers (5×12, A1–E12) — now generic over arbitrary containers (see #17). The photo is ground truth; the extracted data is an index over it.
 
 ## Architecture
 
 Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all swappable:
 
-- `ImageStore` — persists drawer photos
-- `PartExtractor` — vision-model call that turns a photo into structured items (Spring AI)
-- `PartIndex` — read/write of drawer records; search
+- `ImageStore` — persists slot photos to disk
+- `PartExtractor` — vision-model call that turns a photo into `List<Item>` (Spring AI)
+- `PartIndex` — read/write of slot state; search
 
-The initial `PartIndex` adapter is file-backed. If the rack ever grows past ~1,000 drawers, swap in a Postgres adapter without the domain noticing — that seam is the reason for the port.
+### Domain vocabulary
+
+- **Container** — a physical storage unit (rack of drawers, bin, shelf). Identified by lowercase `ContainerId` ("rack", "kitchen-bin").
+- **Slot** — one location inside a container. Identified by URL-safe `SlotId` ("A1", "3", "top-left"). Uniqueness is *per container*: two containers can both have an "A1".
+- **Item** — one identified thing inside a slot (a transistor, a bag of screws, ...). Comes from vision extraction.
+- Containers are defined in `application.yml` under `rack.containers` and materialised at boot by `ContainerRegistry` (see `application/RackConfiguration.java`). Layout kinds: `grid` (cols × rows → A1..) and `linear` (N → 1..N with optional prefix).
 
 ### Package layout (enforced)
 
 ```
 family.eilertsen.rack
 ├── domain
-│   ├── model      # records: Drawer, DrawerId, Item, SearchHit
+│   ├── model      # records: Container, ContainerId, Slot, SlotId, Item, SearchHit, ContainerLayout
 │   └── port       # interfaces: ImageStore, PartExtractor, PartIndex
-├── application    # use-case services that orchestrate domain + ports
+├── application    # AddPhotoToSlot service, ContainerRegistry, RackProperties/Configuration
 └── adapter
-    ├── in         # inbound adapters (REST controllers, CLI, etc.)
-    └── out        # outbound adapters (JsonFilePartIndex, SpringAi..., ...)
+    ├── in.web     # ContainerController, IdentifyController, LabelSheetController, HelloController
+    └── out
+        ├── filesystem   # FilesystemImageStore
+        ├── json         # JsonFilePartIndex + custom serializers for ContainerId/SlotId
+        └── springai     # SpringAiPartExtractor (Claude vision)
 ```
 
 `HexagonalArchitectureTest` (ArchUnit) enforces:
@@ -67,23 +75,23 @@ Adapters go under `adapter.in.<name>` or `adapter.out.<name>` — those subpaths
 
 ### Storage model (why files, not a database)
 
-~60 drawers × ~20 items = ~1,200 items total. That's a data structure, not a database.
+Order of magnitude: ~60 slots × ~20 items = ~1,200 items per container. That's a data structure, not a database.
 
 ```
 data/
-  A1.json
-  A1/
-    2026-08-04-1712.jpg
-  A2.json
-  A2/
-    ...
+  <container>/
+    <slot>.json          # slot state (items, photos list, last_verified, printed_at)
+    <slot>/              # photos for this slot
+      2026-08-04-1712.jpg
+    labels/
+      2026-08-04-1712.pdf   # archived label sheet from each print run
 ```
 
-- Load all 60 JSON files at startup into `Map<DrawerId, Drawer>`. A few MB total.
-- Search is a stream filter over the in-memory collection — no index, no tuning.
-- Writes: serialise one drawer to `A1.json.tmp`, then `Files.move` with `ATOMIC_MOVE`. Single writer on a single box is the entire concurrency story.
+- `JsonFilePartIndex` walks `data/<container>/*.json` at startup into `Map<ContainerId, Map<SlotId, Slot>>`.
+- Writes: serialise to `<slot>.json.tmp`, then `Files.move` with `ATOMIC_MOVE`. Single writer on a single box.
 - `grep -ri "BC547" data/` is a valid diagnostic; hand-editing a mislabelled item is a text edit.
-- No schema migrations — add a field, tolerate its absence on older records.
+- No schema migrations — add a field, tolerate its absence (`spring.jackson.deserialization.fail-on-unknown-properties` off implicitly via Spring Boot defaults; nullable fields on records get null).
+- Container-scoped IDs mean `data/rack/A1.json` and `data/bin/A1.json` are two different slots and don't collide.
 
 ### Semantic search without a vector DB
 
@@ -93,11 +101,25 @@ Each item stores its embedding as a float array inside its JSON. Queries brute-f
 
 Committing after each write gives history, per-drawer undo, and free multi-site sync over the existing mesh. Whether to enable this from day one is still open (see below).
 
-### Frontend / deployment
+### HTTP surface
 
-- PWA using `getUserMedia` for camera access — no app store.
-- QR code on each drawer front encodes its ID; scanning opens "what's in this drawer" and auto-tags photos on capture. This removes the biggest source of corruption: mis-filing a photo against the wrong drawer.
-- Docker Compose on a NUC, behind Traefik.
+- `/` → index page (hub)
+- `/identify.html`, `POST /identify` → identify a part from a photo, no persistence
+- `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state
+- `/labels.html`, `GET /labels/{container}` (preview), `POST /labels/{container}` (mark + archive), `GET /labels/{container}/status` → QR label sheets
+- Static pages resize phone photos to ~1600px client-side before upload; keeps below the 20MB multipart cap and shrinks the vision call.
+
+### Labels
+
+Physical paper is always Avery L7160 (A4 21-up, 63.5×38.1mm). Each container declares a `labelScale` in config; content (QR + text) is drawn to `scale × 30mm` QR and `scale × 40pt` font, anchored to the top-left of each L7160 slot so trimming smaller labels for smaller drawers is easy. The QR encodes `<public-base>/put.html?c={container}&s={slot}` — scanning from a phone camera opens the capture page pre-scoped to that slot.
+
+`Slot.printedAt` records when a label was archived via `POST /labels/{container}`. Preview (GET) doesn't touch this. Default scope on both endpoints is `unprinted` — pass `?scope=all` to include already-printed slots.
+
+### Deployment
+
+- Frontend: PWA (`getUserMedia` for camera).
+- Fronted by a home-network reverse proxy that terminates TLS at `https://rack.apalveien5.eilertsen.family/` and forwards to the container on the box at `192.168.3.132:8080`.
+- Run with `-v /home/geir/rack/data:/app/data` so slot JSON, photos, and printed label sheets survive restarts.
 
 ## Domain notes
 
@@ -115,12 +137,8 @@ Printed part numbers on ICs / modules / connectors, text on bags / reels / manuf
 
 Drift. A part is removed, the record isn't updated, six months later the index lies and trust collapses. Two mitigations, both load-bearing:
 
-1. Updating a drawer must be a single tap-scan-shoot-done action. No forms.
-2. Every drawer carries a `last_verified` date, surfaced in search results, so the user can see when the data was last real.
-
-## Seeding
-
-Shoot all 60 drawers in one sitting — white paper background, coin in frame for scale — then batch-process the lot. Getting from zero to populated in one evening is what makes the system stick.
+1. Updating a slot must be a single tap-scan-shoot-done action. No forms.
+2. Every slot carries a `last_verified` date, surfaced in search results, so the user can see when the data was last real.
 
 ## Open items
 

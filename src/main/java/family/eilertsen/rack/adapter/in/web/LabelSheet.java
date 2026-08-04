@@ -5,7 +5,8 @@ import com.google.zxing.WriterException;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
-import family.eilertsen.rack.domain.model.DrawerId;
+import family.eilertsen.rack.domain.model.Container;
+import family.eilertsen.rack.domain.model.SlotId;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -26,26 +27,30 @@ final class LabelSheet {
     private static final float PAGE_W = 210 * MM;
     private static final float PAGE_H = 297 * MM;
 
-    // Avery L7160: A4 3×7 = 21 labels/page, label 63.5 × 38.1 mm
+    // Sheet paper is always Avery L7160 (A4 21-up, 63.5 × 38.1mm slot)
     private static final int COLS = 3;
     private static final int ROWS = 7;
     private static final float MARGIN_LEFT = 7.2f * MM;
     private static final float MARGIN_TOP = 15.1f * MM;
-    private static final float LABEL_W = 63.5f * MM;
     private static final float LABEL_H = 38.1f * MM;
-    private static final float H_PITCH = 66.0f * MM;   // 63.5 + 2.5 gap
-    private static final float V_PITCH = 38.1f * MM;   // no vertical gap
+    private static final float H_PITCH = 66.0f * MM;
+    private static final float V_PITCH = 38.1f * MM;
 
-    private static final float QR_SIZE = 30 * MM;
-    private static final float PADDING = 2 * MM;
-    private static final float ID_FONT_SIZE = 40f;
+    // Per-slot content at scale 1.0 (fills the L7160 slot). Multiplied by container.labelScale().
+    private static final float QR_SIZE_1X = 30 * MM;
+    private static final float PADDING_1X = 2 * MM;
+    private static final float FONT_SIZE_1X = 40f;
 
     private LabelSheet() {}
 
-    static byte[] build(String baseUrl) throws IOException {
-        List<DrawerId> ids = DrawerId.all();
+    static byte[] build(String baseUrl, Container container, List<SlotId> slots) throws IOException {
         int perPage = COLS * ROWS;
-        int pageCount = (ids.size() + perPage - 1) / perPage;
+        int pageCount = Math.max(1, (slots.size() + perPage - 1) / perPage);
+
+        float scale = container.labelScale() <= 0 ? 1.0f : container.labelScale();
+        float qrSize = QR_SIZE_1X * scale;
+        float padding = PADDING_1X * scale;
+        float fontSize = FONT_SIZE_1X * scale;
 
         try (PDDocument doc = new PDDocument()) {
             PDType1Font font = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
@@ -57,15 +62,15 @@ final class LabelSheet {
                 try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
                     for (int i = 0; i < perPage; i++) {
                         int idx = p * perPage + i;
-                        if (idx >= ids.size()) break;
+                        if (idx >= slots.size()) break;
 
-                        DrawerId id = ids.get(idx);
+                        SlotId sid = slots.get(idx);
                         int col = i % COLS;
                         int row = i / COLS;
                         float x = MARGIN_LEFT + col * H_PITCH;
                         float y = PAGE_H - MARGIN_TOP - (row + 1) * V_PITCH;
 
-                        drawLabel(doc, cs, font, id, baseUrl, x, y);
+                        drawLabel(doc, cs, font, container, sid, baseUrl, x, y, qrSize, padding, fontSize);
                     }
                 }
             }
@@ -77,19 +82,21 @@ final class LabelSheet {
     }
 
     private static void drawLabel(PDDocument doc, PDPageContentStream cs, PDType1Font font,
-                                   DrawerId id, String baseUrl, float x, float y) throws IOException {
-        String url = baseUrl + "/d/" + id.value();
+                                   Container container, SlotId slot, String baseUrl,
+                                   float x, float y, float qrSize, float padding, float fontSize) throws IOException {
+        String url = baseUrl + "/put.html?c=" + container.id().value() + "&s=" + slot.value();
 
         PDImageXObject qr = qrImage(doc, url);
-        float qrY = y + (LABEL_H - QR_SIZE) / 2;
-        cs.drawImage(qr, x + PADDING, qrY, QR_SIZE, QR_SIZE);
+        // Anchor content to the top-left of the L7160 slot so trimming small labels is easy.
+        float qrTop = y + LABEL_H - padding;
+        cs.drawImage(qr, x + padding, qrTop - qrSize, qrSize, qrSize);
 
-        float textX = x + PADDING + QR_SIZE + PADDING;
-        float textY = y + LABEL_H / 2 - ID_FONT_SIZE / 3;
+        float textX = x + padding + qrSize + padding;
+        float textY = qrTop - qrSize / 2 - fontSize / 3;
         cs.beginText();
-        cs.setFont(font, ID_FONT_SIZE);
+        cs.setFont(font, fontSize);
         cs.newLineAtOffset(textX, textY);
-        cs.showText(id.value());
+        cs.showText(slot.value());
         cs.endText();
     }
 

@@ -17,6 +17,14 @@ spring:
 
 rack:
   data-dir: ${RACK_DATA_DIR:./data}
+  containers:
+    - id: rack
+      name: "Parts rack"
+      layout:
+        kind: grid
+        cols: 5
+        rows: 12
+      label-scale: 1.0
 
 server:
   port: 8080
