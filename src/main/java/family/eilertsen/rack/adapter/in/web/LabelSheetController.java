@@ -47,10 +47,12 @@ public class LabelSheetController {
     public ResponseEntity<byte[]> preview(HttpServletRequest req,
                                            @PathVariable String container,
                                            @RequestParam(defaultValue = "unprinted") String scope,
+                                           @RequestParam(required = false) Integer offset,
                                            @RequestParam(required = false) String base) throws IOException {
         Container c = container(container);
         List<SlotId> slots = pickSlots(c, scope);
-        byte[] pdf = LabelSheet.build(base != null ? base : requestBase(req), c, slots);
+        int firstPageOffset = resolveOffset(c, offset);
+        byte[] pdf = LabelSheet.build(base != null ? base : requestBase(req), c, slots, firstPageOffset);
         return pdfResponse(c, pdf);
     }
 
@@ -58,10 +60,12 @@ public class LabelSheetController {
     public ResponseEntity<byte[]> print(HttpServletRequest req,
                                          @PathVariable String container,
                                          @RequestParam(defaultValue = "unprinted") String scope,
+                                         @RequestParam(required = false) Integer offset,
                                          @RequestParam(required = false) String base) throws IOException {
         Container c = container(container);
         List<SlotId> slots = pickSlots(c, scope);
-        byte[] pdf = LabelSheet.build(base != null ? base : requestBase(req), c, slots);
+        int firstPageOffset = resolveOffset(c, offset);
+        byte[] pdf = LabelSheet.build(base != null ? base : requestBase(req), c, slots, firstPageOffset);
         savePdf(c, pdf);
         markPrinted(c, slots);
         return pdfResponse(c, pdf);
@@ -70,16 +74,27 @@ public class LabelSheetController {
     @GetMapping("/labels/{container}/status")
     public LabelStatus status(@PathVariable String container) {
         Container c = container(container);
-        int printed = 0;
-        int unprinted = 0;
-        for (SlotId sid : c.slots()) {
-            boolean isPrinted = index.get(c.id(), sid).map(s -> s.printedAt() != null).orElse(false);
-            if (isPrinted) printed++; else unprinted++;
-        }
-        return new LabelStatus(c.id().value(), c.slots().size(), printed, unprinted);
+        int printed = printedCount(c);
+        int unprinted = c.slots().size() - printed;
+        int nextOffset = printed % LabelSheet.PER_SHEET;
+        return new LabelStatus(c.id().value(), c.slots().size(), printed, unprinted, nextOffset, LabelSheet.PER_SHEET);
     }
 
-    public record LabelStatus(String container, int total, int printed, int unprinted) {}
+    public record LabelStatus(String container, int total, int printed, int unprinted,
+                              int nextOffset, int perSheet) {}
+
+    private int resolveOffset(Container c, Integer explicit) {
+        if (explicit != null) return Math.max(0, explicit % LabelSheet.PER_SHEET);
+        return printedCount(c) % LabelSheet.PER_SHEET;
+    }
+
+    private int printedCount(Container c) {
+        int n = 0;
+        for (SlotId sid : c.slots()) {
+            if (index.get(c.id(), sid).map(s -> s.printedAt() != null).orElse(false)) n++;
+        }
+        return n;
+    }
 
     private Container container(String id) {
         return registry.get(new ContainerId(id))

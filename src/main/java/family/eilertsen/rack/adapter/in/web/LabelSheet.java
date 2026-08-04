@@ -30,6 +30,7 @@ final class LabelSheet {
     // Sheet paper is always Avery L7160 (A4 21-up, 63.5 × 38.1mm slot)
     private static final int COLS = 3;
     private static final int ROWS = 7;
+    static final int PER_SHEET = COLS * ROWS;
     private static final float MARGIN_LEFT = 7.2f * MM;
     private static final float MARGIN_TOP = 15.1f * MM;
     private static final float LABEL_H = 38.1f * MM;
@@ -43,9 +44,10 @@ final class LabelSheet {
 
     private LabelSheet() {}
 
-    static byte[] build(String baseUrl, Container container, List<SlotId> slots) throws IOException {
-        int perPage = COLS * ROWS;
-        int pageCount = Math.max(1, (slots.size() + perPage - 1) / perPage);
+    static byte[] build(String baseUrl, Container container, List<SlotId> slots, int firstPageOffset) throws IOException {
+        int offset = Math.max(0, firstPageOffset % PER_SHEET);
+        int totalPositions = offset + slots.size();
+        int pageCount = Math.max(1, (totalPositions + PER_SHEET - 1) / PER_SHEET);
 
         float scale = container.labelScale() <= 0 ? 1.0f : container.labelScale();
         float qrSize = QR_SIZE_1X * scale;
@@ -55,16 +57,17 @@ final class LabelSheet {
         try (PDDocument doc = new PDDocument()) {
             PDType1Font font = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
 
+            int slotIdx = 0;
             for (int p = 0; p < pageCount; p++) {
                 PDPage page = new PDPage(new PDRectangle(PAGE_W, PAGE_H));
                 doc.addPage(page);
 
                 try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
-                    for (int i = 0; i < perPage; i++) {
-                        int idx = p * perPage + i;
-                        if (idx >= slots.size()) break;
+                    int startPos = (p == 0) ? offset : 0;
+                    for (int i = startPos; i < PER_SHEET; i++) {
+                        if (slotIdx >= slots.size()) break;
 
-                        SlotId sid = slots.get(idx);
+                        SlotId sid = slots.get(slotIdx++);
                         int col = i % COLS;
                         int row = i / COLS;
                         float x = MARGIN_LEFT + col * H_PITCH;

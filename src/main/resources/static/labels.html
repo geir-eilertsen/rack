@@ -37,20 +37,25 @@
 
   <div class="card" id="detail" hidden>
     <div class="counts" id="counts"></div>
+    <div class="counts" id="offsetInfo"></div>
     <label class="toggle"><input type="checkbox" id="includeAll"> include already-printed slots</label>
+    <br>
+    <label class="toggle"><input type="checkbox" id="freshSheet"> fresh sheet (start at position 1)</label>
     <div class="actions">
       <button class="action" id="preview">Preview PDF</button>
       <button class="action primary" id="print">Print &amp; mark as done</button>
     </div>
     <div class="status" id="status"></div>
-    <div class="note">Preview generates the PDF without touching printed-state. &ldquo;Print &amp; mark&rdquo; saves a copy under <code>data/&lt;container&gt;/labels/</code> and flips the pending slots to printed.</div>
+    <div class="note">Preview generates the PDF without touching printed-state. &ldquo;Print &amp; mark&rdquo; saves a copy under <code>data/&lt;container&gt;/labels/</code> and flips the pending slots to printed. Next print offsets past whatever's already used on the current L7160 sheet &mdash; feed the partial sheet back in.</div>
   </div>
 
   <script>
     const containersEl = document.getElementById('containers');
     const detail = document.getElementById('detail');
     const counts = document.getElementById('counts');
+    const offsetInfo = document.getElementById('offsetInfo');
     const includeAll = document.getElementById('includeAll');
+    const freshSheet = document.getElementById('freshSheet');
     const preview = document.getElementById('preview');
     const print = document.getElementById('print');
     const status = document.getElementById('status');
@@ -99,24 +104,35 @@
         + '<span class="num">' + s.total + '</span> slots &middot; '
         + '<span class="num">' + s.printed + '</span> printed &middot; '
         + '<span class="num">' + s.unprinted + '</span> pending';
+      if (s.next_offset > 0) {
+        offsetInfo.textContent = 'Next sheet starts at position ' + (s.next_offset + 1) + ' of ' + s.per_sheet
+          + ' (first ' + s.next_offset + ' left blank to skip past used labels).';
+      } else {
+        offsetInfo.textContent = 'Next sheet starts fresh.';
+      }
       const pending = s.unprinted > 0 || includeAll.checked;
       preview.disabled = !pending && !includeAll.checked;
       print.disabled = !pending && !includeAll.checked;
     }
 
+    function queryParams() {
+      const params = new URLSearchParams();
+      params.set('scope', includeAll.checked ? 'all' : 'unprinted');
+      if (freshSheet.checked) params.set('offset', '0');
+      return params.toString();
+    }
+
     preview.addEventListener('click', () => {
       if (!selected) return;
-      const scope = includeAll.checked ? 'all' : 'unprinted';
-      window.open('/labels/' + selected.id + '?scope=' + scope, '_blank');
+      window.open('/labels/' + selected.id + '?' + queryParams(), '_blank');
     });
 
     print.addEventListener('click', async () => {
       if (!selected) return;
       status.className = 'status';
       status.textContent = 'Generating and marking...';
-      const scope = includeAll.checked ? 'all' : 'unprinted';
       try {
-        const res = await fetch('/labels/' + selected.id + '?scope=' + scope, { method: 'POST' });
+        const res = await fetch('/labels/' + selected.id + '?' + queryParams(), { method: 'POST' });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
