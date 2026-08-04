@@ -13,6 +13,7 @@ spring:
       chat:
         options:
           model: claude-sonnet-4-6
+          max-tokens: 4096
 
 rack:
   data-dir: ${RACK_DATA_DIR:./data}
