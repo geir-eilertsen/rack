@@ -27,16 +27,16 @@
     .sug .why { font-size: .8rem; color: #555; margin-bottom: .35rem; }
     .sug .cta { display: inline-block; margin-top: .3rem; padding: .5rem 1rem; background: #333; color: #fff; border: none; border-radius: 4px; font: inherit; font-size: .9rem; cursor: pointer; }
     .sug .cta:hover { background: #000; }
-    .manual { border: 1px solid #ddd; border-radius: 8px; padding: .75rem; margin-top: .5rem; background: #fafafa; }
-    .manual summary { cursor: pointer; font-size: .95rem; font-weight: 600; }
-    .containers { display: flex; flex-wrap: wrap; gap: .3rem; margin: .5rem 0; }
+    .pickers { margin-bottom: 1rem; }
+    .pickers .label { font-size: .8rem; color: #666; margin: .5rem 0 .25rem; }
+    .containers { display: flex; flex-wrap: wrap; gap: .3rem; }
     .container-btn { padding: .4rem .8rem; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: .85rem; }
     .container-btn.selected { background: #333; color: #fff; border-color: #333; }
-    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: .3rem; margin: .5rem 0; }
+    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: .3rem; }
     .slot-btn { padding: .55rem 0; text-align: center; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: .8rem; }
     .slot-btn.selected { background: #333; color: #fff; border-color: #333; }
-    .manual .filebtn { display: block; width: 100%; padding: .7rem; margin-top: .5rem; background: #333; color: #fff; border: none; border-radius: 4px; font: inherit; font-size: .95rem; cursor: pointer; }
-    .manual .filebtn:disabled { background: #bbb; cursor: not-allowed; }
+    .filebtn { display: block; width: 100%; padding: .7rem; margin-top: .5rem; background: #333; color: #fff; border: none; border-radius: 4px; font: inherit; font-size: .95rem; cursor: pointer; }
+    .filebtn:disabled { background: #bbb; cursor: not-allowed; }
     .current { list-style: none; padding: 0; margin: .5rem 0 0; }
     .current li { display: flex; justify-content: space-between; align-items: center; padding: .55rem .75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: .35rem; gap: .5rem; }
     .current .info { flex: 1; min-width: 0; font-size: .9rem; }
@@ -67,12 +67,20 @@
 
   <div id="slotHeader" class="slot-header" hidden></div>
 
+  <section class="pickers" id="pickers">
+    <h2>pick a slot</h2>
+    <div class="label">Container</div>
+    <div class="containers" id="containers"></div>
+    <div class="label" id="slotsLabel" hidden>Slot</div>
+    <div class="grid" id="slots"></div>
+  </section>
+
   <h2 id="currentHeading" hidden>currently in this slot</h2>
   <ul class="current" id="current"></ul>
 
   <div id="photos" class="photos" hidden></div>
 
-  <h2 id="captureHeading">take a photo</h2>
+  <h2 id="captureHeading">or take a photo</h2>
   <label class="capture">
     <span id="captureLabel">Take a photo</span>
     <input type="file" accept="image/*" capture="environment" id="photo">
@@ -87,16 +95,7 @@
   <h2 id="pickHeading" hidden>where does it go?</h2>
   <ul class="suggestions" id="suggestions"></ul>
 
-  <details class="manual" id="manual">
-    <summary id="manualSummary">Pick a slot manually</summary>
-    <div>
-      <div style="font-size: .85rem; color: #666; margin-top: .5rem;">Container</div>
-      <div class="containers" id="containers"></div>
-      <div style="font-size: .85rem; color: #666; margin-top: .5rem;">Slot</div>
-      <div class="grid" id="slots"></div>
-      <button class="filebtn" id="fileManual" disabled>File in selected slot</button>
-    </div>
-  </details>
+  <button class="filebtn" id="fileManual" hidden>File in selected slot</button>
 
   <script>
     const params = new URLSearchParams(location.search);
@@ -117,8 +116,8 @@
     const extractedEl = document.getElementById('extracted');
     const pickHeading = document.getElementById('pickHeading');
     const suggestionsEl = document.getElementById('suggestions');
-    const manual = document.getElementById('manual');
     const containersEl = document.getElementById('containers');
+    const slotsLabel = document.getElementById('slotsLabel');
     const slotsEl = document.getElementById('slots');
     const fileManualBtn = document.getElementById('fileManual');
 
@@ -291,11 +290,13 @@
       if (!file) return;
 
       pendingPhoto = await resize(file);
+      photo.value = ''; // reset so tapping the same file again re-fires
       preview.innerHTML = '<img src="' + URL.createObjectURL(file) + '">';
       extractedEl.innerHTML = '';
       suggestionsEl.innerHTML = '';
       extractedHeading.hidden = true;
       pickHeading.hidden = true;
+      captureLabel.textContent = 'Not what you wanted? Retake';
       updateManualFileBtn();
 
       if (selectedContainer && selectedSlot) {
@@ -315,9 +316,8 @@
         const data = await res.json();
         renderExtracted(data.extracted || []);
         renderSuggestions(data.suggestions || []);
-        manual.open = !(data.suggestions && data.suggestions.length);
         pickHeading.hidden = false;
-        setStatus('ok', 'Ready — pick where it goes.');
+        setStatus('ok', 'Ready — pick where it goes (suggestions above, or pick manually).');
       } catch (e) {
         setStatus('error', 'Failed: ' + e.message);
       }
@@ -336,7 +336,7 @@
         setStatus('ok', 'Filed ' + extracted.length + ' item(s) into ' + selectedContainer.id + '.' + selectedSlot + '.');
         renderExtracted(extracted);
         pendingPhoto = null;
-        loadCurrent();
+        refreshUiForSelection();
       } catch (e) {
         setStatus('error', 'Failed: ' + e.message);
       }
@@ -391,8 +391,12 @@
       selectedContainer = c;
       selectedSlot = null;
       document.querySelectorAll('.container-btn').forEach(el => el.classList.toggle('selected', el.textContent === (c.name || c.id)));
+      slotsLabel.hidden = false;
       renderSlotPicker(c.slots || []);
-      if (refreshFileBtn) updateManualFileBtn();
+      if (refreshFileBtn) {
+        updateManualFileBtn();
+        refreshUiForSelection();
+      }
     }
 
     function renderSlotPicker(slots) {
@@ -416,11 +420,10 @@
     }
 
     function updateManualFileBtn() {
-      fileManualBtn.disabled = !(selectedContainer && selectedSlot && pendingPhoto);
-      if (selectedContainer && selectedSlot) {
+      const ready = !!(selectedContainer && selectedSlot && pendingPhoto);
+      fileManualBtn.hidden = !ready;
+      if (ready) {
         fileManualBtn.textContent = 'File in ' + selectedContainer.id + '.' + selectedSlot;
-      } else {
-        fileManualBtn.textContent = 'File in selected slot';
       }
     }
 
@@ -444,8 +447,10 @@
         pendingPhoto = null;
         suggestionsEl.innerHTML = '';
         pickHeading.hidden = true;
-        manual.open = false;
         updateManualFileBtn();
+        selectedContainer = containers.find(c => c.id === containerId) || selectedContainer;
+        selectedSlot = slotId;
+        refreshUiForSelection();
         // Refresh current-items view if we filed into the currently-selected slot
         if (selectedContainer && selectedContainer.id === containerId && selectedSlot === slotId) {
           loadCurrent();
