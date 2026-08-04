@@ -34,6 +34,7 @@ final class LabelSheet {
     static final int PER_SHEET = COLS * ROWS;
     private static final float MARGIN_LEFT = 7.2f * MM;
     private static final float MARGIN_TOP = 15.1f * MM;
+    private static final float LABEL_W = 63.5f * MM;
     private static final float LABEL_H = 38.1f * MM;
     private static final float H_PITCH = 66.0f * MM;
     private static final float V_PITCH = 38.1f * MM;
@@ -64,25 +65,73 @@ final class LabelSheet {
     }
 
     /**
-     * Greedily stacks consecutive labels into one physical L7160 label while they still fit, so small-scale
-     * containers stop wasting most of each sticker — two 0.4-scale labels share one, to be trimmed apart.
-     * Mixed scales pack fine because each label is measured individually.
+     * Horizontal room one label needs: QR, then the slot id beside it. The text is estimated at 0.75em per
+     * character rather than measured — Helvetica-Bold caps top out at 0.722em, so this errs wide, and erring
+     * wide only ever costs a column, never an overlap.
      */
-    static List<List<Label>> pack(List<Label> labels) {
-        List<List<Label>> positions = new ArrayList<>();
-        List<Label> current = null;
-        float used = 0;
+    private static float contentWidth(Label label) {
+        float scale = scaleOf(label);
+        float padding = PADDING_1X * scale;
+        float text = label.slot().value().length() * 0.75f * FONT_SIZE_1X * scale;
+        return padding + QR_SIZE_1X * scale + padding + text + padding;
+    }
+
+    /** One label's spot inside a sticker, as offsets right and down from the sticker's top-left corner. */
+    record Placed(Label label, float dx, float dy) {}
+
+    // Exposed so tests can assert the packing never overlaps or overflows a sticker.
+    static float widthOf(Label label) {
+        return contentWidth(label);
+    }
+
+    static float heightOf(Label label) {
+        return contentHeight(label);
+    }
+
+    static float stickerWidth() {
+        return LABEL_W;
+    }
+
+    static float stickerHeight() {
+        return LABEL_H;
+    }
+
+    /**
+     * Shelf-packs consecutive labels into one physical L7160 label, filling across before dropping to the next
+     * row, so small-scale containers stop wasting the sticker's width as well as its height — four 0.4-scale
+     * labels share one sticker as a 2×2 grid, to be trimmed apart. Mixed scales pack because each label is
+     * measured individually; a label that cannot follow the previous one simply starts the next row or sticker.
+     */
+    static List<List<Placed>> pack(List<Label> labels) {
+        List<List<Placed>> stickers = new ArrayList<>();
+        List<Placed> current = new ArrayList<>();
+        float cursorX = 0;
+        float rowTop = 0;
+        float rowHeight = 0;
+
         for (Label label : labels) {
+            float w = contentWidth(label);
             float h = contentHeight(label);
-            if (current == null || used + h > LABEL_H) {
-                current = new ArrayList<>();
-                positions.add(current);
-                used = 0;
+
+            if (!current.isEmpty() && cursorX + w > LABEL_W) {
+                rowTop += rowHeight;
+                cursorX = 0;
+                rowHeight = 0;
             }
-            current.add(label);
-            used += h;
+            if (!current.isEmpty() && rowTop + h > LABEL_H) {
+                stickers.add(current);
+                current = new ArrayList<>();
+                cursorX = 0;
+                rowTop = 0;
+                rowHeight = 0;
+            }
+
+            current.add(new Placed(label, cursorX, rowTop));
+            cursorX += w;
+            rowHeight = Math.max(rowHeight, h);
         }
-        return positions;
+        if (!current.isEmpty()) stickers.add(current);
+        return stickers;
     }
 
     /** Physical labels (not logical ones) a run consumes — what the sheet offset has to be counted in. */
@@ -92,7 +141,7 @@ final class LabelSheet {
 
     static byte[] build(String baseUrl, List<Label> labels, int firstPageOffset) throws IOException {
         int offset = Math.max(0, firstPageOffset % PER_SHEET);
-        List<List<Label>> positions = pack(labels);
+        List<List<Placed>> positions = pack(labels);
         int totalPositions = offset + positions.size();
         int pageCount = Math.max(1, (totalPositions + PER_SHEET - 1) / PER_SHEET);
 
@@ -114,13 +163,12 @@ final class LabelSheet {
                         float x = MARGIN_LEFT + col * H_PITCH;
                         float y = PAGE_H - MARGIN_TOP - (row + 1) * V_PITCH;
 
-                        // Stack the position's labels downwards from the top of the L7160 slot.
-                        float top = y + LABEL_H;
-                        for (Label label : positions.get(posIdx++)) {
-                            float scale = scaleOf(label);
-                            drawLabel(doc, cs, font, label.container(), label.slot(), baseUrl, x, top,
+                        // Offsets run right and down from the sticker's top-left corner.
+                        for (Placed placed : positions.get(posIdx++)) {
+                            float scale = scaleOf(placed.label());
+                            drawLabel(doc, cs, font, placed.label().container(), placed.label().slot(), baseUrl,
+                                x + placed.dx(), y + LABEL_H - placed.dy(),
                                 QR_SIZE_1X * scale, PADDING_1X * scale, FONT_SIZE_1X * scale);
-                            top -= contentHeight(label);
                         }
                     }
                 }
