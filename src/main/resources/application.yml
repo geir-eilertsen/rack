@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: rack
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+
+rack:
+  data-dir: ${RACK_DATA_DIR:./data}
+
+server:
+  port: 8080

@@ -4,7 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-The repository is empty. What follows is the design intent captured before any code was written. Treat it as the north star for the first implementation; update this file as decisions are made concrete in code.
+Scaffold in place: Maven, Java 21, Spring Boot 3.4, Spring AI 1.0. Domain records (`Drawer`, `DrawerId`, `Item`, `SearchHit`) and the three ports (`ImageStore`, `PartExtractor`, `PartIndex`) exist under `family.eilertsen.rack.domain`. No adapters yet — those are the open items below.
+
+## Build and run
+
+```
+./mvnw spring-boot:run                        # run the app
+./mvnw test                                   # all tests
+./mvnw -Dtest=DrawerIdTest test               # single test class
+./mvnw -Dtest=DrawerIdTest#acceptsCornersOfTheGrid test   # single method
+./mvnw package                                # jar in target/
+```
+
+The Maven wrapper isn't checked in yet — run `mvn -N wrapper:wrapper` once (from a machine with `mvn` on PATH) to generate it, or substitute `mvn` for `./mvnw` above.
+
+Config: `OPENAI_API_KEY` env var feeds `spring.ai.openai.api-key`. `RACK_DATA_DIR` overrides the default `./data`.
 
 ## Purpose
 
@@ -79,7 +93,9 @@ Shoot all 60 drawers in one sitting — white paper background, coin in frame fo
 
 ## Open items
 
-- Drawer JSON schema — not yet written
-- `PartIndex` port and its file-backed adapter — not yet written
-- Extraction prompt — sketched (fields above), not finalised
+- File-backed `PartIndex` adapter (`JsonFilePartIndex`) — not yet written
+- Filesystem `ImageStore` adapter — not yet written
+- Spring AI `PartExtractor` adapter + extraction prompt — not yet written
+- Web/PWA inbound adapter — not yet written
 - Whether the Git history layer is in from the start or added later
+- Maven wrapper (`./mvnw`) — not yet generated
