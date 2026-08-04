@@ -33,12 +33,16 @@
     .tags { margin-top: .25rem; }
     .tag { display: inline-block; background: #eef; padding: .1rem .5rem; border-radius: 999px; margin: .1rem .1rem 0 0; font-size: .75rem; }
     .current { list-style: none; padding: 0; margin: .5rem 0 0; }
-    .current li { display: flex; justify-content: space-between; align-items: flex-start; padding: .55rem .75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: .35rem; gap: .5rem; }
+    .current li { display: flex; justify-content: space-between; align-items: center; padding: .55rem .75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: .35rem; gap: .5rem; }
     .current .info { flex: 1; min-width: 0; font-size: .9rem; }
     .current .info strong { display: block; }
     .current .info .pn { font-size: .8rem; }
-    .current .remove { flex: 0 0 auto; border: none; background: transparent; color: #b00020; font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 0 .4rem; }
-    .current .remove:hover { color: #700018; }
+    .current .qty-controls { flex: 0 0 auto; display: flex; align-items: center; gap: .35rem; }
+    .current .qty-btn { border: 1px solid #ccc; background: #fff; font: inherit; font-size: 1rem; line-height: 1; width: 2rem; height: 2rem; border-radius: 4px; cursor: pointer; padding: 0; }
+    .current .qty-btn:hover { background: #f0f0f0; }
+    .current .qty { min-width: 1.4rem; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .current .remove-all { border: none; background: transparent; color: #b00020; font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 0 .3rem; margin-left: .2rem; }
+    .current .remove-all:hover { color: #700018; }
     .current .empty { padding: .55rem .75rem; border: 1px dashed #ccc; border-radius: 6px; color: #666; font-size: .85rem; }
   </style>
 </head>
@@ -187,14 +191,34 @@
       currentEl.innerHTML = list.map((it, idx) => {
         const label = esc(it.description || '(unknown)')
           + (it.part_number ? ' <span class="pn">' + esc(it.part_number) + '</span>' : '');
+        const qty = it.qty_estimate == null ? 1 : it.qty_estimate;
         return '<li>' +
           '<div class="info"><strong>' + label + '</strong></div>' +
-          '<button class="remove" data-idx="' + idx + '" title="remove">&times;</button>' +
+          '<div class="qty-controls">' +
+            '<button class="qty-btn dec" data-idx="' + idx + '" title="took one out">&minus;</button>' +
+            '<span class="qty">' + qty + '</span>' +
+            '<button class="qty-btn inc" data-idx="' + idx + '" title="put one back">+</button>' +
+            '<button class="remove-all" data-idx="' + idx + '" title="remove all">&times;</button>' +
+          '</div>' +
         '</li>';
       }).join('');
-      currentEl.querySelectorAll('.remove').forEach(btn => {
-        btn.addEventListener('click', () => removeItem(parseInt(btn.dataset.idx, 10)));
-      });
+      currentEl.querySelectorAll('.dec').forEach(btn => btn.addEventListener('click', () => adjustItem(parseInt(btn.dataset.idx, 10), 'decrement')));
+      currentEl.querySelectorAll('.inc').forEach(btn => btn.addEventListener('click', () => adjustItem(parseInt(btn.dataset.idx, 10), 'increment')));
+      currentEl.querySelectorAll('.remove-all').forEach(btn => btn.addEventListener('click', () => removeItem(parseInt(btn.dataset.idx, 10))));
+    }
+
+    async function adjustItem(idx, action) {
+      if (!selectedContainer || !selectedSlot) return;
+      try {
+        const url = '/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + idx + '/' + action;
+        const res = await fetch(url, { method: 'POST' });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const slot = await res.json();
+        renderCurrent(slot.items || []);
+      } catch (e) {
+        status.className = 'status error';
+        status.textContent = action + ' failed: ' + e.message;
+      }
     }
 
     async function removeItem(idx) {

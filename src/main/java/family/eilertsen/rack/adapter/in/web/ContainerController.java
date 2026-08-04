@@ -1,6 +1,7 @@
 package family.eilertsen.rack.adapter.in.web;
 
 import family.eilertsen.rack.application.AddPhotoToSlot;
+import family.eilertsen.rack.application.AdjustItemQty;
 import family.eilertsen.rack.application.ContainerRegistry;
 import family.eilertsen.rack.application.RegisterContainer;
 import family.eilertsen.rack.application.RemoveItem;
@@ -36,14 +37,17 @@ public class ContainerController {
     private final AddPhotoToSlot addPhoto;
     private final RegisterContainer registerContainer;
     private final RemoveItem removeItem;
+    private final AdjustItemQty adjustItemQty;
 
     public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto,
-                                RegisterContainer registerContainer, RemoveItem removeItem) {
+                                RegisterContainer registerContainer, RemoveItem removeItem,
+                                AdjustItemQty adjustItemQty) {
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
         this.registerContainer = registerContainer;
         this.removeItem = removeItem;
+        this.adjustItemQty = adjustItemQty;
     }
 
     @GetMapping
@@ -94,9 +98,35 @@ public class ContainerController {
         requireContainerExists(cid);
         try {
             return removeItem.execute(cid, sid, index);
-        } catch (IndexOutOfBoundsException e) {
+        } catch (IndexOutOfBoundsException | java.util.NoSuchElementException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
-        } catch (java.util.NoSuchElementException e) {
+        }
+    }
+
+    @PostMapping("/{container}/{slot}/items/{index}/decrement")
+    public Slot decrementItem(@PathVariable String container,
+                               @PathVariable String slot,
+                               @PathVariable int index) {
+        ContainerId cid = new ContainerId(container);
+        SlotId sid = new SlotId(slot);
+        requireContainerExists(cid);
+        try {
+            return adjustItemQty.decrement(cid, sid, index);
+        } catch (IndexOutOfBoundsException | java.util.NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+        }
+    }
+
+    @PostMapping("/{container}/{slot}/items/{index}/increment")
+    public Slot incrementItem(@PathVariable String container,
+                               @PathVariable String slot,
+                               @PathVariable int index) {
+        ContainerId cid = new ContainerId(container);
+        SlotId sid = new SlotId(slot);
+        requireContainerExists(cid);
+        try {
+            return adjustItemQty.increment(cid, sid, index);
+        } catch (IndexOutOfBoundsException | java.util.NoSuchElementException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
         }
     }
