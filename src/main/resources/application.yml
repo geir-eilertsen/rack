@@ -22,3 +22,6 @@ rack:
 server:
   port: 8080
   forward-headers-strategy: FRAMEWORK
+  error:
+    # Refusals carry the reason the user needs to act on ("still holds items in 3 slots: ...").
+    include-message: always

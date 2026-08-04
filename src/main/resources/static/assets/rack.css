@@ -178,6 +178,8 @@ a { color: var(--primary-hover); }
 .btn.block { display: flex; width: 100%; }
 .btn.ghost { border-color: transparent; background: transparent; }
 .btn.ghost:hover { background: var(--primary-soft); border-color: var(--primary-soft); }
+.btn.danger { color: var(--error); border-color: var(--border-strong); }
+.btn.danger:hover { background: var(--error-soft); border-color: var(--error); color: var(--error); }
 
 .btn-row { display: flex; gap: .5rem; flex-wrap: wrap; }
 .btn-row .btn { flex: 1 1 auto; }

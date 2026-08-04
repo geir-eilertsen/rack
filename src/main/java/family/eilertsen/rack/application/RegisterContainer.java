@@ -21,11 +21,7 @@ public class RegisterContainer {
         ContainerId id = new ContainerId(req.id());
         String name = req.name() == null || req.name().isBlank() ? id.value() : req.name().trim();
         List<SlotId> slots = expand(req.layout());
-        float scale = req.labelScale() == null ? 1.0f : req.labelScale();
-        if (scale <= 0 || scale > 2) {
-            throw new IllegalArgumentException("labelScale must be > 0 and <= 2, got " + scale);
-        }
-        Container c = new Container(id, name, slots, scale);
+        Container c = new Container(id, name, slots, Container.validLabelScale(req.labelScale()));
         registry.add(c);
         return c;
     }

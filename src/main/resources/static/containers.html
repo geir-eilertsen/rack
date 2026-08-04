@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rack — containers</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/rack.svg">
+  <link rel="apple-touch-icon" href="/assets/rack.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#d97747">
+  <link rel="stylesheet" href="/assets/rack.css">
+  <style>
+    .cbox { padding: 1.1rem 1.15rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); margin-bottom: .75rem; }
+    .cbox h3 { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+    .cmeta { font-size: .8rem; color: var(--muted); }
+    .cmeta code { font-family: var(--font-mono); }
+    .cstats { font-size: .9rem; margin: .5rem 0 .85rem; color: var(--text); }
+    .counts { font-size: .9rem; margin-bottom: .4rem; }
+    .num { font-weight: 700; color: var(--primary-hover); font-family: var(--font-mono); }
+    .panel { margin-top: .85rem; padding-top: .85rem; border-top: 1px solid var(--border); }
+    .panel .btn-row { margin-top: .85rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+    .advanced { margin-top: .75rem; }
+    .advanced summary { cursor: pointer; font-size: .7rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+    .advanced summary:hover { color: var(--text); }
+    .toggle-line { display: block; margin: .5rem 0; font-size: .9rem; }
+    .toggle-line input { margin-right: .4rem; }
+    .danger-zone { margin-top: 1rem; padding-top: .85rem; border-top: 1px dashed var(--border-strong); }
+    .note { color: var(--muted); font-size: .8rem; margin-top: .75rem; }
+    .empty { color: var(--muted); font-size: .95rem; }
+    #registerBox > summary { cursor: pointer; font-family: var(--font-display); font-size: 1.05rem; }
+    #registerBox > summary:hover { color: var(--primary-hover); }
+    #registerBox[open] > summary { margin-bottom: .5rem; }
+    fieldset { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .5rem 1rem 1rem; margin: .75rem 0 0; background: var(--bg); }
+    legend { font-size: .75rem; color: var(--muted); padding: 0 .35rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="app-header">
+      <a class="back" href="/">← Home</a>
+      <a class="brand" href="/">
+        <img class="logo" src="/assets/rack.svg" alt="">
+        <span class="name">rack</span>
+      </a>
+    </header>
+
+    <h1>Containers</h1>
+    <p class="subtitle">Every rack, bin, and shelf you've registered. Print its labels, rename it, or retire it.</p>
+
+    <div class="cbox" id="allBox" hidden>
+      <h3>All pending labels</h3>
+      <div class="counts" id="allCounts"></div>
+      <div class="counts" id="allOffset"></div>
+      <div class="btn-row">
+        <button class="btn" id="allPreview" type="button">Preview</button>
+        <button class="btn primary" id="allPrint" type="button">Print &amp; mark as done</button>
+      </div>
+      <details class="advanced">
+        <summary>Advanced options</summary>
+        <label class="toggle-line"><input type="checkbox" id="allScope"> Include already-printed slots</label>
+        <label class="toggle-line"><input type="checkbox" id="allFresh"> Fresh sheet (start at position 1)</label>
+      </details>
+      <p class="note">One continuous run across every container, in the order below — leftover positions on a part-peeled sheet get used by whichever container comes next. Each label keeps its own container's scale.</p>
+      <div class="status" id="allStatus"></div>
+    </div>
+
+    <div id="list"></div>
+    <div class="status" id="pageStatus"></div>
+
+    <details class="cbox" id="registerBox">
+      <summary><strong>Register a container</strong></summary>
+      <div class="register-body">
+        <label class="field" for="regName">Name</label>
+        <input id="regName" type="text" placeholder="e.g. Small parts bin">
+
+        <label class="field" for="regId">ID (URL-safe)</label>
+        <input id="regId" type="text" placeholder="e.g. small-bin" pattern="[a-z][a-z0-9\-]{0,31}">
+        <p class="hint">Lowercase letters, digits, hyphens. Auto-derived from the name.</p>
+
+        <label class="field" for="regKind">Layout</label>
+        <select id="regKind">
+          <option value="grid">Grid (columns × rows, labelled A1, B1, C1, ...)</option>
+          <option value="linear">Linear (numbered 1 to N, optional prefix)</option>
+        </select>
+
+        <fieldset id="regGrid">
+          <legend>Grid</legend>
+          <div class="grid-2">
+            <div>
+              <label class="field" for="regCols">Columns</label>
+              <input id="regCols" type="number" min="1" max="26" value="5">
+            </div>
+            <div>
+              <label class="field" for="regRows">Rows</label>
+              <input id="regRows" type="number" min="1" max="30" value="12">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset id="regLinear" hidden>
+          <legend>Linear</legend>
+          <div class="grid-2">
+            <div>
+              <label class="field" for="regCount">Count</label>
+              <input id="regCount" type="number" min="1" max="200" value="24">
+            </div>
+            <div>
+              <label class="field" for="regPrefix">Prefix (optional)</label>
+              <input id="regPrefix" type="text" placeholder="e.g. b for b1, b2, ...">
+            </div>
+          </div>
+        </fieldset>
+
+        <label class="field" for="regScale">Label scale</label>
+        <input id="regScale" type="number" min="0.1" max="2" step="0.05" value="1.0">
+        <p class="hint">1.0 fills the full L7160 label. At 0.4 two labels share one sticker, to be trimmed apart.</p>
+
+        <div class="btn-row"><button class="btn primary block" id="regSubmit" type="button">Register container</button></div>
+        <div class="status" id="regStatus"></div>
+      </div>
+    </details>
+  </div>
+
+  <script>
+    const listEl = document.getElementById('list');
+    const pageStatus = document.getElementById('pageStatus');
+    const allBox = document.getElementById('allBox');
+    const allCounts = document.getElementById('allCounts');
+    const allOffset = document.getElementById('allOffset');
+    const allScope = document.getElementById('allScope');
+    const allFresh = document.getElementById('allFresh');
+    const allPreview = document.getElementById('allPreview');
+    const allPrint = document.getElementById('allPrint');
+    const allStatus = document.getElementById('allStatus');
+
+    init();
+
+    async function init() {
+      pageStatus.className = 'status';
+      pageStatus.textContent = 'Loading…';
+      try {
+        const res = await fetch('/c');
+        if (!res.ok) throw new Error(await errorText(res));
+        const containers = await res.json();
+        listEl.innerHTML = '';
+        pageStatus.textContent = containers.length ? '' : 'No containers yet. Register one to get started.';
+        pageStatus.className = containers.length ? 'status' : 'status empty';
+        containers.forEach(c => listEl.appendChild(card(c)));
+        allBox.hidden = !containers.length;
+        if (containers.length) await refreshAll();
+      } catch (e) {
+        pageStatus.className = 'status error';
+        pageStatus.textContent = 'Failed to load containers: ' + e.message;
+      }
+    }
+
+    async function refreshAll() {
+      try {
+        const res = await fetch('/labels/status');
+        if (!res.ok) throw new Error(await errorText(res));
+        const s = await res.json();
+        allCounts.innerHTML =
+          '<span class="num">' + s.printed + '</span> printed · ' +
+          '<span class="num">' + s.unprinted + '</span> pending · ' +
+          '<span class="num">' + s.total + '</span> total across ' +
+          '<span class="num">' + s.containers.length + '</span> containers';
+        allOffset.textContent = s.next_offset > 0
+          ? 'Next sheet starts at position ' + (s.next_offset + 1) + ' — feeds around the ' + s.next_offset + ' labels already peeled.'
+          : 'Next sheet starts fresh.';
+        const pending = s.unprinted > 0 || allScope.checked;
+        allPreview.disabled = !pending;
+        allPrint.disabled = !pending;
+      } catch (e) {
+        allStatus.className = 'status error';
+        allStatus.textContent = 'Failed to load label status: ' + e.message;
+      }
+    }
+
+    function allParams() {
+      const params = new URLSearchParams();
+      params.set('scope', allScope.checked ? 'all' : 'unprinted');
+      if (allFresh.checked) params.set('offset', '0');
+      return params.toString();
+    }
+
+    allScope.addEventListener('change', refreshAll);
+
+    allPreview.addEventListener('click', () => {
+      window.open('/labels?' + allParams(), '_blank');
+    });
+
+    allPrint.addEventListener('click', async () => {
+      allStatus.className = 'status';
+      allStatus.textContent = 'Generating…';
+      try {
+        const res = await fetch('/labels?' + allParams(), { method: 'POST' });
+        if (!res.ok) throw new Error(await errorText(res));
+        window.open(URL.createObjectURL(await res.blob()), '_blank');
+        allStatus.className = 'status ok';
+        allStatus.textContent = 'Marked as printed and saved.';
+        await init();
+      } catch (e) {
+        allStatus.className = 'status error';
+        allStatus.textContent = 'Failed: ' + e.message;
+      }
+    });
+
+    function card(c) {
+      const el = document.createElement('article');
+      el.className = 'cbox';
+      el.innerHTML =
+        '<h3 class="c-name"></h3>' +
+        '<div class="cmeta"><code class="c-id"></code> · <span class="c-slots"></span> slots · label scale <span class="c-scale"></span>×</div>' +
+        '<div class="cstats">Loading…</div>' +
+        '<div class="btn-row">' +
+          '<a class="btn c-put">Add an item</a>' +
+          '<button class="btn c-toggle-labels" type="button">Labels</button>' +
+          '<button class="btn c-toggle-edit" type="button">Edit</button>' +
+        '</div>' +
+        '<div class="panel c-labels" hidden>' +
+          '<div class="counts c-counts"></div>' +
+          '<div class="counts c-offset"></div>' +
+          '<div class="btn-row">' +
+            '<button class="btn c-preview" type="button">Preview</button>' +
+            '<button class="btn primary c-print" type="button">Print &amp; mark as done</button>' +
+          '</div>' +
+          '<details class="advanced">' +
+            '<summary>Advanced options</summary>' +
+            '<label class="toggle-line"><input type="checkbox" class="c-all"> Include already-printed slots</label>' +
+            '<label class="toggle-line"><input type="checkbox" class="c-fresh"> Fresh sheet (start at position 1)</label>' +
+          '</details>' +
+          '<div class="note">Preview generates a PDF without marking slots. Print &amp; mark saves a copy under <code>data/&lt;container&gt;/labels/</code> and offsets past positions already used on the current sheet.</div>' +
+        '</div>' +
+        '<div class="panel c-edit" hidden>' +
+          '<div class="grid-2">' +
+            '<div>' +
+              '<label class="field">Name</label>' +
+              '<input type="text" class="c-name-input">' +
+            '</div>' +
+            '<div>' +
+              '<label class="field">Label scale</label>' +
+              '<input type="number" class="c-scale-input" min="0.1" max="2" step="0.05">' +
+            '</div>' +
+          '</div>' +
+          '<p class="hint">1.0 fills the full L7160 label. Try 0.4 for small drawers — content shrinks so you can trim smaller. The id and slot layout are fixed once registered.</p>' +
+          '<div class="btn-row"><button class="btn primary c-save" type="button">Save changes</button></div>' +
+          '<div class="danger-zone">' +
+            '<button class="btn danger block c-delete" type="button" disabled>Delete this container</button>' +
+            '<p class="note c-delete-note">Checking contents…</p>' +
+          '</div>' +
+        '</div>' +
+        '<div class="status c-status"></div>';
+
+      const q = sel => el.querySelector(sel);
+      const stats = q('.cstats');
+      const status = q('.c-status');
+      const labelsPanel = q('.c-labels');
+      const editPanel = q('.c-edit');
+      const allBox = q('.c-all');
+      const freshBox = q('.c-fresh');
+      const preview = q('.c-preview');
+      const print = q('.c-print');
+
+      paint(c);
+      refreshStats();
+
+      function paint(container) {
+        c = container;
+        q('.c-name').textContent = c.name || c.id;
+        q('.c-id').textContent = c.id;
+        q('.c-slots').textContent = c.slots.length;
+        q('.c-scale').textContent = c.label_scale;
+        q('.c-put').href = '/put.html?c=' + encodeURIComponent(c.id);
+        q('.c-name-input').value = c.name || '';
+        q('.c-scale-input').value = c.label_scale;
+      }
+
+      async function refreshStats() {
+        try {
+          const res = await fetch('/c/' + encodeURIComponent(c.id) + '/summary');
+          if (!res.ok) throw new Error(await errorText(res));
+          const slots = await res.json();
+          const filled = slots.filter(s => s.item_count > 0).length;
+          const items = slots.reduce((n, s) => n + s.item_count, 0);
+          const printed = slots.filter(s => s.printed).length;
+          stats.innerHTML =
+            '<span class="num">' + filled + '</span> of <span class="num">' + slots.length + '</span> slots filled · ' +
+            '<span class="num">' + items + '</span> items · ' +
+            '<span class="num">' + printed + '</span> labelled';
+
+          // A photo counts as content even with nothing extracted from it, matching what the server will allow.
+          const occupied = slots.filter(s => s.item_count > 0 || s.photo_count > 0).length;
+          const del = q('.c-delete');
+          del.disabled = occupied > 0;
+          q('.c-delete-note').textContent = occupied > 0
+            ? 'Holds items or photos in ' + occupied + (occupied === 1 ? ' slot' : ' slots') + '. Empty or move them first.'
+            : 'Every slot is empty. Label sheets already on disk are kept.';
+        } catch (e) {
+          stats.textContent = 'Could not load slot counts: ' + e.message;
+        }
+      }
+
+      async function refreshLabelCounts() {
+        const res = await fetch('/labels/' + encodeURIComponent(c.id) + '/status');
+        if (!res.ok) throw new Error(await errorText(res));
+        const s = await res.json();
+        q('.c-counts').innerHTML =
+          '<span class="num">' + s.printed + '</span> printed · ' +
+          '<span class="num">' + s.unprinted + '</span> pending · ' +
+          '<span class="num">' + s.total + '</span> total';
+        q('.c-offset').textContent = s.next_offset > 0
+          ? 'Next sheet starts at position ' + (s.next_offset + 1) + ' — feeds around the ' + s.next_offset + ' labels already peeled.'
+          : 'Next sheet starts fresh.';
+        const pending = s.unprinted > 0 || allBox.checked;
+        preview.disabled = !pending;
+        print.disabled = !pending;
+      }
+
+      function queryParams() {
+        const params = new URLSearchParams();
+        params.set('scope', allBox.checked ? 'all' : 'unprinted');
+        if (freshBox.checked) params.set('offset', '0');
+        return params.toString();
+      }
+
+      q('.c-toggle-labels').addEventListener('click', async () => {
+        editPanel.hidden = true;
+        labelsPanel.hidden = !labelsPanel.hidden;
+        if (!labelsPanel.hidden) {
+          try { await refreshLabelCounts(); } catch (e) { fail('Failed to load label status: ' + e.message); }
+        }
+      });
+
+      q('.c-toggle-edit').addEventListener('click', () => {
+        labelsPanel.hidden = true;
+        editPanel.hidden = !editPanel.hidden;
+      });
+
+      allBox.addEventListener('change', () => refreshLabelCounts().catch(() => {}));
+
+      preview.addEventListener('click', () => {
+        window.open('/labels/' + encodeURIComponent(c.id) + '?' + queryParams(), '_blank');
+      });
+
+      print.addEventListener('click', async () => {
+        note('Generating…');
+        try {
+          const res = await fetch('/labels/' + encodeURIComponent(c.id) + '?' + queryParams(), { method: 'POST' });
+          if (!res.ok) throw new Error(await errorText(res));
+          window.open(URL.createObjectURL(await res.blob()), '_blank');
+          ok('Marked as printed and saved.');
+          await refreshLabelCounts();
+          await refreshStats();
+        } catch (e) {
+          fail('Failed: ' + e.message);
+        }
+      });
+
+      q('.c-save').addEventListener('click', async () => {
+        const body = {
+          name: q('.c-name-input').value,
+          label_scale: parseFloat(q('.c-scale-input').value)
+        };
+        note('Saving…');
+        try {
+          const res = await fetch('/c/' + encodeURIComponent(c.id), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          if (!res.ok) throw new Error(await errorText(res));
+          paint(await res.json());
+          ok('Saved.');
+        } catch (e) {
+          fail('Failed: ' + e.message);
+        }
+      });
+
+      q('.c-delete').addEventListener('click', async () => {
+        if (!confirm('Delete "' + (c.name || c.id) + '"? Its labels stop resolving, and any QR codes already stuck on it become dead.')) return;
+        note('Deleting…');
+        try {
+          const res = await fetch('/c/' + encodeURIComponent(c.id), { method: 'DELETE' });
+          if (!res.ok) throw new Error(await errorText(res));
+          el.remove();
+          pageStatus.className = 'status ok';
+          pageStatus.textContent = '"' + (c.name || c.id) + '" deleted.';
+          if (!listEl.children.length) {
+            pageStatus.className = 'status empty';
+            pageStatus.textContent = 'No containers left. Register one to get started.';
+          }
+        } catch (e) {
+          fail(e.message);
+        }
+      });
+
+      function note(msg) { status.className = 'status'; status.textContent = msg; }
+      function ok(msg) { status.className = 'status ok'; status.textContent = msg; }
+      function fail(msg) { status.className = 'status error'; status.textContent = msg; }
+
+      return el;
+    }
+
+    const regName = document.getElementById('regName');
+    const regId = document.getElementById('regId');
+    const regKind = document.getElementById('regKind');
+    const regStatus = document.getElementById('regStatus');
+    const regSubmit = document.getElementById('regSubmit');
+    let regIdEdited = false;
+
+    regId.addEventListener('input', () => regIdEdited = true);
+    regName.addEventListener('input', () => { if (!regIdEdited) regId.value = deriveId(regName.value); });
+    regKind.addEventListener('change', () => {
+      document.getElementById('regGrid').hidden = regKind.value !== 'grid';
+      document.getElementById('regLinear').hidden = regKind.value !== 'linear';
+    });
+
+    regSubmit.addEventListener('click', async () => {
+      const grid = regKind.value === 'grid';
+      const body = {
+        id: regId.value.trim(),
+        name: regName.value.trim(),
+        layout: {
+          kind: regKind.value,
+          cols: grid ? parseInt(document.getElementById('regCols').value, 10) : null,
+          rows: grid ? parseInt(document.getElementById('regRows').value, 10) : null,
+          count: grid ? null : parseInt(document.getElementById('regCount').value, 10),
+          prefix: grid ? null : (document.getElementById('regPrefix').value.trim() || null)
+        },
+        label_scale: parseFloat(document.getElementById('regScale').value)
+      };
+      regStatus.className = 'status';
+      regStatus.textContent = 'Registering…';
+      regSubmit.disabled = true;
+      try {
+        const res = await fetch('/c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!res.ok) throw new Error(await errorText(res));
+        const c = await res.json();
+        regStatus.className = 'status ok';
+        regStatus.textContent = '"' + c.name + '" registered — ' + c.slots.length + ' slots.';
+        regName.value = '';
+        regId.value = '';
+        regIdEdited = false;
+        await init();
+      } catch (e) {
+        regStatus.className = 'status error';
+        regStatus.textContent = 'Failed: ' + e.message;
+      } finally {
+        regSubmit.disabled = false;
+      }
+    });
+
+    function deriveId(s) {
+      return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/^[^a-z]/, '').slice(0, 32);
+    }
+
+    async function errorText(res) {
+      const body = await res.text();
+      try {
+        const parsed = JSON.parse(body);
+        return parsed.message || parsed.error || ('HTTP ' + res.status);
+      } catch {
+        return body || ('HTTP ' + res.status);
+      }
+    }
+  </script>
+</body>
+</html>

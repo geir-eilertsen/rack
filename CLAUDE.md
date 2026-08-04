@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Live at https://rack.apalveien5.eilertsen.family/. Three use cases work end-to-end: identify a part, add a photo to a slot, print QR labels (with per-container scale + printed-state tracking).
+Live at https://rack.apalveien5.eilertsen.family/. Working end-to-end: identify a part, add a photo to a slot, find/edit/move items, and maintain containers — register, rename, rescale, delete, and print QR labels (with per-container scale + printed-state tracking).
 
 ## Build and run
 
@@ -106,14 +106,33 @@ Committing after each write gives history, per-drawer undo, and free multi-site 
 - `/` → index page (hub)
 - `/identify.html`, `POST /identify` → identify a part from a photo, no persistence
 - `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state
-- `/labels.html`, `GET /labels/{container}` (preview), `POST /labels/{container}` (mark + archive), `GET /labels/{container}/status` → QR label sheets
+- `/containers.html`, `POST /c` (register), `PATCH /c/{container}` (name + label scale), `DELETE /c/{container}` → maintain containers; also hosts registration and the label flow below
+- `GET /labels` (preview), `POST /labels` (mark + archive), `GET /labels/status` → one continuous run across every container
+- `GET /labels/{container}` (preview), `POST /labels/{container}` (mark + archive), `GET /labels/{container}/status` → a single container's sheet
 - Static pages resize phone photos to ~1600px client-side before upload; keeps below the 20MB multipart cap and shrinks the vision call.
 
 ### Labels
 
 Physical paper is always Avery L7160 (A4 21-up, 63.5×38.1mm). Each container declares a `labelScale` in config; content (QR + text) is drawn to `scale × 30mm` QR and `scale × 40pt` font, anchored to the top-left of each L7160 slot so trimming smaller labels for smaller drawers is easy. The QR encodes `<public-base>/put.html?c={container}&s={slot}` — scanning from a phone camera opens the capture page pre-scoped to that slot.
 
-`Slot.printedAt` records when a label was archived via `POST /labels/{container}`. Preview (GET) doesn't touch this. Default scope on both endpoints is `unprinted` — pass `?scope=all` to include already-printed slots.
+`Slot.printedAt` records when a label was archived via `POST /labels/{container}`. Preview (GET) doesn't touch this. Default scope on both endpoints is `unprinted` — pass `?scope=all` to include already-printed slots (`printed` is used internally to reconstruct sheet position).
+
+**Several labels can share one physical sticker.** `LabelSheet.pack` greedily stacks consecutive labels down an L7160 slot while they still fit, so a 0.4-scale container puts two labels on one sticker to be trimmed apart; at 1.0 nothing packs. Mixed scales pack fine because each label is measured on its own — a full-scale label won't squeeze in behind a small one.
+
+The consequence: **printed labels and consumed sticker positions are different numbers**, so sheet offsets are counted in positions. `LabelSheet.positionCount` re-packs the already-printed labels in the same order to work out how far into the current sheet the last run reached.
+
+**A sheet of paper is a shared resource, so the global run spans containers.** `GET`/`POST /labels` walks every container in registration order and lays all pending labels into one continuous stream of sheets, so leftover positions on a part-peeled sheet get used by whichever container comes next. Global runs archive to `data/labels/<stamp>.pdf`; per-container runs still archive to `data/<container>/labels/`. A per-container run keeps its own offset — it does not consume the global sheet position.
+
+`GET /labels/status` is a literal path declared before `/labels/{container}`, which reserves `status` as a container id.
+
+### Maintaining containers
+
+`/containers.html` lists every container with its slot/item/label counts and is the single place to register, print labels, rename, rescale, or delete one. There is no separate register page.
+
+- **Name and label scale are editable; the slot layout is not.** Reshaping a container would orphan slots that hold items, so `UpdateContainer` only ever rewrites those two fields.
+- **Delete refuses while any slot holds items *or photos*** (`409`, naming the occupied slots in layout order). A photo counts as content even when nothing was extracted from it — the photo is ground truth and the items are only an index over it, so deleting would orphan a file that still means something. A printed label is not content. `DeleteContainer` checks `PartIndex.all(container)` rather than the current layout, so an item parked in an off-layout slot still blocks it, and the UI disables the button rather than offering a delete the server will refuse.
+- Deleting drops the registration only — `data/<container>/` is left on disk, so re-registering the same id picks its slot state (and `printedAt`) back up.
+- `server.error.include-message: always` is set so those refusal messages actually reach the browser.
 
 ### Deployment
 

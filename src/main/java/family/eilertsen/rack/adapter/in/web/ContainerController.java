@@ -3,10 +3,12 @@ package family.eilertsen.rack.adapter.in.web;
 import family.eilertsen.rack.application.AddPhotoToSlot;
 import family.eilertsen.rack.application.AskAboutItem;
 import family.eilertsen.rack.application.ContainerRegistry;
+import family.eilertsen.rack.application.DeleteContainer;
 import family.eilertsen.rack.application.EditItem;
 import family.eilertsen.rack.application.MoveItem;
 import family.eilertsen.rack.application.RegisterContainer;
 import family.eilertsen.rack.application.RemoveItem;
+import family.eilertsen.rack.application.UpdateContainer;
 import family.eilertsen.rack.domain.model.Container;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Slot;
@@ -40,6 +42,8 @@ public class ContainerController {
     private final PartIndex index;
     private final AddPhotoToSlot addPhoto;
     private final RegisterContainer registerContainer;
+    private final UpdateContainer updateContainer;
+    private final DeleteContainer deleteContainer;
     private final RemoveItem removeItem;
     private final EditItem editItem;
     private final MoveItem moveItem;
@@ -47,12 +51,15 @@ public class ContainerController {
     private final ImageStore images;
 
     public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto,
-                                RegisterContainer registerContainer, RemoveItem removeItem,
+                                RegisterContainer registerContainer, UpdateContainer updateContainer,
+                                DeleteContainer deleteContainer, RemoveItem removeItem,
                                 EditItem editItem, MoveItem moveItem, AskAboutItem askAboutItem, ImageStore images) {
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
         this.registerContainer = registerContainer;
+        this.updateContainer = updateContainer;
+        this.deleteContainer = deleteContainer;
         this.removeItem = removeItem;
         this.editItem = editItem;
         this.moveItem = moveItem;
@@ -79,6 +86,28 @@ public class ContainerController {
     public Container container(@PathVariable String container) {
         return registry.get(new ContainerId(container))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown container: " + container));
+    }
+
+    @PatchMapping("/{container}")
+    public Container update(@PathVariable String container, @RequestBody UpdateContainer.Fields fields) {
+        try {
+            return updateContainer.execute(new ContainerId(container), fields);
+        } catch (java.util.NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
+    }
+
+    @DeleteMapping("/{container}")
+    public Container delete(@PathVariable String container) {
+        try {
+            return deleteContainer.execute(new ContainerId(container));
+        } catch (java.util.NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage(), e);
+        }
     }
 
     @GetMapping("/{container}/summary")

@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 @Component
@@ -41,6 +42,22 @@ public class ContainerRegistry {
             throw new IllegalArgumentException("Container already registered: " + c.id().value());
         }
         byId.put(c.id(), c);
+        store.saveAll(List.copyOf(byId.values()));
+    }
+
+    /** Replaces an existing container in place, keeping its position in the listing. */
+    public synchronized void update(Container c) {
+        if (!byId.containsKey(c.id())) {
+            throw new NoSuchElementException("Unknown container: " + c.id().value());
+        }
+        byId.put(c.id(), c);
+        store.saveAll(List.copyOf(byId.values()));
+    }
+
+    public synchronized void remove(ContainerId id) {
+        if (byId.remove(id) == null) {
+            throw new NoSuchElementException("Unknown container: " + id.value());
+        }
         store.saveAll(List.copyOf(byId.values()));
     }
 
