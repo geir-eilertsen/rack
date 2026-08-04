@@ -16,20 +16,18 @@ Scaffold in place: Maven, Java 21, Spring Boot 3.4, Spring AI 1.0. Domain record
 ./mvnw package                                # jar in target/
 ```
 
-Config: `OPENAI_API_KEY` env var feeds `spring.ai.openai.api-key`. `RACK_DATA_DIR` overrides the default `./data`.
+Config: `ANTHROPIC_API_KEY` env var feeds `spring.ai.anthropic.api-key`. `RACK_DATA_DIR` overrides the default `./data`.
 
 ## Docker
 
 ```
 docker build -t rack:local .
-docker run --rm -p 8080:8080 -e OPENAI_API_KEY=$OPENAI_API_KEY rack:local
+docker run --rm -p 8080:8080 -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY rack:local
 ```
 
-Multi-stage build (Maven + JDK → JRE-only runtime). `OPENAI_API_KEY` must be set — Spring AI's OpenAI autoconfig requires a key at bean construction, so even a smoke test needs *some* value (`sk-local-smoketest` is enough to boot). A **real** key is needed for `/identify` and any endpoint that actually calls the vision or embedding model.
+Multi-stage build (Maven + JDK → JRE-only runtime). The app boots without an `ANTHROPIC_API_KEY` (the Anthropic autoconfig only requires it on first call, not at bean construction), but `/identify` will 500 without one.
 
-Chat model is `gpt-4o-mini` (see `spring.ai.openai.chat.options.model` in `application.yml`).
-
-`application.yml` disables the OpenAI model types we don't use (`image`, `moderation`, `audio.speech`, `audio.transcription`); leaving them enabled tries to instantiate their beans at startup and crashes the app.
+Chat model is `claude-sonnet-4-6` (see `spring.ai.anthropic.chat.options.model` in `application.yml`). Claude has native vision, so the multipart-photo flow uses the same `ChatClient` API as any other model.
 
 ## Purpose
 
