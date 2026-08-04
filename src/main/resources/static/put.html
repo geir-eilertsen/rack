@@ -32,6 +32,14 @@
     .meta { font-size: .8rem; color: #666; }
     .tags { margin-top: .25rem; }
     .tag { display: inline-block; background: #eef; padding: .1rem .5rem; border-radius: 999px; margin: .1rem .1rem 0 0; font-size: .75rem; }
+    .current { list-style: none; padding: 0; margin: .5rem 0 0; }
+    .current li { display: flex; justify-content: space-between; align-items: flex-start; padding: .55rem .75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: .35rem; gap: .5rem; }
+    .current .info { flex: 1; min-width: 0; font-size: .9rem; }
+    .current .info strong { display: block; }
+    .current .info .pn { font-size: .8rem; }
+    .current .remove { flex: 0 0 auto; border: none; background: transparent; color: #b00020; font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 0 .4rem; }
+    .current .remove:hover { color: #700018; }
+    .current .empty { padding: .55rem .75rem; border: 1px dashed #ccc; border-radius: 6px; color: #666; font-size: .85rem; }
   </style>
 </head>
 <body>
@@ -43,6 +51,9 @@
 
   <h2 id="slotHeading" hidden>2. pick a slot</h2>
   <div class="grid" id="slots"></div>
+
+  <h2 id="currentHeading" hidden>currently in this slot</h2>
+  <ul class="current" id="current"></ul>
 
   <h2 id="photoHeading" hidden>3. take a photo</h2>
   <label class="capture" hidden id="capture">
@@ -59,6 +70,8 @@
     const containerHeading = document.getElementById('containerHeading');
     const slotHeading = document.getElementById('slotHeading');
     const slotsEl = document.getElementById('slots');
+    const currentHeading = document.getElementById('currentHeading');
+    const currentEl = document.getElementById('current');
     const photoHeading = document.getElementById('photoHeading');
     const capture = document.getElementById('capture');
     const photo = document.getElementById('photo');
@@ -113,6 +126,8 @@
       });
       slotHeading.hidden = false;
       renderSlots(c.slots || []);
+      currentHeading.hidden = true;
+      currentEl.innerHTML = '';
       photoHeading.hidden = true;
       capture.hidden = true;
       preview.innerHTML = '';
@@ -147,6 +162,52 @@
       items.innerHTML = '';
       status.className = 'status';
       status.textContent = '';
+      loadCurrent();
+    }
+
+    async function loadCurrent() {
+      if (!selectedContainer || !selectedSlot) return;
+      currentHeading.hidden = false;
+      currentEl.innerHTML = '<li class="empty">Loading...</li>';
+      try {
+        const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const slot = await res.json();
+        renderCurrent(slot.items || []);
+      } catch (e) {
+        currentEl.innerHTML = '<li class="empty">Failed to load: ' + esc(e.message) + '</li>';
+      }
+    }
+
+    function renderCurrent(list) {
+      if (!list.length) {
+        currentEl.innerHTML = '<li class="empty">Empty.</li>';
+        return;
+      }
+      currentEl.innerHTML = list.map((it, idx) => {
+        const label = esc(it.description || '(unknown)')
+          + (it.part_number ? ' <span class="pn">' + esc(it.part_number) + '</span>' : '');
+        return '<li>' +
+          '<div class="info"><strong>' + label + '</strong></div>' +
+          '<button class="remove" data-idx="' + idx + '" title="remove">&times;</button>' +
+        '</li>';
+      }).join('');
+      currentEl.querySelectorAll('.remove').forEach(btn => {
+        btn.addEventListener('click', () => removeItem(parseInt(btn.dataset.idx, 10)));
+      });
+    }
+
+    async function removeItem(idx) {
+      if (!selectedContainer || !selectedSlot) return;
+      try {
+        const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + idx, { method: 'DELETE' });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const slot = await res.json();
+        renderCurrent(slot.items || []);
+      } catch (e) {
+        status.className = 'status error';
+        status.textContent = 'Remove failed: ' + e.message;
+      }
     }
 
     photo.addEventListener('change', async () => {
@@ -169,6 +230,7 @@
         status.className = 'status ok';
         status.textContent = 'Filed ' + extracted.length + ' item(s) into ' + selectedContainer.id + '.' + selectedSlot + ' (photo: ' + data.photo_filename + ')';
         items.innerHTML = extracted.map(renderItem).join('');
+        loadCurrent();
       } catch (e) {
         status.className = 'status error';
         status.textContent = 'Failed: ' + e.message;

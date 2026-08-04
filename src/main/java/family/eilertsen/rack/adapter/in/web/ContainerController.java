@@ -3,6 +3,7 @@ package family.eilertsen.rack.adapter.in.web;
 import family.eilertsen.rack.application.AddPhotoToSlot;
 import family.eilertsen.rack.application.ContainerRegistry;
 import family.eilertsen.rack.application.RegisterContainer;
+import family.eilertsen.rack.application.RemoveItem;
 import family.eilertsen.rack.domain.model.Container;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Slot;
@@ -11,6 +12,7 @@ import family.eilertsen.rack.domain.port.PartIndex;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,13 +35,15 @@ public class ContainerController {
     private final PartIndex index;
     private final AddPhotoToSlot addPhoto;
     private final RegisterContainer registerContainer;
+    private final RemoveItem removeItem;
 
     public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto,
-                                RegisterContainer registerContainer) {
+                                RegisterContainer registerContainer, RemoveItem removeItem) {
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
         this.registerContainer = registerContainer;
+        this.removeItem = removeItem;
     }
 
     @GetMapping
@@ -79,6 +83,22 @@ public class ContainerController {
         SlotId sid = new SlotId(slot);
         requireContainerExists(cid);
         return addPhoto.execute(cid, sid, photo.getBytes(), photo.getContentType());
+    }
+
+    @DeleteMapping("/{container}/{slot}/items/{index}")
+    public Slot removeItem(@PathVariable String container,
+                            @PathVariable String slot,
+                            @PathVariable int index) {
+        ContainerId cid = new ContainerId(container);
+        SlotId sid = new SlotId(slot);
+        requireContainerExists(cid);
+        try {
+            return removeItem.execute(cid, sid, index);
+        } catch (IndexOutOfBoundsException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+        } catch (java.util.NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+        }
     }
 
     private void requireContainerExists(ContainerId id) {
