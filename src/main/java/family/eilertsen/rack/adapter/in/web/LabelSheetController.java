@@ -1,13 +1,13 @@
 package family.eilertsen.rack.adapter.in.web;
 
 import family.eilertsen.rack.application.ContainerRegistry;
+import family.eilertsen.rack.application.RackProperties;
 import family.eilertsen.rack.domain.model.Container;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.port.PartIndex;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -35,12 +35,13 @@ public class LabelSheetController {
     private final ContainerRegistry registry;
     private final PartIndex index;
     private final Path dataDir;
+    private final String configuredBase;
 
-    public LabelSheetController(ContainerRegistry registry, PartIndex index,
-                                 @Value("${rack.data-dir}") String dataDir) {
+    public LabelSheetController(ContainerRegistry registry, PartIndex index, RackProperties props) {
         this.registry = registry;
         this.index = index;
-        this.dataDir = Path.of(dataDir).toAbsolutePath();
+        this.dataDir = Path.of(props.dataDir()).toAbsolutePath();
+        this.configuredBase = props.publicBaseUrl();
     }
 
     @GetMapping("/labels/{container}")
@@ -52,7 +53,7 @@ public class LabelSheetController {
         Container c = container(container);
         List<SlotId> slots = pickSlots(c, scope);
         int firstPageOffset = resolveOffset(c, offset);
-        byte[] pdf = LabelSheet.build(base != null ? base : requestBase(req), c, slots, firstPageOffset);
+        byte[] pdf = LabelSheet.build(resolveBase(base, req), c, slots, firstPageOffset);
         return pdfResponse(c, pdf);
     }
 
@@ -65,10 +66,16 @@ public class LabelSheetController {
         Container c = container(container);
         List<SlotId> slots = pickSlots(c, scope);
         int firstPageOffset = resolveOffset(c, offset);
-        byte[] pdf = LabelSheet.build(base != null ? base : requestBase(req), c, slots, firstPageOffset);
+        byte[] pdf = LabelSheet.build(resolveBase(base, req), c, slots, firstPageOffset);
         savePdf(c, pdf);
         markPrinted(c, slots);
         return pdfResponse(c, pdf);
+    }
+
+    private String resolveBase(String explicit, HttpServletRequest req) {
+        if (explicit != null && !explicit.isBlank()) return explicit;
+        if (configuredBase != null && !configuredBase.isBlank()) return configuredBase;
+        return requestBase(req);
     }
 
     @GetMapping("/labels/{container}/status")

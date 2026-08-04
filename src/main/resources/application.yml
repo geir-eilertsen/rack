@@ -17,6 +17,8 @@ spring:
 
 rack:
   data-dir: ${RACK_DATA_DIR:./data}
+  public-base-url: ${RACK_PUBLIC_BASE_URL:}
 
 server:
   port: 8080
+  forward-headers-strategy: FRAMEWORK
