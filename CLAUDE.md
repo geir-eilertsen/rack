@@ -16,8 +16,6 @@ Scaffold in place: Maven, Java 21, Spring Boot 3.4, Spring AI 1.0. Domain record
 ./mvnw package                                # jar in target/
 ```
 
-The Maven wrapper isn't checked in yet — run `mvn -N wrapper:wrapper` once (from a machine with `mvn` on PATH) to generate it, or substitute `mvn` for `./mvnw` above.
-
 Config: `OPENAI_API_KEY` env var feeds `spring.ai.openai.api-key`. `RACK_DATA_DIR` overrides the default `./data`.
 
 ## Purpose
@@ -33,6 +31,28 @@ Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all s
 - `PartIndex` — read/write of drawer records; search
 
 The initial `PartIndex` adapter is file-backed. If the rack ever grows past ~1,000 drawers, swap in a Postgres adapter without the domain noticing — that seam is the reason for the port.
+
+### Package layout (enforced)
+
+```
+family.eilertsen.rack
+├── domain
+│   ├── model      # records: Drawer, DrawerId, Item, SearchHit
+│   └── port       # interfaces: ImageStore, PartExtractor, PartIndex
+├── application    # use-case services that orchestrate domain + ports
+└── adapter
+    ├── in         # inbound adapters (REST controllers, CLI, etc.)
+    └── out        # outbound adapters (JsonFilePartIndex, SpringAi..., ...)
+```
+
+`HexagonalArchitectureTest` (ArchUnit) enforces:
+
+1. **Onion layering** — domain doesn't depend on application or adapters; application doesn't depend on adapters; adapters don't depend on each other.
+2. **Domain is framework-free** — no Spring, JPA, Servlet, or Jackson imports under `..domain..`. Adapters own all framework contact.
+3. **Ports are interfaces** — anything under `..domain.port..` must be an interface.
+4. **No package cycles** across top-level slices.
+
+Adapters go under `adapter.in.<name>` or `adapter.out.<name>` — those subpaths are what the onion rule recognises.
 
 ### Storage model (why files, not a database)
 
@@ -98,4 +118,3 @@ Shoot all 60 drawers in one sitting — white paper background, coin in frame fo
 - Spring AI `PartExtractor` adapter + extraction prompt — not yet written
 - Web/PWA inbound adapter — not yet written
 - Whether the Git history layer is in from the start or added later
-- Maven wrapper (`./mvnw`) — not yet generated
