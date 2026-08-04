@@ -105,10 +105,12 @@ public class JsonFilePartIndex implements PartIndex {
         for (Map.Entry<ContainerId, Map<SlotId, Slot>> e : byContainer.entrySet()) {
             ContainerId cid = e.getKey();
             for (Slot slot : e.getValue().values()) {
-                for (Item item : slot.items()) {
+                List<Item> items = slot.items();
+                for (int i = 0; i < items.size(); i++) {
+                    Item item = items.get(i);
                     double score = matchScore(item, q);
                     if (score > 0) {
-                        hits.add(new SearchHit(cid, slot.id(), item, score, slot.lastVerified()));
+                        hits.add(new SearchHit(cid, slot.id(), i, item, score, slot.lastVerified(), slot.photos()));
                     }
                 }
             }

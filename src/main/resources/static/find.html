@@ -21,11 +21,22 @@
     .hit .verified { font-size: .75rem; color: #666; }
     .hit .verified.stale { color: #b58900; }
     .hit .verified.never { color: #999; }
-    .hit h3 { margin: 0 0 .2rem; font-size: .95rem; }
+    .hit h3 { margin: 0 0 .2rem; font-size: .95rem; display: inline; }
+    .hit .edit { border: none; background: transparent; color: #333; font-size: .95rem; cursor: pointer; padding: 0 .3rem; float: right; }
+    .hit .edit:hover { color: #000; }
     .pn { font-family: ui-monospace, SFMono-Regular, monospace; color: #444; font-size: .85rem; }
     .meta { font-size: .8rem; color: #666; margin-top: .2rem; }
     .tags { margin-top: .2rem; }
     .tag { display: inline-block; background: #eef; padding: .1rem .5rem; border-radius: 999px; margin: .1rem .1rem 0 0; font-size: .7rem; }
+    .photos { display: flex; gap: .25rem; flex-wrap: wrap; margin-top: .35rem; }
+    .photos img { width: 56px; height: 56px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; }
+    .edit-form { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid #eee; display: none; flex-direction: column; gap: .3rem; }
+    .hit.editing .edit-form { display: flex; }
+    .edit-form label { font-size: .75rem; color: #666; }
+    .edit-form input { font: inherit; font-size: .9rem; padding: .35rem .5rem; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
+    .edit-form .row { display: flex; gap: .3rem; margin-top: .3rem; }
+    .edit-form .row button { flex: 1; padding: .5rem; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer; font: inherit; font-size: .9rem; }
+    .edit-form .row button.save { background: #333; color: #fff; border-color: #333; }
   </style>
 </head>
 <body>
@@ -45,6 +56,7 @@
 
     let controller = null;
     let debounce = null;
+    let currentQuery = '';
 
     q.addEventListener('input', () => {
       clearTimeout(debounce);
@@ -53,6 +65,7 @@
 
     async function runSearch() {
       const query = q.value.trim();
+      currentQuery = query;
       if (!query) {
         status.className = 'status';
         status.textContent = 'Type to search.';
@@ -85,6 +98,7 @@
       status.className = 'status';
       status.textContent = results.length + ' match' + (results.length === 1 ? '' : 'es') + ' for "' + esc(query) + '".';
       hits.innerHTML = results.map(renderHit).join('');
+      wireHitEvents();
     }
 
     function renderHit(h) {
@@ -94,13 +108,63 @@
       const qty = it.qty_estimate != null ? it.qty_estimate : '?';
       const location = h.container + ' · ' + h.slot;
       const putUrl = '/put.html?c=' + encodeURIComponent(h.container) + '&s=' + encodeURIComponent(h.slot);
-      return '<li class="hit">' +
+      const tagsCsv = (it.tags || []).join(', ');
+      const photoStrip = (h.photos || []).slice(0, 6).map(fn => {
+        const url = '/c/' + encodeURIComponent(h.container) + '/' + encodeURIComponent(h.slot) + '/photos/' + encodeURIComponent(fn);
+        return '<a href="' + url + '" target="_blank"><img src="' + url + '" alt=""></a>';
+      }).join('');
+      return '<li class="hit" data-container="' + esc(h.container) + '" data-slot="' + esc(h.slot) + '" data-index="' + h.index + '">' +
         '<div class="loc"><a href="' + putUrl + '">' + esc(location) + '</a>' + verifiedBadge(h.last_verified) + '</div>' +
         '<h3>' + esc(it.description || '(unknown)') + '</h3>' +
+        '<button class="edit" title="edit">&#9998;</button>' +
         (it.part_number ? '<div class="pn">' + esc(it.part_number) + '</div>' : '') +
         '<div class="meta">' + esc(it.category || '') + ' · qty ' + qty + ' · conf ' + conf + '</div>' +
         (tags ? '<div class="tags">' + tags + '</div>' : '') +
+        (photoStrip ? '<div class="photos">' + photoStrip + '</div>' : '') +
+        '<div class="edit-form">' +
+          '<label>Description</label><input class="f-description" value="' + esc(it.description || '') + '">' +
+          '<label>Part number</label><input class="f-part_number" value="' + esc(it.part_number || '') + '">' +
+          '<label>Category</label><input class="f-category" value="' + esc(it.category || '') + '">' +
+          '<label>Quantity</label><input class="f-qty_estimate" type="number" min="0" value="' + (it.qty_estimate != null ? it.qty_estimate : 1) + '">' +
+          '<label>Tags (comma separated)</label><input class="f-tags" value="' + esc(tagsCsv) + '">' +
+          '<div class="row"><button class="cancel">Cancel</button><button class="save">Save</button></div>' +
+        '</div>' +
       '</li>';
+    }
+
+    function wireHitEvents() {
+      hits.querySelectorAll('.hit .edit').forEach(b => b.addEventListener('click', e => {
+        e.stopPropagation();
+        b.closest('.hit').classList.toggle('editing');
+      }));
+      hits.querySelectorAll('.hit .cancel').forEach(b => b.addEventListener('click', () => b.closest('.hit').classList.remove('editing')));
+      hits.querySelectorAll('.hit .save').forEach(b => b.addEventListener('click', () => saveHit(b.closest('.hit'))));
+    }
+
+    async function saveHit(li) {
+      const container = li.dataset.container;
+      const slot = li.dataset.slot;
+      const idx = +li.dataset.index;
+      const payload = {
+        description: li.querySelector('.f-description').value,
+        part_number: li.querySelector('.f-part_number').value || null,
+        category: li.querySelector('.f-category').value,
+        qty_estimate: parseInt(li.querySelector('.f-qty_estimate').value, 10) || 1,
+        tags: li.querySelector('.f-tags').value.split(',').map(s => s.trim()).filter(Boolean)
+      };
+      try {
+        const res = await fetch('/c/' + container + '/' + slot + '/items/' + idx, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        // Re-run current search so the hit reflects the edit
+        runSearch();
+      } catch (e) {
+        status.className = 'status error';
+        status.textContent = 'Edit failed: ' + e.message;
+      }
     }
 
     function verifiedBadge(iso) {
