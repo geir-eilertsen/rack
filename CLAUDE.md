@@ -124,8 +124,6 @@ Shoot all 60 drawers in one sitting — white paper background, coin in frame fo
 
 ## Open items
 
-- File-backed `PartIndex` adapter (`JsonFilePartIndex`) — not yet written
-- Filesystem `ImageStore` adapter — not yet written
-- Spring AI `PartExtractor` adapter + extraction prompt — not yet written
-- Web/PWA inbound adapter — not yet written
-- Whether the Git history layer is in from the start or added later
+Tracked as GitHub issues: https://github.com/geir-eilertsen/rack/issues
+
+When new scope surfaces — a feature, adapter, or open question — file a `gh issue` rather than adding it here.
