@@ -3,175 +3,159 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rack — add to slot</title>
+  <title>rack — put in slot</title>
   <style>
     body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 1rem; max-width: 640px; color: #222; }
     .back { color: #666; text-decoration: none; font-size: .85rem; }
     .back:hover { color: #222; }
     h1 { font-size: 1.2rem; margin: .25rem 0 1rem; }
     h2 { font-size: .85rem; color: #666; margin: 1.2rem 0 .5rem; text-transform: uppercase; letter-spacing: .05em; }
-    .containers { display: flex; flex-wrap: wrap; gap: .3rem; }
-    .container-btn { padding: .5rem .9rem; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: .9rem; }
-    .container-btn:hover { background: #f0f0f0; }
-    .container-btn.selected { background: #333; color: #fff; border-color: #333; }
-    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: .3rem; }
-    .slot-btn { padding: .55rem 0; text-align: center; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: .8rem; }
-    .slot-btn:hover { background: #f0f0f0; }
-    .slot-btn.selected { background: #333; color: #fff; border-color: #333; }
     .capture { display: block; width: 100%; padding: 1.4rem; font-size: 1rem; border: 2px dashed #666; border-radius: 8px; text-align: center; background: #f8f8f8; cursor: pointer; box-sizing: border-box; }
-    .capture[hidden] { display: none; }
     .capture input { display: none; }
     #preview img { max-width: 100%; border-radius: 8px; display: block; margin-top: 1rem; }
-    .status { margin-top: 1rem; color: #666; }
+    .status { margin-top: 1rem; color: #666; font-size: .9rem; }
     .status.error { color: #b00020; }
     .status.ok { color: #0a7f00; }
-    .items { list-style: none; padding: 0; margin: .5rem 0 0; }
-    .item { padding: .75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: .5rem; }
-    .item h3 { margin: 0 0 .25rem; font-size: 1rem; }
-    .pn { font-family: ui-monospace, SFMono-Regular, monospace; color: #444; margin-bottom: .25rem; }
-    .meta { font-size: .8rem; color: #666; }
-    .tags { margin-top: .25rem; }
-    .tag { display: inline-block; background: #eef; padding: .1rem .5rem; border-radius: 999px; margin: .1rem .1rem 0 0; font-size: .75rem; }
+    .items { list-style: none; padding: 0; margin: 0; }
+    .item { padding: .55rem .75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: .35rem; font-size: .9rem; }
+    .item .pn { font-family: ui-monospace, SFMono-Regular, monospace; color: #444; }
+    .suggestions { list-style: none; padding: 0; margin: 0; }
+    .sug { padding: .75rem; border: 1px solid #ddd; border-radius: 8px; margin-bottom: .5rem; background: #fafafa; }
+    .sug.top { border-color: #0a7f00; background: #eefbea; }
+    .sug .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .3rem; }
+    .sug .head strong { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 1rem; }
+    .sug .why { font-size: .8rem; color: #555; margin-bottom: .35rem; }
+    .sug .cta { display: inline-block; margin-top: .3rem; padding: .5rem 1rem; background: #333; color: #fff; border: none; border-radius: 4px; font: inherit; font-size: .9rem; cursor: pointer; }
+    .sug .cta:hover { background: #000; }
+    .manual { border: 1px solid #ddd; border-radius: 8px; padding: .75rem; margin-top: .5rem; background: #fafafa; }
+    .manual summary { cursor: pointer; font-size: .95rem; font-weight: 600; }
+    .containers { display: flex; flex-wrap: wrap; gap: .3rem; margin: .5rem 0; }
+    .container-btn { padding: .4rem .8rem; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: .85rem; }
+    .container-btn.selected { background: #333; color: #fff; border-color: #333; }
+    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: .3rem; margin: .5rem 0; }
+    .slot-btn { padding: .55rem 0; text-align: center; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: .8rem; }
+    .slot-btn.selected { background: #333; color: #fff; border-color: #333; }
+    .manual .filebtn { display: block; width: 100%; padding: .7rem; margin-top: .5rem; background: #333; color: #fff; border: none; border-radius: 4px; font: inherit; font-size: .95rem; cursor: pointer; }
+    .manual .filebtn:disabled { background: #bbb; cursor: not-allowed; }
     .current { list-style: none; padding: 0; margin: .5rem 0 0; }
     .current li { display: flex; justify-content: space-between; align-items: center; padding: .55rem .75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: .35rem; gap: .5rem; }
     .current .info { flex: 1; min-width: 0; font-size: .9rem; }
-    .current .info strong { display: block; }
-    .current .info .pn { font-size: .8rem; }
     .current .qty-controls { flex: 0 0 auto; display: flex; align-items: center; gap: .35rem; }
     .current .qty-btn { border: 1px solid #ccc; background: #fff; font: inherit; font-size: 1rem; line-height: 1; width: 2rem; height: 2rem; border-radius: 4px; cursor: pointer; padding: 0; }
-    .current .qty-btn:hover { background: #f0f0f0; }
     .current .qty { min-width: 1.4rem; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
     .current .remove-all { border: none; background: transparent; color: #b00020; font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 0 .3rem; margin-left: .2rem; }
-    .current .remove-all:hover { color: #700018; }
     .current .empty { padding: .55rem .75rem; border: 1px dashed #ccc; border-radius: 6px; color: #666; font-size: .85rem; }
+    .slot-header { padding: .55rem .75rem; background: #eef; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 600; }
   </style>
 </head>
 <body>
   <a class="back" href="/">&larr; rack</a>
-  <h1>add to slot</h1>
+  <h1 id="title">put in slot</h1>
 
-  <h2 id="containerHeading">1. pick a container</h2>
-  <div class="containers" id="containers"></div>
-
-  <h2 id="slotHeading" hidden>2. pick a slot</h2>
-  <div class="grid" id="slots"></div>
+  <div id="slotHeader" class="slot-header" hidden></div>
 
   <h2 id="currentHeading" hidden>currently in this slot</h2>
   <ul class="current" id="current"></ul>
 
-  <h2 id="photoHeading" hidden>3. take a photo</h2>
-  <label class="capture" hidden id="capture">
-    Take a photo
+  <h2 id="captureHeading">take a photo</h2>
+  <label class="capture">
+    <span id="captureLabel">Take a photo</span>
     <input type="file" accept="image/*" capture="environment" id="photo">
   </label>
 
   <div id="preview"></div>
   <div class="status" id="status"></div>
-  <ul class="items" id="items"></ul>
+
+  <h2 id="extractedHeading" hidden>what I see</h2>
+  <ul class="items" id="extracted"></ul>
+
+  <h2 id="pickHeading" hidden>where does it go?</h2>
+  <ul class="suggestions" id="suggestions"></ul>
+
+  <details class="manual" id="manual">
+    <summary id="manualSummary">Pick a slot manually</summary>
+    <div>
+      <div style="font-size: .85rem; color: #666; margin-top: .5rem;">Container</div>
+      <div class="containers" id="containers"></div>
+      <div style="font-size: .85rem; color: #666; margin-top: .5rem;">Slot</div>
+      <div class="grid" id="slots"></div>
+      <button class="filebtn" id="fileManual" disabled>File in selected slot</button>
+    </div>
+  </details>
 
   <script>
-    const containersEl = document.getElementById('containers');
-    const containerHeading = document.getElementById('containerHeading');
-    const slotHeading = document.getElementById('slotHeading');
-    const slotsEl = document.getElementById('slots');
-    const currentHeading = document.getElementById('currentHeading');
-    const currentEl = document.getElementById('current');
-    const photoHeading = document.getElementById('photoHeading');
-    const capture = document.getElementById('capture');
-    const photo = document.getElementById('photo');
-    const preview = document.getElementById('preview');
-    const status = document.getElementById('status');
-    const items = document.getElementById('items');
-
-    let selectedContainer = null;
-    let selectedSlot = null;
-
     const params = new URLSearchParams(location.search);
     const preC = params.get('c');
     const preS = params.get('s');
+
+    const title = document.getElementById('title');
+    const slotHeader = document.getElementById('slotHeader');
+    const currentHeading = document.getElementById('currentHeading');
+    const currentEl = document.getElementById('current');
+    const captureHeading = document.getElementById('captureHeading');
+    const captureLabel = document.getElementById('captureLabel');
+    const photo = document.getElementById('photo');
+    const preview = document.getElementById('preview');
+    const status = document.getElementById('status');
+    const extractedHeading = document.getElementById('extractedHeading');
+    const extractedEl = document.getElementById('extracted');
+    const pickHeading = document.getElementById('pickHeading');
+    const suggestionsEl = document.getElementById('suggestions');
+    const manual = document.getElementById('manual');
+    const containersEl = document.getElementById('containers');
+    const slotsEl = document.getElementById('slots');
+    const fileManualBtn = document.getElementById('fileManual');
+
+    let containers = [];
+    let selectedContainer = null;   // set by QR pre-fill OR manual pick
+    let selectedSlot = null;        // set by QR pre-fill OR manual pick
+    let pendingPhoto = null;        // File held after capture, waiting for destination
 
     init();
 
     async function init() {
       try {
         const res = await fetch('/c');
-        const containers = await res.json();
-        renderContainers(containers);
-        if (preC) {
-          const c = containers.find(x => x.id === preC);
-          if (c) selectContainer(c);
-        } else if (containers.length === 1) {
-          selectContainer(containers[0]);
-        }
+        containers = await res.json();
+        renderContainerPicker();
       } catch (e) {
-        status.className = 'status error';
-        status.textContent = 'Failed to load containers: ' + e.message;
+        setStatus('error', 'Failed to load containers: ' + e.message);
+        return;
       }
-    }
-
-    function renderContainers(containers) {
-      containersEl.innerHTML = '';
-      containers.forEach(c => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'container-btn';
-        btn.textContent = c.name || c.id;
-        btn.addEventListener('click', () => selectContainer(c));
-        containersEl.appendChild(btn);
-      });
-    }
-
-    function selectContainer(c) {
-      selectedContainer = c;
-      selectedSlot = null;
-      photo.value = '';
-      document.querySelectorAll('.container-btn').forEach((el, i) => {
-        el.classList.toggle('selected', el.textContent === (c.name || c.id));
-      });
-      slotHeading.hidden = false;
-      renderSlots(c.slots || []);
-      currentHeading.hidden = true;
-      currentEl.innerHTML = '';
-      photoHeading.hidden = true;
-      capture.hidden = true;
-      preview.innerHTML = '';
-      items.innerHTML = '';
-      status.className = 'status';
-      status.textContent = '';
-      if (preS && (c.slots || []).includes(preS)) {
-        selectSlot(preS);
+      if (preC) {
+        const c = containers.find(x => x.id === preC);
+        if (c) {
+          selectContainer(c, false);
+          if (preS && (c.slots || []).includes(preS)) selectSlot(preS, false);
+        }
       }
+      refreshUiForSelection();
     }
 
-    function renderSlots(slots) {
-      slotsEl.innerHTML = '';
-      slots.forEach(sid => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'slot-btn';
-        btn.textContent = sid;
-        btn.dataset.slot = sid;
-        btn.addEventListener('click', () => selectSlot(sid));
-        slotsEl.appendChild(btn);
-      });
-    }
+    // ---------- Slot pre-selection UI (QR entry) ----------
 
-    function selectSlot(sid) {
-      selectedSlot = sid;
-      photo.value = '';
-      slotsEl.querySelectorAll('.slot-btn').forEach(el => el.classList.toggle('selected', el.dataset.slot === sid));
-      photoHeading.hidden = false;
-      capture.hidden = false;
-      preview.innerHTML = '';
-      items.innerHTML = '';
-      status.className = 'status';
-      status.textContent = '';
-      loadCurrent();
+    function refreshUiForSelection() {
+      const hasSlot = !!(selectedContainer && selectedSlot);
+      if (hasSlot) {
+        title.textContent = 'slot ' + selectedContainer.id + '.' + selectedSlot;
+        slotHeader.hidden = false;
+        slotHeader.textContent = selectedContainer.id + ' · ' + selectedSlot;
+        currentHeading.hidden = false;
+        captureHeading.textContent = 'add a photo';
+        captureLabel.textContent = 'Take a photo (files to ' + selectedContainer.id + '.' + selectedSlot + ')';
+        loadCurrent();
+      } else {
+        title.textContent = 'put in slot';
+        slotHeader.hidden = true;
+        currentHeading.hidden = true;
+        currentEl.innerHTML = '';
+        captureHeading.textContent = 'take a photo';
+        captureLabel.textContent = 'Take a photo';
+      }
     }
 
     async function loadCurrent() {
       if (!selectedContainer || !selectedSlot) return;
-      currentHeading.hidden = false;
       currentEl.innerHTML = '<li class="empty">Loading...</li>';
       try {
         const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot);
@@ -198,80 +182,210 @@
             '<button class="qty-btn dec" data-idx="' + idx + '" title="took one out">&minus;</button>' +
             '<span class="qty">' + qty + '</span>' +
             '<button class="qty-btn inc" data-idx="' + idx + '" title="put one back">+</button>' +
-            '<button class="remove-all" data-idx="' + idx + '" title="remove all">&times;</button>' +
+            '<button class="remove-all" data-idx="' + idx + '" title="remove entry">&times;</button>' +
           '</div>' +
         '</li>';
       }).join('');
-      currentEl.querySelectorAll('.dec').forEach(btn => btn.addEventListener('click', () => adjustItem(parseInt(btn.dataset.idx, 10), 'decrement')));
-      currentEl.querySelectorAll('.inc').forEach(btn => btn.addEventListener('click', () => adjustItem(parseInt(btn.dataset.idx, 10), 'increment')));
-      currentEl.querySelectorAll('.remove-all').forEach(btn => btn.addEventListener('click', () => removeItem(parseInt(btn.dataset.idx, 10))));
+      currentEl.querySelectorAll('.dec').forEach(b => b.addEventListener('click', () => adjustItem(+b.dataset.idx, 'decrement')));
+      currentEl.querySelectorAll('.inc').forEach(b => b.addEventListener('click', () => adjustItem(+b.dataset.idx, 'increment')));
+      currentEl.querySelectorAll('.remove-all').forEach(b => b.addEventListener('click', () => removeItem(+b.dataset.idx)));
     }
 
     async function adjustItem(idx, action) {
-      if (!selectedContainer || !selectedSlot) return;
       try {
         const url = '/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + idx + '/' + action;
         const res = await fetch(url, { method: 'POST' });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
-        const slot = await res.json();
-        renderCurrent(slot.items || []);
-      } catch (e) {
-        status.className = 'status error';
-        status.textContent = action + ' failed: ' + e.message;
-      }
+        renderCurrent((await res.json()).items || []);
+      } catch (e) { setStatus('error', action + ' failed: ' + e.message); }
     }
 
     async function removeItem(idx) {
-      if (!selectedContainer || !selectedSlot) return;
       try {
         const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + idx, { method: 'DELETE' });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
-        const slot = await res.json();
-        renderCurrent(slot.items || []);
-      } catch (e) {
-        status.className = 'status error';
-        status.textContent = 'Remove failed: ' + e.message;
-      }
+        renderCurrent((await res.json()).items || []);
+      } catch (e) { setStatus('error', 'Remove failed: ' + e.message); }
     }
+
+    // ---------- Photo capture ----------
 
     photo.addEventListener('change', async () => {
       const file = photo.files[0];
-      if (!file || !selectedContainer || !selectedSlot) return;
+      if (!file) return;
 
+      pendingPhoto = await resize(file);
       preview.innerHTML = '<img src="' + URL.createObjectURL(file) + '">';
-      items.innerHTML = '';
-      status.className = 'status';
-      status.textContent = 'Uploading and identifying...';
+      extractedEl.innerHTML = '';
+      suggestionsEl.innerHTML = '';
+      extractedHeading.hidden = true;
+      pickHeading.hidden = true;
+      updateManualFileBtn();
 
+      if (selectedContainer && selectedSlot) {
+        await fileToSelectedSlot();
+      } else {
+        await suggestAndPick();
+      }
+    });
+
+    async function suggestAndPick() {
+      setStatus('', 'Identifying and looking for similar slots...');
       const form = new FormData();
-      form.append('photo', await resize(file));
+      form.append('photo', pendingPhoto);
+      try {
+        const res = await fetch('/suggest', { method: 'POST', body: form });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const data = await res.json();
+        renderExtracted(data.extracted || []);
+        renderSuggestions(data.suggestions || []);
+        manual.open = !(data.suggestions && data.suggestions.length);
+        pickHeading.hidden = false;
+        setStatus('ok', 'Ready — pick where it goes.');
+      } catch (e) {
+        setStatus('error', 'Failed: ' + e.message);
+      }
+    }
+
+    async function fileToSelectedSlot() {
+      setStatus('', 'Filing into ' + selectedContainer.id + '.' + selectedSlot + '...');
+      const form = new FormData();
+      form.append('photo', pendingPhoto);
       try {
         const url = '/c/' + selectedContainer.id + '/' + selectedSlot + '/photo';
         const res = await fetch(url, { method: 'POST', body: form });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const data = await res.json();
         const extracted = data.extracted || [];
-        status.className = 'status ok';
-        status.textContent = 'Filed ' + extracted.length + ' item(s) into ' + selectedContainer.id + '.' + selectedSlot + ' (photo: ' + data.photo_filename + ')';
-        items.innerHTML = extracted.map(renderItem).join('');
+        setStatus('ok', 'Filed ' + extracted.length + ' item(s) into ' + selectedContainer.id + '.' + selectedSlot + '.');
+        renderExtracted(extracted);
+        pendingPhoto = null;
         loadCurrent();
       } catch (e) {
-        status.className = 'status error';
-        status.textContent = 'Failed: ' + e.message;
+        setStatus('error', 'Failed: ' + e.message);
+      }
+    }
+
+    function renderExtracted(list) {
+      extractedHeading.hidden = list.length === 0;
+      extractedEl.innerHTML = list.map(it => {
+        return '<li class="item"><strong>' + esc(it.description || '(unknown)') + '</strong>' +
+          (it.part_number ? ' &middot; <span class="pn">' + esc(it.part_number) + '</span>' : '') +
+        '</li>';
+      }).join('');
+    }
+
+    function renderSuggestions(sugs) {
+      if (!sugs.length) {
+        suggestionsEl.innerHTML = '<li class="sug"><em>No similar items filed yet. Pick a slot below.</em></li>';
+        return;
+      }
+      suggestionsEl.innerHTML = sugs.map((s, i) => {
+        const matches = (s.matches || []).slice(0, 3)
+          .map(m => esc(m.description || '?'))
+          .join('; ');
+        return '<li class="sug' + (i === 0 ? ' top' : '') + '">' +
+          '<div class="head"><strong>' + s.container + ' &middot; ' + s.slot + '</strong>' +
+            '<span style="font-size:.75rem;color:#666">score ' + s.score.toFixed(1) + '</span>' +
+          '</div>' +
+          (matches ? '<div class="why">already has: ' + matches + '</div>' : '') +
+          '<button class="cta" data-c="' + esc(s.container) + '" data-s="' + esc(s.slot) + '">File here</button>' +
+        '</li>';
+      }).join('');
+      suggestionsEl.querySelectorAll('.cta').forEach(btn => {
+        btn.addEventListener('click', () => fileToPicked(btn.dataset.c, btn.dataset.s));
+      });
+    }
+
+    // ---------- Manual picker (fallback under details) ----------
+
+    function renderContainerPicker() {
+      containersEl.innerHTML = '';
+      containers.forEach(c => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'container-btn';
+        btn.textContent = c.name || c.id;
+        btn.addEventListener('click', () => selectContainer(c, true));
+        containersEl.appendChild(btn);
+      });
+    }
+
+    function selectContainer(c, refreshFileBtn) {
+      selectedContainer = c;
+      selectedSlot = null;
+      document.querySelectorAll('.container-btn').forEach(el => el.classList.toggle('selected', el.textContent === (c.name || c.id)));
+      renderSlotPicker(c.slots || []);
+      if (refreshFileBtn) updateManualFileBtn();
+    }
+
+    function renderSlotPicker(slots) {
+      slotsEl.innerHTML = '';
+      slots.forEach(sid => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'slot-btn';
+        btn.textContent = sid;
+        btn.dataset.slot = sid;
+        btn.addEventListener('click', () => selectSlot(sid, true));
+        slotsEl.appendChild(btn);
+      });
+    }
+
+    function selectSlot(sid, userDriven) {
+      selectedSlot = sid;
+      slotsEl.querySelectorAll('.slot-btn').forEach(el => el.classList.toggle('selected', el.dataset.slot === sid));
+      updateManualFileBtn();
+      if (userDriven) refreshUiForSelection();
+    }
+
+    function updateManualFileBtn() {
+      fileManualBtn.disabled = !(selectedContainer && selectedSlot && pendingPhoto);
+      if (selectedContainer && selectedSlot) {
+        fileManualBtn.textContent = 'File in ' + selectedContainer.id + '.' + selectedSlot;
+      } else {
+        fileManualBtn.textContent = 'File in selected slot';
+      }
+    }
+
+    fileManualBtn.addEventListener('click', () => {
+      if (selectedContainer && selectedSlot && pendingPhoto) {
+        fileToPicked(selectedContainer.id, selectedSlot);
       }
     });
 
-    function renderItem(it) {
-      const tags = (it.tags || []).map(t => '<span class="tag">' + esc(t) + '</span>').join('');
-      const conf = it.confidence != null ? Math.round(it.confidence * 100) + '%' : '?';
-      const qty = it.qty_estimate != null ? it.qty_estimate : '?';
-      return '<li class="item">' +
-        '<h3>' + esc(it.description || '(unknown)') + '</h3>' +
-        (it.part_number ? '<div class="pn">' + esc(it.part_number) + '</div>' : '') +
-        '<div class="meta">' + esc(it.category || '') + ' &middot; qty ' + qty + ' &middot; conf ' + conf + '</div>' +
-        (tags ? '<div class="tags">' + tags + '</div>' : '') +
-      '</li>';
+    async function fileToPicked(containerId, slotId) {
+      if (!pendingPhoto) { setStatus('error', 'No photo to file.'); return; }
+      setStatus('', 'Filing into ' + containerId + '.' + slotId + '...');
+      const form = new FormData();
+      form.append('photo', pendingPhoto);
+      try {
+        const url = '/c/' + containerId + '/' + slotId + '/photo';
+        const res = await fetch(url, { method: 'POST', body: form });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const data = await res.json();
+        setStatus('ok', 'Filed ' + (data.extracted || []).length + ' item(s) into ' + containerId + '.' + slotId + '.');
+        pendingPhoto = null;
+        suggestionsEl.innerHTML = '';
+        pickHeading.hidden = true;
+        manual.open = false;
+        updateManualFileBtn();
+        // Refresh current-items view if we filed into the currently-selected slot
+        if (selectedContainer && selectedContainer.id === containerId && selectedSlot === slotId) {
+          loadCurrent();
+        }
+      } catch (e) {
+        setStatus('error', 'Failed: ' + e.message);
+      }
     }
+
+    // ---------- helpers ----------
+
+    function setStatus(kind, text) {
+      status.className = 'status' + (kind ? ' ' + kind : '');
+      status.textContent = text;
+    }
+
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
     async function resize(file, maxDim = 1600, quality = 0.85) {
