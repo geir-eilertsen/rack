@@ -38,4 +38,12 @@ class DrawerIdTest {
     void stringFormShowsTheValue() {
         assertEquals("B4", new DrawerId("B4").toString());
     }
+
+    @Test
+    void allEnumeratesAllSixty() {
+        var ids = DrawerId.all();
+        assertEquals(60, ids.size());
+        assertEquals(new DrawerId("A1"), ids.get(0));
+        assertEquals(new DrawerId("E12"), ids.get(59));
+    }
 }
