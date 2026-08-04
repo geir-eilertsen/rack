@@ -1,5 +1,6 @@
 package family.eilertsen.rack.domain.model;
 
+import java.time.Instant;
 import java.util.List;
 
 public record Item(
@@ -9,5 +10,8 @@ public record Item(
     Integer qtyEstimate,
     double confidence,
     List<String> tags,
-    float[] embedding
-) {}
+    float[] embedding,
+    List<QA> qa
+) {
+    public record QA(String question, String answer, Instant at) {}
+}

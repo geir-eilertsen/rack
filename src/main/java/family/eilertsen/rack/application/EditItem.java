@@ -38,7 +38,8 @@ public class EditItem {
             update.qtyEstimate(),
             1.0,
             update.tags() == null ? List.of() : List.copyOf(update.tags()),
-            current.embedding()
+            current.embedding(),
+            current.qa()
         );
 
         List<Item> newItems = new ArrayList<>(existing.items());

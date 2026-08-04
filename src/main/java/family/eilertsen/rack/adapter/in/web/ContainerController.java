@@ -1,6 +1,7 @@
 package family.eilertsen.rack.adapter.in.web;
 
 import family.eilertsen.rack.application.AddPhotoToSlot;
+import family.eilertsen.rack.application.AskAboutItem;
 import family.eilertsen.rack.application.ContainerRegistry;
 import family.eilertsen.rack.application.EditItem;
 import family.eilertsen.rack.application.RegisterContainer;
@@ -40,17 +41,19 @@ public class ContainerController {
     private final RegisterContainer registerContainer;
     private final RemoveItem removeItem;
     private final EditItem editItem;
+    private final AskAboutItem askAboutItem;
     private final ImageStore images;
 
     public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto,
                                 RegisterContainer registerContainer, RemoveItem removeItem,
-                                EditItem editItem, ImageStore images) {
+                                EditItem editItem, AskAboutItem askAboutItem, ImageStore images) {
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
         this.registerContainer = registerContainer;
         this.removeItem = removeItem;
         this.editItem = editItem;
+        this.askAboutItem = askAboutItem;
         this.images = images;
     }
 
@@ -121,6 +124,25 @@ public class ContainerController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
         }
     }
+
+    @PostMapping("/{container}/{slot}/items/{index}/ask")
+    public Slot askItem(@PathVariable String container,
+                         @PathVariable String slot,
+                         @PathVariable int index,
+                         @RequestBody AskRequest req) {
+        ContainerId cid = new ContainerId(container);
+        SlotId sid = new SlotId(slot);
+        requireContainerExists(cid);
+        try {
+            return askAboutItem.execute(cid, sid, index, req.question());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        } catch (IndexOutOfBoundsException | java.util.NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+        }
+    }
+
+    public record AskRequest(String question) {}
 
     @GetMapping("/{container}/{slot}/photos/{filename}")
     public ResponseEntity<byte[]> getPhoto(@PathVariable String container,
