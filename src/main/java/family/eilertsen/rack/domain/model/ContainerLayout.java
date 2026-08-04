@@ -17,9 +17,9 @@ public final class ContainerLayout {
                 "Not enough column labels (" + colLabels.length() + ") for " + cols + " columns");
         }
         List<SlotId> slots = new ArrayList<>(cols * rows);
-        for (int c = 0; c < cols; c++) {
-            char letter = colLabels.charAt(c);
-            for (int r = 1; r <= rows; r++) {
+        for (int r = 1; r <= rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                char letter = colLabels.charAt(c);
                 slots.add(new SlotId("" + letter + r));
             }
         }
