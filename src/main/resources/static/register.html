@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rack — register container</title>
+  <style>
+    body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 1rem; max-width: 640px; color: #222; }
+    .back { color: #666; text-decoration: none; font-size: .85rem; }
+    .back:hover { color: #222; }
+    h1 { font-size: 1.2rem; margin: .25rem 0 1rem; }
+    label.field { display: block; margin: 1rem 0 .25rem; font-size: .85rem; color: #666; text-transform: uppercase; letter-spacing: .05em; }
+    input, select { font: inherit; font-size: 1rem; padding: .5rem; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; width: 100%; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+    .hint { color: #666; font-size: .8rem; margin: .2rem 0 0; }
+    button.submit { margin-top: 1.5rem; padding: .75rem 1.5rem; background: #333; color: #fff; border: none; border-radius: 6px; cursor: pointer; font: inherit; font-size: 1rem; }
+    button.submit:disabled { opacity: .5; cursor: not-allowed; }
+    .status { margin-top: 1rem; font-size: .9rem; color: #666; }
+    .status.error { color: #b00020; }
+    .status.ok { color: #0a7f00; }
+    .actions a { display: inline-block; margin-right: .75rem; color: #333; }
+    fieldset { border: 1px solid #ddd; border-radius: 6px; padding: .5rem 1rem 1rem; margin: 0; }
+    legend { font-size: .85rem; color: #666; padding: 0 .3rem; }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">&larr; rack</a>
+  <h1>register a container</h1>
+
+  <label class="field" for="name">Name</label>
+  <input id="name" type="text" placeholder="e.g. Small parts bin">
+
+  <label class="field" for="id">ID (URL-safe)</label>
+  <input id="id" type="text" placeholder="e.g. small-bin" pattern="[a-z][a-z0-9\-]{0,31}">
+  <p class="hint">Lowercase letters, digits, hyphens. Auto-derived from the name — edit if needed.</p>
+
+  <label class="field" for="kind">Layout</label>
+  <select id="kind">
+    <option value="grid">Grid (cols × rows, labelled A1, A2, ...)</option>
+    <option value="linear">Linear (numbered 1 to N, optional prefix)</option>
+  </select>
+
+  <fieldset id="gridFields">
+    <legend>Grid</legend>
+    <div class="row">
+      <div>
+        <label class="field" for="cols">Columns</label>
+        <input id="cols" type="number" min="1" max="26" value="5">
+      </div>
+      <div>
+        <label class="field" for="rows">Rows</label>
+        <input id="rows" type="number" min="1" max="30" value="12">
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset id="linearFields" hidden>
+    <legend>Linear</legend>
+    <div class="row">
+      <div>
+        <label class="field" for="count">Count</label>
+        <input id="count" type="number" min="1" max="200" value="24">
+      </div>
+      <div>
+        <label class="field" for="prefix">Prefix (optional)</label>
+        <input id="prefix" type="text" placeholder="e.g. b — makes b1, b2, ...">
+      </div>
+    </div>
+  </fieldset>
+
+  <label class="field" for="scale">Label scale</label>
+  <input id="scale" type="number" min="0.1" max="1.5" step="0.05" value="1.0">
+  <p class="hint">1.0 fills the full L7160 slot. Try 0.4 for small drawers &mdash; QR + text shrink but paper is the same; trim to fit.</p>
+
+  <button class="submit" id="submit">Register container</button>
+  <div class="status" id="status"></div>
+  <div class="actions" id="actions" hidden></div>
+
+  <script>
+    const nameEl = document.getElementById('name');
+    const idEl = document.getElementById('id');
+    const kindEl = document.getElementById('kind');
+    const gridFields = document.getElementById('gridFields');
+    const linearFields = document.getElementById('linearFields');
+    const colsEl = document.getElementById('cols');
+    const rowsEl = document.getElementById('rows');
+    const countEl = document.getElementById('count');
+    const prefixEl = document.getElementById('prefix');
+    const scaleEl = document.getElementById('scale');
+    const submit = document.getElementById('submit');
+    const status = document.getElementById('status');
+    const actions = document.getElementById('actions');
+
+    let idEdited = false;
+    idEl.addEventListener('input', () => idEdited = true);
+    nameEl.addEventListener('input', () => {
+      if (!idEdited) idEl.value = deriveId(nameEl.value);
+    });
+
+    kindEl.addEventListener('change', () => {
+      gridFields.hidden = kindEl.value !== 'grid';
+      linearFields.hidden = kindEl.value !== 'linear';
+    });
+
+    submit.addEventListener('click', register);
+
+    async function register() {
+      const body = {
+        id: idEl.value.trim(),
+        name: nameEl.value.trim(),
+        layout: {
+          kind: kindEl.value,
+          cols: kindEl.value === 'grid' ? parseInt(colsEl.value, 10) : null,
+          rows: kindEl.value === 'grid' ? parseInt(rowsEl.value, 10) : null,
+          count: kindEl.value === 'linear' ? parseInt(countEl.value, 10) : null,
+          prefix: kindEl.value === 'linear' ? (prefixEl.value.trim() || null) : null
+        },
+        label_scale: parseFloat(scaleEl.value)
+      };
+      status.className = 'status';
+      status.textContent = 'Registering...';
+      actions.hidden = true;
+      submit.disabled = true;
+      try {
+        const res = await fetch('/c', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || ('HTTP ' + res.status));
+        }
+        const c = await res.json();
+        status.className = 'status ok';
+        status.textContent = 'Registered "' + c.name + '" (' + c.slots.length + ' slots).';
+        actions.innerHTML =
+          '<a href="/labels.html">Print labels</a>' +
+          '<a href="/put.html?c=' + encodeURIComponent(c.id) + '">Add a photo</a>';
+        actions.hidden = false;
+      } catch (e) {
+        status.className = 'status error';
+        status.textContent = 'Failed: ' + e.message;
+      } finally {
+        submit.disabled = false;
+      }
+    }
+
+    function deriveId(s) {
+      return s.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/^[^a-z]/, '')
+        .slice(0, 32);
+    }
+  </script>
+</body>
+</html>

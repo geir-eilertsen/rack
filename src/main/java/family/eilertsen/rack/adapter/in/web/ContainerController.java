@@ -2,21 +2,24 @@ package family.eilertsen.rack.adapter.in.web;
 
 import family.eilertsen.rack.application.AddPhotoToSlot;
 import family.eilertsen.rack.application.ContainerRegistry;
+import family.eilertsen.rack.application.RegisterContainer;
 import family.eilertsen.rack.domain.model.Container;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.port.PartIndex;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -29,16 +32,29 @@ public class ContainerController {
     private final ContainerRegistry registry;
     private final PartIndex index;
     private final AddPhotoToSlot addPhoto;
+    private final RegisterContainer registerContainer;
 
-    public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto) {
+    public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto,
+                                RegisterContainer registerContainer) {
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
+        this.registerContainer = registerContainer;
     }
 
     @GetMapping
     public Collection<Container> list() {
         return registry.all();
+    }
+
+    @PostMapping
+    public ResponseEntity<Container> register(@RequestBody RegisterContainer.Request req) {
+        try {
+            Container c = registerContainer.execute(req);
+            return ResponseEntity.status(HttpStatus.CREATED).body(c);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
     }
 
     @GetMapping("/{container}")
