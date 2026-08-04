@@ -158,6 +158,8 @@
         currentHeading.hidden = false;
         captureHeading.textContent = 'Add a photo';
         captureLabel.textContent = 'Take a photo of what\'s in ' + selectedContainer.id + '.' + selectedSlot;
+        manual.hidden = true;
+        manual.open = false;
         loadCurrent();
       } else {
         title.textContent = 'Add an item';
@@ -166,6 +168,7 @@
         currentEl.innerHTML = '';
         captureHeading.textContent = 'Take a photo';
         captureLabel.textContent = 'Take a photo';
+        manual.hidden = false;
       }
       updateManualFileBtn();
     }
