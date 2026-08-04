@@ -84,7 +84,7 @@ public class SpringAiPartExtractor implements PartExtractor {
         List<String> tags
     ) {
         Item toItem() {
-            return new Item(description, partNumber, category, qtyEstimate, confidence, tags, null, null);
+            return new Item(description, partNumber, category, qtyEstimate, confidence, tags, null, null, null);
         }
     }
 }

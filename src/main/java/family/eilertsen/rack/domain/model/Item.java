@@ -11,7 +11,8 @@ public record Item(
     double confidence,
     List<String> tags,
     float[] embedding,
-    List<QA> qa
+    List<QA> qa,
+    String sourcePhoto
 ) {
     public record QA(String question, String answer, Instant at) {}
 }

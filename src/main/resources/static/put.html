@@ -15,7 +15,10 @@
     .current li:hover { background: var(--primary-soft); border-color: var(--border-strong); }
     .current li.editing { cursor: default; background: var(--card); border-color: var(--primary); box-shadow: var(--shadow); }
     .current .row { display: flex; align-items: center; gap: .5rem; }
-    .current .desc { flex: 1; min-width: 0; font-size: .95rem; font-weight: 500; }
+    .current .thumb { flex: 0 0 auto; width: 48px; height: 48px; object-fit: cover; border-radius: var(--radius-xs); border: 1px solid var(--border); }
+    .current .thumb-placeholder { flex: 0 0 auto; width: 48px; height: 48px; border-radius: var(--radius-xs); background: var(--primary-soft); display: flex; align-items: center; justify-content: center; color: var(--primary); }
+    .current .body { flex: 1; min-width: 0; }
+    .current .desc { font-size: .95rem; font-weight: 500; }
     .current .qty { font-family: var(--font-mono); font-weight: 700; color: var(--primary-hover); font-size: .95rem; }
     .current .pn-line { margin-top: .2rem; }
     .current .tags-line { margin-top: .3rem; }
@@ -66,8 +69,6 @@
     <h2 id="currentHeading" hidden>What's already here</h2>
     <ul class="current" id="current"></ul>
 
-    <div id="photos" class="photos" hidden></div>
-
     <h2 id="captureHeading">Take a photo</h2>
     <label class="capture">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -106,7 +107,6 @@
     const slotHeader = document.getElementById('slotHeader');
     const currentHeading = document.getElementById('currentHeading');
     const currentEl = document.getElementById('current');
-    const photosEl = document.getElementById('photos');
     const captureHeading = document.getElementById('captureHeading');
     const captureLabel = document.getElementById('captureLabel');
     const photo = document.getElementById('photo');
@@ -164,8 +164,6 @@
         slotHeader.hidden = true;
         currentHeading.hidden = true;
         currentEl.innerHTML = '';
-        photosEl.hidden = true;
-        photosEl.innerHTML = '';
         captureHeading.textContent = 'Take a photo';
         captureLabel.textContent = 'Take a photo';
       }
@@ -179,20 +177,13 @@
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const slot = await res.json();
         renderCurrent(slot.items || []);
-        renderPhotos(slot.photos || []);
       } catch (e) {
         currentEl.innerHTML = '<li class="empty">Failed to load: ' + esc(e.message) + '</li>';
-        photosEl.hidden = true;
       }
     }
 
-    function renderPhotos(list) {
-      if (!list.length) { photosEl.hidden = true; photosEl.innerHTML = ''; return; }
-      photosEl.hidden = false;
-      photosEl.innerHTML = list.map(fn => {
-        const url = '/c/' + encodeURIComponent(selectedContainer.id) + '/' + encodeURIComponent(selectedSlot) + '/photos/' + encodeURIComponent(fn);
-        return '<a href="' + url + '" target="_blank"><img src="' + url + '" alt=""></a>';
-      }).join('');
+    function photoUrl(fn) {
+      return '/c/' + encodeURIComponent(selectedContainer.id) + '/' + encodeURIComponent(selectedSlot) + '/photos/' + encodeURIComponent(fn);
     }
 
     function renderCurrent(list) {
@@ -262,13 +253,19 @@
       const tags = (it.tags || []).map(t => '<span class="tag">' + esc(t) + '</span>').join('');
       const qty = it.qty_estimate == null ? 1 : it.qty_estimate;
       const tagsCsv = (it.tags || []).join(', ');
+      const thumb = it.source_photo
+        ? '<a href="' + photoUrl(it.source_photo) + '" target="_blank" onclick="event.stopPropagation()"><img class="thumb" src="' + photoUrl(it.source_photo) + '" alt=""></a>'
+        : '<div class="thumb-placeholder" title="no photo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg></div>';
       return '<li data-idx="' + idx + '">' +
         '<div class="row">' +
-          '<div class="desc">' + esc(it.description || '(unknown)') + '</div>' +
+          thumb +
+          '<div class="body">' +
+            '<div class="desc">' + esc(it.description || '(unknown)') + '</div>' +
+            (it.part_number ? '<div class="pn-line pn">' + esc(it.part_number) + '</div>' : '') +
+            (tags ? '<div class="tags-line">' + tags + '</div>' : '') +
+          '</div>' +
           '<div class="qty">×' + qty + '</div>' +
         '</div>' +
-        (it.part_number ? '<div class="pn-line pn">' + esc(it.part_number) + '</div>' : '') +
-        (tags ? '<div class="tags-line">' + tags + '</div>' : '') +
         '<div class="edit-form">' +
           '<label>Description</label><input class="f-description" value="' + esc(it.description || '') + '">' +
           '<label>Part number</label><input class="f-part_number" value="' + esc(it.part_number || '') + '">' +
@@ -294,9 +291,18 @@
 
     function renderQaLog(qa) {
       if (!qa.length) return '';
-      return '<ul class="qa-log">' + qa.map(x =>
-        '<li><div class="q">Q: ' + esc(x.question) + '</div><div class="a">' + md(x.answer) + '</div></li>'
-      ).join('') + '</ul>';
+      const recent = qa.slice(-2);
+      const older = qa.slice(0, -2);
+      const olderHtml = older.length
+        ? '<details class="qa-history"><summary>Show ' + older.length + ' earlier question' + (older.length === 1 ? '' : 's') + '</summary>' +
+            '<ul class="qa-log">' + older.map(qaItem).join('') + '</ul>' +
+          '</details>'
+        : '';
+      return olderHtml + '<ul class="qa-log">' + recent.map(qaItem).join('') + '</ul>';
+    }
+
+    function qaItem(x) {
+      return '<li><div class="q">Q: ' + esc(x.question) + '</div><div class="a">' + md(x.answer) + '</div></li>';
     }
 
     function md(text) {

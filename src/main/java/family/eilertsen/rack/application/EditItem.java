@@ -39,7 +39,8 @@ public class EditItem {
             1.0,
             update.tags() == null ? List.of() : List.copyOf(update.tags()),
             current.embedding(),
-            current.qa()
+            current.qa(),
+            current.sourcePhoto()
         );
 
         List<Item> newItems = new ArrayList<>(existing.items());

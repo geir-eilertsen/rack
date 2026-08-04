@@ -23,7 +23,10 @@
     .group ul.items > li:hover { background: var(--primary-soft); }
     .group ul.items > li.editing { cursor: default; background: var(--card); }
     .row { display: flex; align-items: center; gap: .5rem; }
-    .desc { flex: 1; font-weight: 500; font-size: .95rem; }
+    .thumb { flex: 0 0 auto; width: 48px; height: 48px; object-fit: cover; border-radius: var(--radius-xs); border: 1px solid var(--border); }
+    .thumb-placeholder { flex: 0 0 auto; width: 48px; height: 48px; border-radius: var(--radius-xs); background: var(--primary-soft); display: flex; align-items: center; justify-content: center; color: var(--primary); }
+    .body { flex: 1; min-width: 0; }
+    .desc { font-weight: 500; font-size: .95rem; }
     .qty { font-family: var(--font-mono); font-weight: 700; color: var(--primary-hover); font-size: .9rem; }
     .pn-line { margin-top: .2rem; }
     .tags-line { margin-top: .3rem; }
@@ -128,17 +131,16 @@
     function renderGroup(g) {
       const location = g.container + ' · ' + g.slot;
       const putUrl = '/put.html?c=' + encodeURIComponent(g.container) + '&s=' + encodeURIComponent(g.slot);
-      const photoStrip = g.photos.slice(0, 6).map(fn => {
-        const url = '/c/' + encodeURIComponent(g.container) + '/' + encodeURIComponent(g.slot) + '/photos/' + encodeURIComponent(fn);
-        return '<a href="' + url + '" target="_blank"><img src="' + url + '" alt=""></a>';
-      }).join('');
       const staleBadge = staleBadgeIfNeeded(g.lastVerified);
       const itemsHtml = g.hits.map(h => renderHitItem(h, g)).join('');
       return '<li class="group">' +
         '<div class="loc"><a href="' + putUrl + '">' + esc(location) + '</a>' + staleBadge + '</div>' +
-        (photoStrip ? '<div class="photos">' + photoStrip + '</div>' : '') +
         '<ul class="items">' + itemsHtml + '</ul>' +
       '</li>';
+    }
+
+    function photoUrl(container, slot, fn) {
+      return '/c/' + encodeURIComponent(container) + '/' + encodeURIComponent(slot) + '/photos/' + encodeURIComponent(fn);
     }
 
     function renderHitItem(h, g) {
@@ -146,13 +148,19 @@
       const tags = (it.tags || []).map(t => '<span class="tag">' + esc(t) + '</span>').join('');
       const qty = it.qty_estimate == null ? 1 : it.qty_estimate;
       const tagsCsv = (it.tags || []).join(', ');
+      const thumb = it.source_photo
+        ? '<a href="' + photoUrl(g.container, g.slot, it.source_photo) + '" target="_blank" onclick="event.stopPropagation()"><img class="thumb" src="' + photoUrl(g.container, g.slot, it.source_photo) + '" alt=""></a>'
+        : '<div class="thumb-placeholder" title="no photo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg></div>';
       return '<li data-container="' + esc(g.container) + '" data-slot="' + esc(g.slot) + '" data-index="' + h.index + '">' +
         '<div class="row">' +
-          '<div class="desc">' + esc(it.description || '(unknown)') + '</div>' +
+          thumb +
+          '<div class="body">' +
+            '<div class="desc">' + esc(it.description || '(unknown)') + '</div>' +
+            (it.part_number ? '<div class="pn-line pn">' + esc(it.part_number) + '</div>' : '') +
+            (tags ? '<div class="tags-line">' + tags + '</div>' : '') +
+          '</div>' +
           '<div class="qty">×' + qty + '</div>' +
         '</div>' +
-        (it.part_number ? '<div class="pn-line pn">' + esc(it.part_number) + '</div>' : '') +
-        (tags ? '<div class="tags-line">' + tags + '</div>' : '') +
         '<div class="edit-form">' +
           '<label>Description</label><input class="f-description" value="' + esc(it.description || '') + '">' +
           '<label>Part number</label><input class="f-part_number" value="' + esc(it.part_number || '') + '">' +
@@ -178,9 +186,18 @@
 
     function renderQaLog(qa) {
       if (!qa.length) return '';
-      return '<ul class="qa-log">' + qa.map(x =>
-        '<li><div class="q">Q: ' + esc(x.question) + '</div><div class="a">' + md(x.answer) + '</div></li>'
-      ).join('') + '</ul>';
+      const recent = qa.slice(-2);
+      const older = qa.slice(0, -2);
+      const olderHtml = older.length
+        ? '<details class="qa-history"><summary>Show ' + older.length + ' earlier question' + (older.length === 1 ? '' : 's') + '</summary>' +
+            '<ul class="qa-log">' + older.map(qaItem).join('') + '</ul>' +
+          '</details>'
+        : '';
+      return olderHtml + '<ul class="qa-log">' + recent.map(qaItem).join('') + '</ul>';
+    }
+
+    function qaItem(x) {
+      return '<li><div class="q">Q: ' + esc(x.question) + '</div><div class="a">' + md(x.answer) + '</div></li>';
     }
 
     function md(text) {

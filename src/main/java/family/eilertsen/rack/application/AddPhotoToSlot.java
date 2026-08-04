@@ -28,7 +28,9 @@ public class AddPhotoToSlot {
 
     public Result execute(ContainerId container, SlotId slot, byte[] photo, String contentType) {
         String filename = images.store(container, slot, photo, contentType);
-        List<Item> extracted = extractor.extract(photo);
+        List<Item> extracted = extractor.extract(photo).stream()
+            .map(i -> stampSource(i, filename))
+            .toList();
 
         Slot existing = index.get(container, slot).orElse(new Slot(slot, List.of(), null, List.of(), null));
 
@@ -41,6 +43,11 @@ public class AddPhotoToSlot {
         index.save(container, updated);
 
         return new Result(filename, extracted);
+    }
+
+    private static Item stampSource(Item i, String filename) {
+        return new Item(i.description(), i.partNumber(), i.category(), i.qtyEstimate(),
+            i.confidence(), i.tags(), i.embedding(), i.qa(), filename);
     }
 
     public record Result(String photoFilename, List<Item> extracted) {}

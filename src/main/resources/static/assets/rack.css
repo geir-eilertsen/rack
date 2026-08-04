@@ -397,3 +397,7 @@ label.field {
 .qa-log .a h3 { font-size: .88rem; }
 .qa-log .a h4 { font-size: .82rem; color: var(--muted); }
 .qa-log .a hr { border: none; border-top: 1px solid var(--border); margin: .6em 0; }
+.qa-history { margin-bottom: .5rem; }
+.qa-history > summary { cursor: pointer; font-size: .78rem; color: var(--muted); padding: .25rem 0; }
+.qa-history > summary:hover { color: var(--text); }
+.qa-history[open] > summary { margin-bottom: .35rem; }
