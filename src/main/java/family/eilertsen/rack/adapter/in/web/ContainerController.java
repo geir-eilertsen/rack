@@ -3,18 +3,21 @@ package family.eilertsen.rack.adapter.in.web;
 import family.eilertsen.rack.application.AddPhotoToSlot;
 import family.eilertsen.rack.application.AdjustItemQty;
 import family.eilertsen.rack.application.ContainerRegistry;
+import family.eilertsen.rack.application.EditItem;
 import family.eilertsen.rack.application.RegisterContainer;
 import family.eilertsen.rack.application.RemoveItem;
 import family.eilertsen.rack.domain.model.Container;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
+import family.eilertsen.rack.domain.port.ImageStore;
 import family.eilertsen.rack.domain.port.PartIndex;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -38,16 +41,20 @@ public class ContainerController {
     private final RegisterContainer registerContainer;
     private final RemoveItem removeItem;
     private final AdjustItemQty adjustItemQty;
+    private final EditItem editItem;
+    private final ImageStore images;
 
     public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto,
                                 RegisterContainer registerContainer, RemoveItem removeItem,
-                                AdjustItemQty adjustItemQty) {
+                                AdjustItemQty adjustItemQty, EditItem editItem, ImageStore images) {
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
         this.registerContainer = registerContainer;
         this.removeItem = removeItem;
         this.adjustItemQty = adjustItemQty;
+        this.editItem = editItem;
+        this.images = images;
     }
 
     @GetMapping
@@ -129,6 +136,42 @@ public class ContainerController {
         } catch (IndexOutOfBoundsException | java.util.NoSuchElementException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
         }
+    }
+
+    @PatchMapping("/{container}/{slot}/items/{index}")
+    public Slot editItem(@PathVariable String container,
+                          @PathVariable String slot,
+                          @PathVariable int index,
+                          @RequestBody EditItem.Fields fields) {
+        ContainerId cid = new ContainerId(container);
+        SlotId sid = new SlotId(slot);
+        requireContainerExists(cid);
+        try {
+            return editItem.execute(cid, sid, index, fields);
+        } catch (IndexOutOfBoundsException | java.util.NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+        }
+    }
+
+    @GetMapping("/{container}/{slot}/photos/{filename}")
+    public ResponseEntity<byte[]> getPhoto(@PathVariable String container,
+                                            @PathVariable String slot,
+                                            @PathVariable String filename) {
+        ContainerId cid = new ContainerId(container);
+        SlotId sid = new SlotId(slot);
+        requireContainerExists(cid);
+
+        Slot s = index.get(cid, sid).orElseThrow(() ->
+            new ResponseStatusException(HttpStatus.NOT_FOUND, "No slot state: " + container + "/" + slot));
+        if (!s.photos().contains(filename)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No such photo: " + filename);
+        }
+
+        byte[] bytes = images.read(cid, sid, filename);
+        MediaType type = filename.toLowerCase().endsWith(".png")
+            ? MediaType.IMAGE_PNG
+            : MediaType.IMAGE_JPEG;
+        return ResponseEntity.ok().contentType(type).body(bytes);
     }
 
     private void requireContainerExists(ContainerId id) {

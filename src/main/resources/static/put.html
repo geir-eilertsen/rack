@@ -45,7 +45,20 @@
     .current .qty { min-width: 1.4rem; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
     .current .remove-all { border: none; background: transparent; color: #b00020; font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 0 .3rem; margin-left: .2rem; }
     .current .empty { padding: .55rem .75rem; border: 1px dashed #ccc; border-radius: 6px; color: #666; font-size: .85rem; }
+    .current .edit { border: none; background: transparent; color: #333; font-size: .95rem; line-height: 1; cursor: pointer; padding: 0 .3rem; }
+    .current .edit:hover { color: #000; }
+    .current .edit-form { flex: 1 1 100%; margin-top: .5rem; padding-top: .5rem; border-top: 1px solid #eee; display: none; flex-direction: column; gap: .3rem; }
+    .current li.editing { flex-wrap: wrap; }
+    .current li.editing .edit-form { display: flex; }
+    .current .edit-form label { font-size: .75rem; color: #666; }
+    .current .edit-form input { font: inherit; font-size: .9rem; padding: .35rem .5rem; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
+    .current .edit-form .row { display: flex; gap: .3rem; margin-top: .3rem; }
+    .current .edit-form .row button { flex: 1; padding: .5rem; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer; font: inherit; font-size: .9rem; }
+    .current .edit-form .row button.save { background: #333; color: #fff; border-color: #333; }
     .slot-header { padding: .55rem .75rem; background: #eef; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 600; }
+    .photos { display: flex; gap: .3rem; flex-wrap: wrap; margin: .5rem 0 0; }
+    .photos a { display: block; }
+    .photos img { width: 80px; height: 80px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; }
   </style>
 </head>
 <body>
@@ -56,6 +69,8 @@
 
   <h2 id="currentHeading" hidden>currently in this slot</h2>
   <ul class="current" id="current"></ul>
+
+  <div id="photos" class="photos" hidden></div>
 
   <h2 id="captureHeading">take a photo</h2>
   <label class="capture">
@@ -92,6 +107,7 @@
     const slotHeader = document.getElementById('slotHeader');
     const currentHeading = document.getElementById('currentHeading');
     const currentEl = document.getElementById('current');
+    const photosEl = document.getElementById('photos');
     const captureHeading = document.getElementById('captureHeading');
     const captureLabel = document.getElementById('captureLabel');
     const photo = document.getElementById('photo');
@@ -149,6 +165,8 @@
         slotHeader.hidden = true;
         currentHeading.hidden = true;
         currentEl.innerHTML = '';
+        photosEl.hidden = true;
+        photosEl.innerHTML = '';
         captureHeading.textContent = 'take a photo';
         captureLabel.textContent = 'Take a photo';
       }
@@ -162,9 +180,20 @@
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const slot = await res.json();
         renderCurrent(slot.items || []);
+        renderPhotos(slot.photos || []);
       } catch (e) {
         currentEl.innerHTML = '<li class="empty">Failed to load: ' + esc(e.message) + '</li>';
+        photosEl.hidden = true;
       }
+    }
+
+    function renderPhotos(list) {
+      if (!list.length) { photosEl.hidden = true; photosEl.innerHTML = ''; return; }
+      photosEl.hidden = false;
+      photosEl.innerHTML = list.map(fn => {
+        const url = '/c/' + encodeURIComponent(selectedContainer.id) + '/' + encodeURIComponent(selectedSlot) + '/photos/' + encodeURIComponent(fn);
+        return '<a href="' + url + '" target="_blank"><img src="' + url + '" alt="' + esc(fn) + '"></a>';
+      }).join('');
     }
 
     function renderCurrent(list) {
@@ -176,19 +205,66 @@
         const label = esc(it.description || '(unknown)')
           + (it.part_number ? ' <span class="pn">' + esc(it.part_number) + '</span>' : '');
         const qty = it.qty_estimate == null ? 1 : it.qty_estimate;
+        const tagsCsv = (it.tags || []).join(', ');
         return '<li>' +
           '<div class="info"><strong>' + label + '</strong></div>' +
+          '<button class="edit" data-idx="' + idx + '" title="edit">&#9998;</button>' +
           '<div class="qty-controls">' +
             '<button class="qty-btn dec" data-idx="' + idx + '" title="took one out">&minus;</button>' +
             '<span class="qty">' + qty + '</span>' +
             '<button class="qty-btn inc" data-idx="' + idx + '" title="put one back">+</button>' +
             '<button class="remove-all" data-idx="' + idx + '" title="remove entry">&times;</button>' +
           '</div>' +
+          '<div class="edit-form" data-idx="' + idx + '">' +
+            '<label>Description</label><input class="f-description" value="' + esc(it.description || '') + '">' +
+            '<label>Part number</label><input class="f-part_number" value="' + esc(it.part_number || '') + '">' +
+            '<label>Category</label><input class="f-category" value="' + esc(it.category || '') + '">' +
+            '<label>Quantity</label><input class="f-qty_estimate" type="number" min="0" value="' + qty + '">' +
+            '<label>Tags (comma separated)</label><input class="f-tags" value="' + esc(tagsCsv) + '">' +
+            '<div class="row"><button class="cancel">Cancel</button><button class="save">Save</button></div>' +
+          '</div>' +
         '</li>';
       }).join('');
       currentEl.querySelectorAll('.dec').forEach(b => b.addEventListener('click', () => adjustItem(+b.dataset.idx, 'decrement')));
       currentEl.querySelectorAll('.inc').forEach(b => b.addEventListener('click', () => adjustItem(+b.dataset.idx, 'increment')));
       currentEl.querySelectorAll('.remove-all').forEach(b => b.addEventListener('click', () => removeItem(+b.dataset.idx)));
+      currentEl.querySelectorAll('.edit').forEach(b => b.addEventListener('click', () => toggleEdit(+b.dataset.idx)));
+      currentEl.querySelectorAll('.edit-form .cancel').forEach(b => b.addEventListener('click', () => cancelEdit(b)));
+      currentEl.querySelectorAll('.edit-form .save').forEach(b => b.addEventListener('click', () => saveEdit(b)));
+    }
+
+    function toggleEdit(idx) {
+      const li = currentEl.querySelectorAll('li')[idx];
+      if (li) li.classList.toggle('editing');
+    }
+
+    function cancelEdit(btn) {
+      const li = btn.closest('li');
+      if (li) li.classList.remove('editing');
+    }
+
+    async function saveEdit(btn) {
+      const form = btn.closest('.edit-form');
+      const idx = +form.dataset.idx;
+      const payload = {
+        description: form.querySelector('.f-description').value,
+        part_number: form.querySelector('.f-part_number').value || null,
+        category: form.querySelector('.f-category').value,
+        qty_estimate: parseInt(form.querySelector('.f-qty_estimate').value, 10) || 1,
+        tags: form.querySelector('.f-tags').value.split(',').map(s => s.trim()).filter(Boolean)
+      };
+      try {
+        const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + idx, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const slot = await res.json();
+        renderCurrent(slot.items || []);
+      } catch (e) {
+        setStatus('error', 'Edit failed: ' + e.message);
+      }
     }
 
     async function adjustItem(idx, action) {
