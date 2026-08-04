@@ -14,24 +14,27 @@
     .status { color: #666; font-size: .9rem; margin-bottom: .5rem; }
     .status.error { color: #b00020; }
     .hits { list-style: none; padding: 0; margin: 0; }
-    .hit { padding: .75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: .5rem; }
-    .hit .loc { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .35rem; }
-    .hit .loc a { color: #333; font-weight: 600; text-decoration: none; font-family: ui-monospace, SFMono-Regular, monospace; }
-    .hit .loc a:hover { text-decoration: underline; }
-    .hit .verified { font-size: .75rem; color: #666; }
-    .hit .verified.stale { color: #b58900; }
-    .hit .verified.never { color: #999; }
-    .hit h3 { margin: 0 0 .2rem; font-size: .95rem; display: inline; }
-    .hit .edit { border: none; background: transparent; color: #333; font-size: .95rem; cursor: pointer; padding: 0 .3rem; float: right; }
-    .hit .edit:hover { color: #000; }
+    .group { padding: .75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: .75rem; }
+    .group .loc { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .35rem; }
+    .group .loc a { color: #333; font-weight: 600; text-decoration: none; font-family: ui-monospace, SFMono-Regular, monospace; }
+    .group .loc a:hover { text-decoration: underline; }
+    .verified { font-size: .75rem; color: #666; }
+    .verified.stale { color: #b58900; }
+    .verified.never { color: #999; }
+    .photos { display: flex; gap: .25rem; flex-wrap: wrap; margin: .35rem 0; }
+    .photos img { width: 64px; height: 64px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; }
+    .group ul.items { list-style: none; padding: 0; margin: .5rem 0 0; }
+    .group ul.items > li { padding: .5rem 0; border-top: 1px solid #eee; }
+    .group ul.items > li:first-child { border-top: none; padding-top: 0; }
+    .group h3 { margin: 0; font-size: .95rem; display: inline; }
+    .group .edit { border: none; background: transparent; color: #333; font-size: .95rem; cursor: pointer; padding: 0 .3rem; float: right; }
+    .group .edit:hover { color: #000; }
     .pn { font-family: ui-monospace, SFMono-Regular, monospace; color: #444; font-size: .85rem; }
     .meta { font-size: .8rem; color: #666; margin-top: .2rem; }
     .tags { margin-top: .2rem; }
     .tag { display: inline-block; background: #eef; padding: .1rem .5rem; border-radius: 999px; margin: .1rem .1rem 0 0; font-size: .7rem; }
-    .photos { display: flex; gap: .25rem; flex-wrap: wrap; margin-top: .35rem; }
-    .photos img { width: 56px; height: 56px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; }
     .edit-form { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid #eee; display: none; flex-direction: column; gap: .3rem; }
-    .hit.editing .edit-form { display: flex; }
+    li.editing .edit-form { display: flex; }
     .edit-form label { font-size: .75rem; color: #666; }
     .edit-form input { font: inherit; font-size: .9rem; padding: .35rem .5rem; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
     .edit-form .row { display: flex; gap: .3rem; margin-top: .3rem; }
@@ -97,30 +100,58 @@
       }
       status.className = 'status';
       status.textContent = results.length + ' match' + (results.length === 1 ? '' : 'es') + ' for "' + esc(query) + '".';
-      hits.innerHTML = results.map(renderHit).join('');
+      hits.innerHTML = groupBySlot(results).map(renderGroup).join('');
       wireHitEvents();
     }
 
-    function renderHit(h) {
+    function groupBySlot(results) {
+      const groups = new Map();
+      for (const h of results) {
+        const key = h.container + '/' + h.slot;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            container: h.container,
+            slot: h.slot,
+            lastVerified: h.last_verified,
+            photos: h.photos || [],
+            hits: [],
+            topScore: 0
+          });
+        }
+        const g = groups.get(key);
+        g.hits.push(h);
+        if (h.score > g.topScore) g.topScore = h.score;
+      }
+      return [...groups.values()].sort((a, b) => b.topScore - a.topScore);
+    }
+
+    function renderGroup(g) {
+      const location = g.container + ' · ' + g.slot;
+      const putUrl = '/put.html?c=' + encodeURIComponent(g.container) + '&s=' + encodeURIComponent(g.slot);
+      const photoStrip = g.photos.slice(0, 6).map(fn => {
+        const url = '/c/' + encodeURIComponent(g.container) + '/' + encodeURIComponent(g.slot) + '/photos/' + encodeURIComponent(fn);
+        return '<a href="' + url + '" target="_blank"><img src="' + url + '" alt=""></a>';
+      }).join('');
+      const itemsHtml = g.hits.map(h => renderHitItem(h, g)).join('');
+      return '<li class="group">' +
+        '<div class="loc"><a href="' + putUrl + '">' + esc(location) + '</a>' + verifiedBadge(g.lastVerified) + '</div>' +
+        (photoStrip ? '<div class="photos">' + photoStrip + '</div>' : '') +
+        '<ul class="items">' + itemsHtml + '</ul>' +
+      '</li>';
+    }
+
+    function renderHitItem(h, g) {
       const it = h.item || {};
       const tags = (it.tags || []).map(t => '<span class="tag">' + esc(t) + '</span>').join('');
       const conf = it.confidence != null ? Math.round(it.confidence * 100) + '%' : '?';
       const qty = it.qty_estimate != null ? it.qty_estimate : '?';
-      const location = h.container + ' · ' + h.slot;
-      const putUrl = '/put.html?c=' + encodeURIComponent(h.container) + '&s=' + encodeURIComponent(h.slot);
       const tagsCsv = (it.tags || []).join(', ');
-      const photoStrip = (h.photos || []).slice(0, 6).map(fn => {
-        const url = '/c/' + encodeURIComponent(h.container) + '/' + encodeURIComponent(h.slot) + '/photos/' + encodeURIComponent(fn);
-        return '<a href="' + url + '" target="_blank"><img src="' + url + '" alt=""></a>';
-      }).join('');
-      return '<li class="hit" data-container="' + esc(h.container) + '" data-slot="' + esc(h.slot) + '" data-index="' + h.index + '">' +
-        '<div class="loc"><a href="' + putUrl + '">' + esc(location) + '</a>' + verifiedBadge(h.last_verified) + '</div>' +
+      return '<li data-container="' + esc(g.container) + '" data-slot="' + esc(g.slot) + '" data-index="' + h.index + '">' +
         '<h3>' + esc(it.description || '(unknown)') + '</h3>' +
         '<button class="edit" title="edit">&#9998;</button>' +
         (it.part_number ? '<div class="pn">' + esc(it.part_number) + '</div>' : '') +
         '<div class="meta">' + esc(it.category || '') + ' · qty ' + qty + ' · conf ' + conf + '</div>' +
         (tags ? '<div class="tags">' + tags + '</div>' : '') +
-        (photoStrip ? '<div class="photos">' + photoStrip + '</div>' : '') +
         '<div class="edit-form">' +
           '<label>Description</label><input class="f-description" value="' + esc(it.description || '') + '">' +
           '<label>Part number</label><input class="f-part_number" value="' + esc(it.part_number || '') + '">' +
@@ -133,12 +164,12 @@
     }
 
     function wireHitEvents() {
-      hits.querySelectorAll('.hit .edit').forEach(b => b.addEventListener('click', e => {
+      hits.querySelectorAll('.edit').forEach(b => b.addEventListener('click', e => {
         e.stopPropagation();
-        b.closest('.hit').classList.toggle('editing');
+        b.closest('li').classList.toggle('editing');
       }));
-      hits.querySelectorAll('.hit .cancel').forEach(b => b.addEventListener('click', () => b.closest('.hit').classList.remove('editing')));
-      hits.querySelectorAll('.hit .save').forEach(b => b.addEventListener('click', () => saveHit(b.closest('.hit'))));
+      hits.querySelectorAll('.cancel').forEach(b => b.addEventListener('click', () => b.closest('li').classList.remove('editing')));
+      hits.querySelectorAll('.save').forEach(b => b.addEventListener('click', () => saveHit(b.closest('li'))));
     }
 
     async function saveHit(li) {
