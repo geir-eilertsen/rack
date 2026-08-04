@@ -1,9 +1,18 @@
 spring:
   application:
     name: rack
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
   ai:
     openai:
       api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: gpt-4o-mini
     model:
       audio:
         speech: none

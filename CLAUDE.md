@@ -25,7 +25,9 @@ docker build -t rack:local .
 docker run --rm -p 8080:8080 -e OPENAI_API_KEY=$OPENAI_API_KEY rack:local
 ```
 
-Multi-stage build (Maven + JDK → JRE-only runtime). `OPENAI_API_KEY` must be set — Spring AI's OpenAI autoconfig requires a key at bean construction, so even a smoke test needs *some* value (`sk-local-smoketest` is enough to boot; you only need a real key when actually calling the model).
+Multi-stage build (Maven + JDK → JRE-only runtime). `OPENAI_API_KEY` must be set — Spring AI's OpenAI autoconfig requires a key at bean construction, so even a smoke test needs *some* value (`sk-local-smoketest` is enough to boot). A **real** key is needed for `/identify` and any endpoint that actually calls the vision or embedding model.
+
+Chat model is `gpt-4o-mini` (see `spring.ai.openai.chat.options.model` in `application.yml`).
 
 `application.yml` disables the OpenAI model types we don't use (`image`, `moderation`, `audio.speech`, `audio.transcription`); leaving them enabled tries to instantiate their beans at startup and crashes the app.
 
