@@ -73,7 +73,7 @@
       return '<li class="item">' +
         '<h3>' + esc(it.description || '(unknown)') + '</h3>' +
         (it.part_number ? '<div class="pn">' + esc(it.part_number) + '</div>' : '') +
-        '<div class="meta">' + esc(it.category || '') + ' &middot; qty ' + qty + ' &middot; conf ' + conf + '</div>' +
+        '<div class="meta">' + esc(it.category || '') + ' · qty ' + qty + ' · conf ' + conf + '</div>' +
         (tags ? '<div class="tags">' + tags + '</div>' : '') +
       '</li>';
     }

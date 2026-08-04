@@ -92,13 +92,13 @@
       const tags = (it.tags || []).map(t => '<span class="tag">' + esc(t) + '</span>').join('');
       const conf = it.confidence != null ? Math.round(it.confidence * 100) + '%' : '?';
       const qty = it.qty_estimate != null ? it.qty_estimate : '?';
-      const location = h.container + ' &middot; ' + h.slot;
+      const location = h.container + ' · ' + h.slot;
       const putUrl = '/put.html?c=' + encodeURIComponent(h.container) + '&s=' + encodeURIComponent(h.slot);
       return '<li class="hit">' +
         '<div class="loc"><a href="' + putUrl + '">' + esc(location) + '</a>' + verifiedBadge(h.last_verified) + '</div>' +
         '<h3>' + esc(it.description || '(unknown)') + '</h3>' +
         (it.part_number ? '<div class="pn">' + esc(it.part_number) + '</div>' : '') +
-        '<div class="meta">' + esc(it.category || '') + ' &middot; qty ' + qty + ' &middot; conf ' + conf + '</div>' +
+        '<div class="meta">' + esc(it.category || '') + ' · qty ' + qty + ' · conf ' + conf + '</div>' +
         (tags ? '<div class="tags">' + tags + '</div>' : '') +
       '</li>';
     }

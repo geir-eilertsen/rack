@@ -270,7 +270,7 @@
       extractedHeading.hidden = list.length === 0;
       extractedEl.innerHTML = list.map(it => {
         return '<li class="item"><strong>' + esc(it.description || '(unknown)') + '</strong>' +
-          (it.part_number ? ' &middot; <span class="pn">' + esc(it.part_number) + '</span>' : '') +
+          (it.part_number ? ' · <span class="pn">' + esc(it.part_number) + '</span>' : '') +
         '</li>';
       }).join('');
     }
@@ -285,7 +285,7 @@
           .map(m => esc(m.description || '?'))
           .join('; ');
         return '<li class="sug' + (i === 0 ? ' top' : '') + '">' +
-          '<div class="head"><strong>' + s.container + ' &middot; ' + s.slot + '</strong>' +
+          '<div class="head"><strong>' + s.container + ' · ' + s.slot + '</strong>' +
             '<span style="font-size:.75rem;color:#666">score ' + s.score.toFixed(1) + '</span>' +
           '</div>' +
           (matches ? '<div class="why">already has: ' + matches + '</div>' : '') +

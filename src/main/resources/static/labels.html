@@ -101,8 +101,8 @@
       const res = await fetch('/labels/' + selected.id + '/status');
       const s = await res.json();
       counts.innerHTML = 'Container <span class="num">' + esc(s.container) + '</span>: '
-        + '<span class="num">' + s.total + '</span> slots &middot; '
-        + '<span class="num">' + s.printed + '</span> printed &middot; '
+        + '<span class="num">' + s.total + '</span> slots · '
+        + '<span class="num">' + s.printed + '</span> printed · '
         + '<span class="num">' + s.unprinted + '</span> pending';
       if (s.next_offset > 0) {
         offsetInfo.textContent = 'Next sheet starts at position ' + (s.next_offset + 1) + ' of ' + s.per_sheet
