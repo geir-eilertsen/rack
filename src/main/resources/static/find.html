@@ -3,54 +3,58 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rack — find</title>
+  <title>rack — find an item</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/rack.svg">
+  <link rel="apple-touch-icon" href="/assets/rack.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#d97747">
+  <link rel="stylesheet" href="/assets/rack.css">
   <style>
-    body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 1rem; max-width: 640px; color: #222; }
-    .back { color: #666; text-decoration: none; font-size: .85rem; }
-    .back:hover { color: #222; }
-    h1 { font-size: 1.2rem; margin: .25rem 0 1rem; }
-    .search { display: flex; gap: .3rem; margin-bottom: 1rem; }
-    .search input { flex: 1; padding: .6rem .75rem; font: inherit; font-size: 1rem; border: 1px solid #ccc; border-radius: 6px; }
-    .status { color: #666; font-size: .9rem; margin-bottom: .5rem; }
-    .status.error { color: #b00020; }
+    .search { margin-bottom: 1rem; }
+    .search input { font-size: 1.05rem; padding: .8rem 1rem; }
     .hits { list-style: none; padding: 0; margin: 0; }
-    .group { padding: .75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: .75rem; }
+    .group { padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: .75rem; background: var(--card); box-shadow: var(--shadow); }
     .group .loc { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .35rem; }
-    .group .loc a { color: #333; font-weight: 600; text-decoration: none; font-family: ui-monospace, SFMono-Regular, monospace; }
+    .group .loc a { color: var(--primary-hover); font-weight: 700; text-decoration: none; font-family: var(--font-mono); font-size: 1.05rem; }
     .group .loc a:hover { text-decoration: underline; }
-    .verified { font-size: .75rem; color: #666; }
-    .verified.stale { color: #b58900; }
-    .verified.never { color: #999; }
-    .photos { display: flex; gap: .25rem; flex-wrap: wrap; margin: .35rem 0; }
-    .photos img { width: 64px; height: 64px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; }
-    .group ul.items { list-style: none; padding: 0; margin: .5rem 0 0; }
-    .group ul.items > li { padding: .5rem 0; border-top: 1px solid #eee; }
-    .group ul.items > li:first-child { border-top: none; padding-top: 0; }
-    .group h3 { margin: 0; font-size: .95rem; display: inline; }
-    .group .edit { border: none; background: transparent; color: #333; font-size: .95rem; cursor: pointer; padding: 0 .3rem; float: right; }
-    .group .edit:hover { color: #000; }
-    .pn { font-family: ui-monospace, SFMono-Regular, monospace; color: #444; font-size: .85rem; }
-    .meta { font-size: .8rem; color: #666; margin-top: .2rem; }
-    .tags { margin-top: .2rem; }
-    .tag { display: inline-block; background: #eef; padding: .1rem .5rem; border-radius: 999px; margin: .1rem .1rem 0 0; font-size: .7rem; }
-    .edit-form { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid #eee; display: none; flex-direction: column; gap: .3rem; }
-    li.editing .edit-form { display: flex; }
-    .edit-form label { font-size: .75rem; color: #666; }
-    .edit-form input { font: inherit; font-size: .9rem; padding: .35rem .5rem; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
-    .edit-form .row { display: flex; gap: .3rem; margin-top: .3rem; }
-    .edit-form .row button { flex: 1; padding: .5rem; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer; font: inherit; font-size: .9rem; }
-    .edit-form .row button.save { background: #333; color: #fff; border-color: #333; }
+    .group ul.items { list-style: none; padding: 0; margin: .6rem 0 0; }
+    .group ul.items > li { padding: .65rem .75rem; border-top: 1px solid var(--border); cursor: pointer; transition: background .12s ease; border-radius: var(--radius-xs); }
+    .group ul.items > li:first-child { border-top: none; }
+    .group ul.items > li:hover { background: var(--primary-soft); }
+    .group ul.items > li.editing { cursor: default; background: var(--card); }
+    .row { display: flex; align-items: center; gap: .5rem; }
+    .desc { flex: 1; font-weight: 500; font-size: .95rem; }
+    .qty { font-family: var(--font-mono); font-weight: 700; color: var(--primary-hover); font-size: .9rem; }
+    .pn-line { margin-top: .2rem; }
+    .tags-line { margin-top: .3rem; }
+    .editing .row, .editing .pn-line, .editing .tags-line { display: none; }
+    .edit-form { display: none; flex-direction: column; gap: .35rem; }
+    .editing .edit-form { display: flex; }
+    .edit-form label { font-size: .7rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: .35rem; }
+    .edit-actions { display: flex; gap: .4rem; margin-top: .5rem; align-items: center; }
+    .edit-actions .btn { flex: 1; }
+    .edit-actions .remove { flex: 0 0 auto; background: transparent; border: none; color: var(--error); font-size: .85rem; cursor: pointer; padding: .3rem .5rem; text-decoration: underline; }
+    .edit-actions .remove:hover { color: #7a2a20; }
   </style>
 </head>
 <body>
-  <a class="back" href="/">&larr; rack</a>
-  <h1>find</h1>
+  <div class="container">
+    <header class="app-header">
+      <a class="back" href="/">← Home</a>
+      <a class="brand" href="/">
+        <img class="logo" src="/assets/rack.svg" alt="">
+        <span class="name">rack</span>
+      </a>
+    </header>
 
-  <div class="search">
-    <input id="q" type="search" placeholder="e.g. BC547, transistor, TO-220, red LED" autocomplete="off" autofocus>
+    <h1>Find an item</h1>
+
+    <div class="search">
+      <input id="q" type="search" placeholder="e.g. transistor, TO-220, red LED" autocomplete="off" autofocus>
+    </div>
+    <div class="status" id="status">Type to search.</div>
+    <ul class="hits" id="hits"></ul>
   </div>
-  <div class="status" id="status">Type to search.</div>
-  <ul class="hits" id="hits"></ul>
 
   <script>
     const q = document.getElementById('q');
@@ -59,7 +63,6 @@
 
     let controller = null;
     let debounce = null;
-    let currentQuery = '';
 
     q.addEventListener('input', () => {
       clearTimeout(debounce);
@@ -68,7 +71,6 @@
 
     async function runSearch() {
       const query = q.value.trim();
-      currentQuery = query;
       if (!query) {
         status.className = 'status';
         status.textContent = 'Type to search.';
@@ -101,7 +103,7 @@
       status.className = 'status';
       status.textContent = results.length + ' match' + (results.length === 1 ? '' : 'es') + ' for "' + esc(query) + '".';
       hits.innerHTML = groupBySlot(results).map(renderGroup).join('');
-      wireHitEvents();
+      wireEvents();
     }
 
     function groupBySlot(results) {
@@ -109,14 +111,7 @@
       for (const h of results) {
         const key = h.container + '/' + h.slot;
         if (!groups.has(key)) {
-          groups.set(key, {
-            container: h.container,
-            slot: h.slot,
-            lastVerified: h.last_verified,
-            photos: h.photos || [],
-            hits: [],
-            topScore: 0
-          });
+          groups.set(key, { container: h.container, slot: h.slot, lastVerified: h.last_verified, photos: h.photos || [], hits: [], topScore: 0 });
         }
         const g = groups.get(key);
         g.hits.push(h);
@@ -132,9 +127,10 @@
         const url = '/c/' + encodeURIComponent(g.container) + '/' + encodeURIComponent(g.slot) + '/photos/' + encodeURIComponent(fn);
         return '<a href="' + url + '" target="_blank"><img src="' + url + '" alt=""></a>';
       }).join('');
+      const staleBadge = staleBadgeIfNeeded(g.lastVerified);
       const itemsHtml = g.hits.map(h => renderHitItem(h, g)).join('');
       return '<li class="group">' +
-        '<div class="loc"><a href="' + putUrl + '">' + esc(location) + '</a>' + verifiedBadge(g.lastVerified) + '</div>' +
+        '<div class="loc"><a href="' + putUrl + '">' + esc(location) + '</a>' + staleBadge + '</div>' +
         (photoStrip ? '<div class="photos">' + photoStrip + '</div>' : '') +
         '<ul class="items">' + itemsHtml + '</ul>' +
       '</li>';
@@ -143,68 +139,84 @@
     function renderHitItem(h, g) {
       const it = h.item || {};
       const tags = (it.tags || []).map(t => '<span class="tag">' + esc(t) + '</span>').join('');
-      const conf = it.confidence != null ? Math.round(it.confidence * 100) + '%' : '?';
-      const qty = it.qty_estimate != null ? it.qty_estimate : '?';
+      const qty = it.qty_estimate == null ? 1 : it.qty_estimate;
       const tagsCsv = (it.tags || []).join(', ');
       return '<li data-container="' + esc(g.container) + '" data-slot="' + esc(g.slot) + '" data-index="' + h.index + '">' +
-        '<h3>' + esc(it.description || '(unknown)') + '</h3>' +
-        '<button class="edit" title="edit">&#9998;</button>' +
-        (it.part_number ? '<div class="pn">' + esc(it.part_number) + '</div>' : '') +
-        '<div class="meta">' + esc(it.category || '') + ' · qty ' + qty + ' · conf ' + conf + '</div>' +
-        (tags ? '<div class="tags">' + tags + '</div>' : '') +
+        '<div class="row">' +
+          '<div class="desc">' + esc(it.description || '(unknown)') + '</div>' +
+          '<div class="qty">×' + qty + '</div>' +
+        '</div>' +
+        (it.part_number ? '<div class="pn-line pn">' + esc(it.part_number) + '</div>' : '') +
+        (tags ? '<div class="tags-line">' + tags + '</div>' : '') +
         '<div class="edit-form">' +
           '<label>Description</label><input class="f-description" value="' + esc(it.description || '') + '">' +
           '<label>Part number</label><input class="f-part_number" value="' + esc(it.part_number || '') + '">' +
           '<label>Category</label><input class="f-category" value="' + esc(it.category || '') + '">' +
-          '<label>Quantity</label><input class="f-qty_estimate" type="number" min="0" value="' + (it.qty_estimate != null ? it.qty_estimate : 1) + '">' +
+          '<label>Quantity</label><input class="f-qty_estimate" type="number" min="0" value="' + qty + '">' +
           '<label>Tags (comma separated)</label><input class="f-tags" value="' + esc(tagsCsv) + '">' +
-          '<div class="row"><button class="cancel">Cancel</button><button class="save">Save</button></div>' +
+          '<div class="edit-actions">' +
+            '<button class="btn cancel">Cancel</button>' +
+            '<button class="btn primary save">Save</button>' +
+            '<button class="remove" title="Remove this item">Remove</button>' +
+          '</div>' +
         '</div>' +
       '</li>';
     }
 
-    function wireHitEvents() {
-      hits.querySelectorAll('.edit').forEach(b => b.addEventListener('click', e => {
-        e.stopPropagation();
-        b.closest('li').classList.toggle('editing');
-      }));
-      hits.querySelectorAll('.cancel').forEach(b => b.addEventListener('click', () => b.closest('li').classList.remove('editing')));
-      hits.querySelectorAll('.save').forEach(b => b.addEventListener('click', () => saveHit(b.closest('li'))));
+    function wireEvents() {
+      hits.querySelectorAll('.items > li').forEach(li => {
+        li.addEventListener('click', ev => {
+          if (li.classList.contains('editing')) return;
+          if (ev.target.closest('.edit-form')) return;
+          li.classList.add('editing');
+        });
+      });
+      hits.querySelectorAll('.cancel').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); b.closest('li').classList.remove('editing'); }));
+      hits.querySelectorAll('.save').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); saveHit(b.closest('li')); }));
+      hits.querySelectorAll('.remove').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); removeHit(b.closest('li')); }));
     }
 
     async function saveHit(li) {
-      const container = li.dataset.container;
-      const slot = li.dataset.slot;
-      const idx = +li.dataset.index;
       const payload = {
         description: li.querySelector('.f-description').value,
         part_number: li.querySelector('.f-part_number').value || null,
         category: li.querySelector('.f-category').value,
-        qty_estimate: parseInt(li.querySelector('.f-qty_estimate').value, 10) || 1,
+        qty_estimate: parseInt(li.querySelector('.f-qty_estimate').value, 10) || 0,
         tags: li.querySelector('.f-tags').value.split(',').map(s => s.trim()).filter(Boolean)
       };
+      if (payload.qty_estimate <= 0) return removeHit(li);
+      const { container, slot, index } = li.dataset;
       try {
-        const res = await fetch('/c/' + container + '/' + slot + '/items/' + idx, {
+        const res = await fetch('/c/' + container + '/' + slot + '/items/' + index, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
-        // Re-run current search so the hit reflects the edit
         runSearch();
       } catch (e) {
         status.className = 'status error';
-        status.textContent = 'Edit failed: ' + e.message;
+        status.textContent = 'Save failed: ' + e.message;
       }
     }
 
-    function verifiedBadge(iso) {
-      if (!iso) return '<span class="verified never">never verified</span>';
-      const d = new Date(iso);
-      const days = Math.floor((Date.now() - d.getTime()) / 86400000);
-      const label = days === 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago';
-      const stale = days > 180;
-      return '<span class="verified' + (stale ? ' stale' : '') + '">verified ' + label + '</span>';
+    async function removeHit(li) {
+      const { container, slot, index } = li.dataset;
+      try {
+        const res = await fetch('/c/' + container + '/' + slot + '/items/' + index, { method: 'DELETE' });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        runSearch();
+      } catch (e) {
+        status.className = 'status error';
+        status.textContent = 'Remove failed: ' + e.message;
+      }
+    }
+
+    function staleBadgeIfNeeded(iso) {
+      if (!iso) return '<span class="verified never">not yet verified</span>';
+      const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+      if (days <= 180) return '';
+      return '<span class="verified stale">stale · ' + days + ' days ago</span>';
     }
 
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }

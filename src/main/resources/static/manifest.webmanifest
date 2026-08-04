@@ -1,0 +1,24 @@
+{
+  "name": "rack — small parts inventory",
+  "short_name": "rack",
+  "description": "Take a photo. Find it later.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fef8f0",
+  "theme_color": "#d97747",
+  "icons": [
+    {
+      "src": "/assets/rack.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/rack.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -3,55 +3,53 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rack</title>
-  <style>
-    body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 1rem; max-width: 640px; color: #222; }
-    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
-    .subtitle { color: #666; margin: 0 0 .5rem; font-size: .9rem; }
-    .hint { color: #666; font-size: .8rem; margin: 0 0 1.25rem; padding: .5rem .75rem; background: #f0f5ff; border-left: 3px solid #4a76c4; border-radius: 3px; }
-    ul { list-style: none; padding: 0; margin: 0; }
-    li { margin: 0 0 .75rem; }
-    a.card { display: block; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; text-decoration: none; color: inherit; background: #fafafa; }
-    a.card:hover, a.card:focus { border-color: #999; background: #f0f0f0; }
-    a.card h2 { margin: 0 0 .25rem; font-size: 1.05rem; }
-    a.card p { margin: 0; color: #666; font-size: .85rem; }
-    .section { color: #666; font-size: .75rem; margin: 1.25rem 0 .5rem; text-transform: uppercase; letter-spacing: .05em; }
-  </style>
+  <title>rack — small parts, findable</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/rack.svg">
+  <link rel="apple-touch-icon" href="/assets/rack.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#d97747">
+  <link rel="stylesheet" href="/assets/rack.css">
 </head>
 <body>
-  <h1>rack</h1>
-  <p class="subtitle">drawer inventory</p>
-  <p class="hint">Tip: scan a drawer's QR to jump straight to that slot.</p>
+  <div class="container">
+    <div class="hero">
+      <img class="logo-lg" src="/assets/rack.svg" alt="">
+      <h1>rack</h1>
+      <p class="tagline">Take a photo. Find it later.</p>
+    </div>
 
-  <ul>
-    <li>
-      <a class="card" href="/put.html">
-        <h2>Add an item</h2>
-        <p>Take a photo and file it into a slot.</p>
-      </a>
-    </li>
-    <li>
-      <a class="card" href="/find.html">
-        <h2>Find an item</h2>
-        <p>Search filed slots. See details, view photos, edit.</p>
-      </a>
-    </li>
-  </ul>
+    <p class="callout">Tip: scan a drawer's QR code with your phone camera to jump straight to that slot.</p>
 
-  <div class="section">Setup</div>
-  <ul>
-    <li>
-      <a class="card" href="/register.html">
-        <h2>Register a container</h2>
-        <p>Add a new rack, bin, or shelf. Pick a shape, get labels for it.</p>
-      </a>
-    </li>
-    <li>
-      <a class="card" href="/labels.html">
-        <h2>Print labels</h2>
-        <p>Pick a container, print pending labels on Avery L7160 (A4). Tracks what's been printed so you don't reprint.</p>
-      </a>
-    </li>
-  </ul>
+    <ul class="cards">
+      <li>
+        <a class="card" href="/put.html">
+          <h2>Add an item</h2>
+          <p>Take a photo, pick the slot, and it's filed.</p>
+        </a>
+      </li>
+      <li>
+        <a class="card" href="/find.html">
+          <h2>Find an item</h2>
+          <p>Search everything you've filed. See photos, edit details.</p>
+        </a>
+      </li>
+    </ul>
+
+    <div class="section-title">Setup</div>
+    <ul class="cards">
+      <li>
+        <a class="card" href="/register.html">
+          <h2>Register a container</h2>
+          <p>Add a new rack, bin, or shelf and get labels sized for it.</p>
+        </a>
+      </li>
+      <li>
+        <a class="card" href="/labels.html">
+          <h2>Print labels</h2>
+          <p>Print QR labels on Avery L7160 sheets. Remembers what's been printed.</p>
+        </a>
+      </li>
+    </ul>
+  </div>
 </body>
 </html>

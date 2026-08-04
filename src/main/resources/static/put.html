@@ -3,99 +3,94 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rack — put in slot</title>
+  <title>rack — add an item</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/rack.svg">
+  <link rel="apple-touch-icon" href="/assets/rack.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#d97747">
+  <link rel="stylesheet" href="/assets/rack.css">
   <style>
-    body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 1rem; max-width: 640px; color: #222; }
-    .back { color: #666; text-decoration: none; font-size: .85rem; }
-    .back:hover { color: #222; }
-    h1 { font-size: 1.2rem; margin: .25rem 0 1rem; }
-    h2 { font-size: .85rem; color: #666; margin: 1.2rem 0 .5rem; text-transform: uppercase; letter-spacing: .05em; }
-    .capture { display: block; width: 100%; padding: 1.4rem; font-size: 1rem; border: 2px dashed #666; border-radius: 8px; text-align: center; background: #f8f8f8; cursor: pointer; box-sizing: border-box; }
-    .capture input { display: none; }
-    #preview img { max-width: 100%; border-radius: 8px; display: block; margin-top: 1rem; }
-    .status { margin-top: 1rem; color: #666; font-size: .9rem; }
-    .status.error { color: #b00020; }
-    .status.ok { color: #0a7f00; }
-    .items { list-style: none; padding: 0; margin: 0; }
-    .item { padding: .55rem .75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: .35rem; font-size: .9rem; }
-    .item .pn { font-family: ui-monospace, SFMono-Regular, monospace; color: #444; }
-    .suggestions { list-style: none; padding: 0; margin: 0; }
-    .sug { padding: .75rem; border: 1px solid #ddd; border-radius: 8px; margin-bottom: .5rem; background: #fafafa; }
-    .sug.top { border-color: #0a7f00; background: #eefbea; }
-    .sug .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .3rem; }
-    .sug .head strong { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 1rem; }
-    .sug .why { font-size: .8rem; color: #555; margin-bottom: .35rem; }
-    .sug .cta { display: inline-block; margin-top: .3rem; padding: .5rem 1rem; background: #333; color: #fff; border: none; border-radius: 4px; font: inherit; font-size: .9rem; cursor: pointer; }
-    .sug .cta:hover { background: #000; }
-    .pickers { margin-bottom: 1rem; }
-    .pickers .label { font-size: .8rem; color: #666; margin: .5rem 0 .25rem; }
-    .containers { display: flex; flex-wrap: wrap; gap: .3rem; }
-    .container-btn { padding: .4rem .8rem; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: .85rem; }
-    .container-btn.selected { background: #333; color: #fff; border-color: #333; }
-    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: .3rem; }
-    .slot-btn { padding: .55rem 0; text-align: center; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: .8rem; }
-    .slot-btn.selected { background: #333; color: #fff; border-color: #333; }
-    .filebtn { display: block; width: 100%; padding: .7rem; margin-top: .5rem; background: #333; color: #fff; border: none; border-radius: 4px; font: inherit; font-size: .95rem; cursor: pointer; }
-    .filebtn:disabled { background: #bbb; cursor: not-allowed; }
     .current { list-style: none; padding: 0; margin: .5rem 0 0; }
-    .current li { display: flex; justify-content: space-between; align-items: center; padding: .55rem .75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: .35rem; gap: .5rem; }
-    .current .info { flex: 1; min-width: 0; font-size: .9rem; }
-    .current .qty-controls { flex: 0 0 auto; display: flex; align-items: center; gap: .35rem; }
-    .current .qty-btn { border: 1px solid #ccc; background: #fff; font: inherit; font-size: 1rem; line-height: 1; width: 2rem; height: 2rem; border-radius: 4px; cursor: pointer; padding: 0; }
-    .current .qty { min-width: 1.4rem; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
-    .current .remove-all { border: none; background: transparent; color: #b00020; font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 0 .3rem; margin-left: .2rem; }
-    .current .empty { padding: .55rem .75rem; border: 1px dashed #ccc; border-radius: 6px; color: #666; font-size: .85rem; }
-    .current .edit { border: none; background: transparent; color: #333; font-size: .95rem; line-height: 1; cursor: pointer; padding: 0 .3rem; }
-    .current .edit:hover { color: #000; }
-    .current .edit-form { flex: 1 1 100%; margin-top: .5rem; padding-top: .5rem; border-top: 1px solid #eee; display: none; flex-direction: column; gap: .3rem; }
-    .current li.editing { flex-wrap: wrap; }
+    .current li { padding: .75rem .9rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: .5rem; background: var(--card); cursor: pointer; transition: background .12s ease, border-color .12s ease; }
+    .current li:hover { background: var(--primary-soft); border-color: var(--border-strong); }
+    .current li.editing { cursor: default; background: var(--card); border-color: var(--primary); box-shadow: var(--shadow); }
+    .current .row { display: flex; align-items: center; gap: .5rem; }
+    .current .desc { flex: 1; min-width: 0; font-size: .95rem; font-weight: 500; }
+    .current .qty { font-family: var(--font-mono); font-weight: 700; color: var(--primary-hover); font-size: .95rem; }
+    .current .pn-line { margin-top: .2rem; }
+    .current .tags-line { margin-top: .3rem; }
+    .current li.editing .row { display: none; }
+    .current li.editing .pn-line, .current li.editing .tags-line { display: none; }
+    .edit-form { display: none; flex-direction: column; gap: .35rem; }
     .current li.editing .edit-form { display: flex; }
-    .current .edit-form label { font-size: .75rem; color: #666; }
-    .current .edit-form input { font: inherit; font-size: .9rem; padding: .35rem .5rem; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
-    .current .edit-form .row { display: flex; gap: .3rem; margin-top: .3rem; }
-    .current .edit-form .row button { flex: 1; padding: .5rem; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer; font: inherit; font-size: .9rem; }
-    .current .edit-form .row button.save { background: #333; color: #fff; border-color: #333; }
-    .slot-header { padding: .55rem .75rem; background: #eef; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 600; }
-    .photos { display: flex; gap: .3rem; flex-wrap: wrap; margin: .5rem 0 0; }
-    .photos a { display: block; }
-    .photos img { width: 80px; height: 80px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; }
+    .edit-form label { font-size: .7rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: .35rem; }
+    .edit-actions { display: flex; gap: .4rem; margin-top: .5rem; align-items: center; }
+    .edit-actions .btn { flex: 1; }
+    .edit-actions .remove { flex: 0 0 auto; background: transparent; border: none; color: var(--error); font-size: .85rem; cursor: pointer; padding: .3rem .5rem; text-decoration: underline; }
+    .edit-actions .remove:hover { color: #7a2a20; }
+    .empty { padding: .75rem; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); color: var(--muted); font-size: .9rem; text-align: center; background: var(--card); }
+    .manual { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .5rem .85rem .85rem; background: var(--card); margin-top: 1rem; box-shadow: var(--shadow); }
+    .manual summary { cursor: pointer; font-size: .9rem; font-weight: 600; padding: .35rem 0; color: var(--text); }
+    .manual summary:hover { color: var(--primary-hover); }
+    .sug-list { list-style: none; padding: 0; margin: 0; }
+    .sug { padding: .8rem .9rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: .5rem; background: var(--card); box-shadow: var(--shadow); }
+    .sug.top { border-color: var(--primary); background: var(--primary-soft); }
+    .sug .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .3rem; }
+    .sug .loc { font-family: var(--font-mono); font-weight: 700; font-size: 1rem; }
+    .sug .why { font-size: .8rem; color: var(--muted); margin-bottom: .4rem; }
+    .none { padding: .6rem .85rem; color: var(--muted); font-size: .85rem; font-style: italic; }
+    .items.extracted { list-style: none; padding: 0; margin: 0; }
+    .items.extracted li { padding: .5rem .75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: .35rem; background: var(--card); font-size: .9rem; }
+    .items.extracted .pn { display: inline; margin-left: .35rem; }
   </style>
 </head>
 <body>
-  <a class="back" href="/">&larr; rack</a>
-  <h1 id="title">put in slot</h1>
+  <div class="container">
+    <header class="app-header">
+      <a class="back" href="/">← Home</a>
+      <a class="brand" href="/">
+        <img class="logo" src="/assets/rack.svg" alt="">
+        <span class="name">rack</span>
+      </a>
+    </header>
 
-  <div id="slotHeader" class="slot-header" hidden></div>
+    <h1 id="title">Add an item</h1>
 
-  <section class="pickers" id="pickers">
-    <h2>pick a slot</h2>
-    <div class="label">Container</div>
-    <div class="containers" id="containers"></div>
-    <div class="label" id="slotsLabel" hidden>Slot</div>
-    <div class="grid" id="slots"></div>
-  </section>
+    <div id="slotHeader" class="slot-header" hidden></div>
 
-  <h2 id="currentHeading" hidden>currently in this slot</h2>
-  <ul class="current" id="current"></ul>
+    <h2 id="currentHeading" hidden>What's already here</h2>
+    <ul class="current" id="current"></ul>
 
-  <div id="photos" class="photos" hidden></div>
+    <div id="photos" class="photos" hidden></div>
 
-  <h2 id="captureHeading">or take a photo</h2>
-  <label class="capture">
-    <span id="captureLabel">Take a photo</span>
-    <input type="file" accept="image/*" capture="environment" id="photo">
-  </label>
+    <h2 id="captureHeading">Take a photo</h2>
+    <label class="capture">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+        <circle cx="12" cy="13" r="4"/>
+      </svg>
+      <span id="captureLabel">Take a photo</span>
+      <input type="file" accept="image/*" capture="environment" id="photo">
+    </label>
 
-  <div id="preview"></div>
-  <div class="status" id="status"></div>
+    <div id="preview" class="preview"></div>
+    <div class="status" id="status"></div>
 
-  <h2 id="extractedHeading" hidden>what I see</h2>
-  <ul class="items" id="extracted"></ul>
+    <h2 id="extractedHeading" hidden>What I see</h2>
+    <ul class="items extracted" id="extracted"></ul>
 
-  <h2 id="pickHeading" hidden>where does it go?</h2>
-  <ul class="suggestions" id="suggestions"></ul>
+    <h2 id="pickHeading" hidden>Where does it go?</h2>
+    <ul class="sug-list" id="suggestions"></ul>
 
-  <button class="filebtn" id="fileManual" hidden>File in selected slot</button>
+    <details class="manual" id="manual" open>
+      <summary id="manualSummary">Or pick a slot manually</summary>
+      <div class="picker-label">Container</div>
+      <div class="containers" id="containers"></div>
+      <div class="picker-label" id="slotsLabel" hidden>Slot</div>
+      <div class="slots-grid" id="slots"></div>
+      <button class="btn primary block" id="fileManual" style="margin-top:.75rem" hidden>File in selected slot</button>
+    </details>
+  </div>
 
   <script>
     const params = new URLSearchParams(location.search);
@@ -116,15 +111,16 @@
     const extractedEl = document.getElementById('extracted');
     const pickHeading = document.getElementById('pickHeading');
     const suggestionsEl = document.getElementById('suggestions');
+    const manual = document.getElementById('manual');
     const containersEl = document.getElementById('containers');
     const slotsLabel = document.getElementById('slotsLabel');
     const slotsEl = document.getElementById('slots');
     const fileManualBtn = document.getElementById('fileManual');
 
     let containers = [];
-    let selectedContainer = null;   // set by QR pre-fill OR manual pick
-    let selectedSlot = null;        // set by QR pre-fill OR manual pick
-    let pendingPhoto = null;        // File held after capture, waiting for destination
+    let selectedContainer = null;
+    let selectedSlot = null;
+    let pendingPhoto = null;
 
     init();
 
@@ -142,37 +138,36 @@
         if (c) {
           selectContainer(c, false);
           if (preS && (c.slots || []).includes(preS)) selectSlot(preS, false);
+          manual.open = false;
         }
       }
       refreshUiForSelection();
     }
 
-    // ---------- Slot pre-selection UI (QR entry) ----------
-
     function refreshUiForSelection() {
       const hasSlot = !!(selectedContainer && selectedSlot);
       if (hasSlot) {
-        title.textContent = 'slot ' + selectedContainer.id + '.' + selectedSlot;
+        title.textContent = 'Slot ' + selectedContainer.id + ' · ' + selectedSlot;
         slotHeader.hidden = false;
         slotHeader.textContent = selectedContainer.id + ' · ' + selectedSlot;
         currentHeading.hidden = false;
-        captureHeading.textContent = 'add a photo';
-        captureLabel.textContent = 'Take a photo (files to ' + selectedContainer.id + '.' + selectedSlot + ')';
+        captureHeading.textContent = 'Add a photo';
+        captureLabel.textContent = 'Take a photo of what\'s in ' + selectedContainer.id + '.' + selectedSlot;
         loadCurrent();
       } else {
-        title.textContent = 'put in slot';
+        title.textContent = 'Add an item';
         slotHeader.hidden = true;
         currentHeading.hidden = true;
         currentEl.innerHTML = '';
         photosEl.hidden = true;
         photosEl.innerHTML = '';
-        captureHeading.textContent = 'take a photo';
+        captureHeading.textContent = 'Take a photo';
         captureLabel.textContent = 'Take a photo';
       }
+      updateManualFileBtn();
     }
 
     async function loadCurrent() {
-      if (!selectedContainer || !selectedSlot) return;
       currentEl.innerHTML = '<li class="empty">Loading...</li>';
       try {
         const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot);
@@ -191,67 +186,66 @@
       photosEl.hidden = false;
       photosEl.innerHTML = list.map(fn => {
         const url = '/c/' + encodeURIComponent(selectedContainer.id) + '/' + encodeURIComponent(selectedSlot) + '/photos/' + encodeURIComponent(fn);
-        return '<a href="' + url + '" target="_blank"><img src="' + url + '" alt="' + esc(fn) + '"></a>';
+        return '<a href="' + url + '" target="_blank"><img src="' + url + '" alt=""></a>';
       }).join('');
     }
 
     function renderCurrent(list) {
       if (!list.length) {
-        currentEl.innerHTML = '<li class="empty">Empty.</li>';
+        currentEl.innerHTML = '<li class="empty">Nothing here yet.</li>';
         return;
       }
-      currentEl.innerHTML = list.map((it, idx) => {
-        const label = esc(it.description || '(unknown)')
-          + (it.part_number ? ' <span class="pn">' + esc(it.part_number) + '</span>' : '');
-        const qty = it.qty_estimate == null ? 1 : it.qty_estimate;
-        const tagsCsv = (it.tags || []).join(', ');
-        return '<li>' +
-          '<div class="info"><strong>' + label + '</strong></div>' +
-          '<button class="edit" data-idx="' + idx + '" title="edit">&#9998;</button>' +
-          '<div class="qty-controls">' +
-            '<button class="qty-btn dec" data-idx="' + idx + '" title="took one out">&minus;</button>' +
-            '<span class="qty">' + qty + '</span>' +
-            '<button class="qty-btn inc" data-idx="' + idx + '" title="put one back">+</button>' +
-            '<button class="remove-all" data-idx="' + idx + '" title="remove entry">&times;</button>' +
+      currentEl.innerHTML = list.map((it, idx) => renderItemRow(it, idx)).join('');
+      currentEl.querySelectorAll('li').forEach((li, idx) => {
+        li.addEventListener('click', ev => {
+          if (li.classList.contains('editing')) return;
+          if (ev.target.closest('.edit-form')) return;
+          li.classList.add('editing');
+        });
+      });
+      currentEl.querySelectorAll('.cancel').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); b.closest('li').classList.remove('editing'); }));
+      currentEl.querySelectorAll('.save').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); saveEdit(b.closest('li')); }));
+      currentEl.querySelectorAll('.remove').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); removeItem(b.closest('li')); }));
+    }
+
+    function renderItemRow(it, idx) {
+      const tags = (it.tags || []).map(t => '<span class="tag">' + esc(t) + '</span>').join('');
+      const qty = it.qty_estimate == null ? 1 : it.qty_estimate;
+      const tagsCsv = (it.tags || []).join(', ');
+      return '<li data-idx="' + idx + '">' +
+        '<div class="row">' +
+          '<div class="desc">' + esc(it.description || '(unknown)') + '</div>' +
+          '<div class="qty">×' + qty + '</div>' +
+        '</div>' +
+        (it.part_number ? '<div class="pn-line pn">' + esc(it.part_number) + '</div>' : '') +
+        (tags ? '<div class="tags-line">' + tags + '</div>' : '') +
+        '<div class="edit-form">' +
+          '<label>Description</label><input class="f-description" value="' + esc(it.description || '') + '">' +
+          '<label>Part number</label><input class="f-part_number" value="' + esc(it.part_number || '') + '">' +
+          '<label>Category</label><input class="f-category" value="' + esc(it.category || '') + '">' +
+          '<label>Quantity</label><input class="f-qty_estimate" type="number" min="0" value="' + qty + '">' +
+          '<label>Tags (comma separated)</label><input class="f-tags" value="' + esc(tagsCsv) + '">' +
+          '<div class="edit-actions">' +
+            '<button class="btn cancel">Cancel</button>' +
+            '<button class="btn primary save">Save</button>' +
+            '<button class="remove" title="Remove this item">Remove</button>' +
           '</div>' +
-          '<div class="edit-form" data-idx="' + idx + '">' +
-            '<label>Description</label><input class="f-description" value="' + esc(it.description || '') + '">' +
-            '<label>Part number</label><input class="f-part_number" value="' + esc(it.part_number || '') + '">' +
-            '<label>Category</label><input class="f-category" value="' + esc(it.category || '') + '">' +
-            '<label>Quantity</label><input class="f-qty_estimate" type="number" min="0" value="' + qty + '">' +
-            '<label>Tags (comma separated)</label><input class="f-tags" value="' + esc(tagsCsv) + '">' +
-            '<div class="row"><button class="cancel">Cancel</button><button class="save">Save</button></div>' +
-          '</div>' +
-        '</li>';
-      }).join('');
-      currentEl.querySelectorAll('.dec').forEach(b => b.addEventListener('click', () => adjustItem(+b.dataset.idx, 'decrement')));
-      currentEl.querySelectorAll('.inc').forEach(b => b.addEventListener('click', () => adjustItem(+b.dataset.idx, 'increment')));
-      currentEl.querySelectorAll('.remove-all').forEach(b => b.addEventListener('click', () => removeItem(+b.dataset.idx)));
-      currentEl.querySelectorAll('.edit').forEach(b => b.addEventListener('click', () => toggleEdit(+b.dataset.idx)));
-      currentEl.querySelectorAll('.edit-form .cancel').forEach(b => b.addEventListener('click', () => cancelEdit(b)));
-      currentEl.querySelectorAll('.edit-form .save').forEach(b => b.addEventListener('click', () => saveEdit(b)));
+        '</div>' +
+      '</li>';
     }
 
-    function toggleEdit(idx) {
-      const li = currentEl.querySelectorAll('li')[idx];
-      if (li) li.classList.toggle('editing');
-    }
-
-    function cancelEdit(btn) {
-      const li = btn.closest('li');
-      if (li) li.classList.remove('editing');
-    }
-
-    async function saveEdit(btn) {
-      const form = btn.closest('.edit-form');
-      const idx = +form.dataset.idx;
+    async function saveEdit(li) {
+      const idx = +li.dataset.idx;
       const payload = {
-        description: form.querySelector('.f-description').value,
-        part_number: form.querySelector('.f-part_number').value || null,
-        category: form.querySelector('.f-category').value,
-        qty_estimate: parseInt(form.querySelector('.f-qty_estimate').value, 10) || 1,
-        tags: form.querySelector('.f-tags').value.split(',').map(s => s.trim()).filter(Boolean)
+        description: li.querySelector('.f-description').value,
+        part_number: li.querySelector('.f-part_number').value || null,
+        category: li.querySelector('.f-category').value,
+        qty_estimate: parseInt(li.querySelector('.f-qty_estimate').value, 10) || 0,
+        tags: li.querySelector('.f-tags').value.split(',').map(s => s.trim()).filter(Boolean)
       };
+      if (payload.qty_estimate <= 0) {
+        return removeItem(li);
+      }
       try {
         const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + idx, {
           method: 'PATCH',
@@ -262,35 +256,28 @@
         const slot = await res.json();
         renderCurrent(slot.items || []);
       } catch (e) {
-        setStatus('error', 'Edit failed: ' + e.message);
+        setStatus('error', 'Save failed: ' + e.message);
       }
     }
 
-    async function adjustItem(idx, action) {
-      try {
-        const url = '/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + idx + '/' + action;
-        const res = await fetch(url, { method: 'POST' });
-        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
-        renderCurrent((await res.json()).items || []);
-      } catch (e) { setStatus('error', action + ' failed: ' + e.message); }
-    }
-
-    async function removeItem(idx) {
+    async function removeItem(li) {
+      const idx = +li.dataset.idx;
       try {
         const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + idx, { method: 'DELETE' });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
-        renderCurrent((await res.json()).items || []);
-      } catch (e) { setStatus('error', 'Remove failed: ' + e.message); }
+        const slot = await res.json();
+        renderCurrent(slot.items || []);
+      } catch (e) {
+        setStatus('error', 'Remove failed: ' + e.message);
+      }
     }
-
-    // ---------- Photo capture ----------
 
     photo.addEventListener('change', async () => {
       const file = photo.files[0];
       if (!file) return;
 
       pendingPhoto = await resize(file);
-      photo.value = ''; // reset so tapping the same file again re-fires
+      photo.value = '';
       preview.innerHTML = '<img src="' + URL.createObjectURL(file) + '">';
       extractedEl.innerHTML = '';
       suggestionsEl.innerHTML = '';
@@ -307,7 +294,7 @@
     });
 
     async function suggestAndPick() {
-      setStatus('', 'Identifying and looking for similar slots...');
+      setStatus('', 'Identifying...');
       const form = new FormData();
       form.append('photo', pendingPhoto);
       try {
@@ -317,7 +304,8 @@
         renderExtracted(data.extracted || []);
         renderSuggestions(data.suggestions || []);
         pickHeading.hidden = false;
-        setStatus('ok', 'Ready — pick where it goes (suggestions above, or pick manually).');
+        manual.open = !(data.suggestions && data.suggestions.length);
+        setStatus('ok', 'Ready to file.');
       } catch (e) {
         setStatus('error', 'Failed: ' + e.message);
       }
@@ -345,15 +333,15 @@
     function renderExtracted(list) {
       extractedHeading.hidden = list.length === 0;
       extractedEl.innerHTML = list.map(it => {
-        return '<li class="item"><strong>' + esc(it.description || '(unknown)') + '</strong>' +
-          (it.part_number ? ' · <span class="pn">' + esc(it.part_number) + '</span>' : '') +
+        return '<li><strong>' + esc(it.description || '(unknown)') + '</strong>' +
+          (it.part_number ? '<span class="pn">' + esc(it.part_number) + '</span>' : '') +
         '</li>';
       }).join('');
     }
 
     function renderSuggestions(sugs) {
       if (!sugs.length) {
-        suggestionsEl.innerHTML = '<li class="sug"><em>No similar items filed yet. Pick a slot below.</em></li>';
+        suggestionsEl.innerHTML = '<li class="none">No similar slots found. Pick a slot below.</li>';
         return;
       }
       suggestionsEl.innerHTML = sugs.map((s, i) => {
@@ -361,19 +349,15 @@
           .map(m => esc(m.description || '?'))
           .join('; ');
         return '<li class="sug' + (i === 0 ? ' top' : '') + '">' +
-          '<div class="head"><strong>' + s.container + ' · ' + s.slot + '</strong>' +
-            '<span style="font-size:.75rem;color:#666">score ' + s.score.toFixed(1) + '</span>' +
-          '</div>' +
-          (matches ? '<div class="why">already has: ' + matches + '</div>' : '') +
-          '<button class="cta" data-c="' + esc(s.container) + '" data-s="' + esc(s.slot) + '">File here</button>' +
+          '<div class="head"><span class="loc">' + esc(s.container) + ' · ' + esc(s.slot) + '</span></div>' +
+          (matches ? '<div class="why">has: ' + matches + '</div>' : '') +
+          '<button class="btn primary block" data-c="' + esc(s.container) + '" data-s="' + esc(s.slot) + '">File here</button>' +
         '</li>';
       }).join('');
-      suggestionsEl.querySelectorAll('.cta').forEach(btn => {
+      suggestionsEl.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => fileToPicked(btn.dataset.c, btn.dataset.s));
       });
     }
-
-    // ---------- Manual picker (fallback under details) ----------
 
     function renderContainerPicker() {
       containersEl.innerHTML = '';
@@ -387,13 +371,13 @@
       });
     }
 
-    function selectContainer(c, refreshFileBtn) {
+    function selectContainer(c, refreshUi) {
       selectedContainer = c;
       selectedSlot = null;
       document.querySelectorAll('.container-btn').forEach(el => el.classList.toggle('selected', el.textContent === (c.name || c.id)));
       slotsLabel.hidden = false;
       renderSlotPicker(c.slots || []);
-      if (refreshFileBtn) {
+      if (refreshUi) {
         updateManualFileBtn();
         refreshUiForSelection();
       }
@@ -422,9 +406,7 @@
     function updateManualFileBtn() {
       const ready = !!(selectedContainer && selectedSlot && pendingPhoto);
       fileManualBtn.hidden = !ready;
-      if (ready) {
-        fileManualBtn.textContent = 'File in ' + selectedContainer.id + '.' + selectedSlot;
-      }
+      if (ready) fileManualBtn.textContent = 'File in ' + selectedContainer.id + '.' + selectedSlot;
     }
 
     fileManualBtn.addEventListener('click', () => {
@@ -447,20 +429,13 @@
         pendingPhoto = null;
         suggestionsEl.innerHTML = '';
         pickHeading.hidden = true;
-        updateManualFileBtn();
         selectedContainer = containers.find(c => c.id === containerId) || selectedContainer;
         selectedSlot = slotId;
         refreshUiForSelection();
-        // Refresh current-items view if we filed into the currently-selected slot
-        if (selectedContainer && selectedContainer.id === containerId && selectedSlot === slotId) {
-          loadCurrent();
-        }
       } catch (e) {
         setStatus('error', 'Failed: ' + e.message);
       }
     }
-
-    // ---------- helpers ----------
 
     function setStatus(kind, text) {
       status.className = 'status' + (kind ? ' ' + kind : '');
