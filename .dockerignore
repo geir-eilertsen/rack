@@ -1,0 +1,10 @@
+.git
+.gitignore
+.claude
+.idea
+.vscode
+target
+data
+*.md
+Dockerfile
+.dockerignore

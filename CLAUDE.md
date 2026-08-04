@@ -18,6 +18,17 @@ Scaffold in place: Maven, Java 21, Spring Boot 3.4, Spring AI 1.0. Domain record
 
 Config: `OPENAI_API_KEY` env var feeds `spring.ai.openai.api-key`. `RACK_DATA_DIR` overrides the default `./data`.
 
+## Docker
+
+```
+docker build -t rack:local .
+docker run --rm -p 8080:8080 -e OPENAI_API_KEY=$OPENAI_API_KEY rack:local
+```
+
+Multi-stage build (Maven + JDK → JRE-only runtime). `OPENAI_API_KEY` must be set — Spring AI's OpenAI autoconfig requires a key at bean construction, so even a smoke test needs *some* value (`sk-local-smoketest` is enough to boot; you only need a real key when actually calling the model).
+
+`application.yml` disables the OpenAI model types we don't use (`image`, `moderation`, `audio.speech`, `audio.transcription`); leaving them enabled tries to instantiate their beans at startup and crashes the app.
+
 ## Purpose
 
 Small parts-inventory system for a rack of 60 drawers (5 wide × 12 down, positions A1–E12) holding electronics components, fasteners, and connectors. Workflow: photograph drawer contents → vision-model extraction → structured JSON → searchable index. The photo is ground truth; the extracted data is an index over it.

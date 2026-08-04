@@ -4,6 +4,12 @@ spring:
   ai:
     openai:
       api-key: ${OPENAI_API_KEY:}
+    model:
+      audio:
+        speech: none
+        transcription: none
+      image: none
+      moderation: none
 
 rack:
   data-dir: ${RACK_DATA_DIR:./data}
