@@ -30,10 +30,6 @@
     .edit-actions .remove:hover { color: #7a2a20; }
     .ai { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--border); }
     .ai h4 { margin: 0 0 .4rem; font-size: .7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-    .ai .qa-log { list-style: none; padding: 0; margin: 0 0 .5rem; }
-    .ai .qa-log li { padding: .5rem .6rem; background: var(--bg); border-radius: var(--radius-xs); margin-bottom: .35rem; font-size: .85rem; }
-    .ai .qa-log .q { color: var(--muted); margin-bottom: .2rem; }
-    .ai .qa-log .a { color: var(--text); }
     .ai-input { display: flex; gap: .3rem; }
     .ai-input input { flex: 1; }
     .ai-input .ask-btn { flex: 0 0 auto; padding: .55rem .9rem; }
@@ -235,14 +231,31 @@
         });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const slot = await res.json();
-        renderCurrent(slot.items || []);
-        const refreshed = currentEl.querySelector('li[data-idx="' + idx + '"]');
-        if (refreshed) refreshed.classList.add('editing');
+        const latestItem = slot.items[idx];
+        const latestQA = (latestItem.qa || []).slice(-1)[0];
+        appendQaEntry(li, latestQA);
       } catch (e) {
         setStatus('error', 'Ask failed: ' + e.message);
+      } finally {
         askBtn.disabled = false;
         askBtn.textContent = 'Ask';
+        input.value = '';
+        input.focus();
       }
+    }
+
+    function appendQaEntry(li, entry) {
+      if (!entry) return;
+      const ai = li.querySelector('.ai');
+      let log = ai.querySelector('.qa-log');
+      if (!log) {
+        log = document.createElement('ul');
+        log.className = 'qa-log';
+        ai.insertBefore(log, ai.querySelector('.ai-input'));
+      }
+      const item = document.createElement('li');
+      item.innerHTML = '<div class="q">Q: ' + esc(entry.question) + '</div><div class="a">' + md(entry.answer) + '</div>';
+      log.appendChild(item);
     }
 
     function renderItemRow(it, idx) {
@@ -282,8 +295,31 @@
     function renderQaLog(qa) {
       if (!qa.length) return '';
       return '<ul class="qa-log">' + qa.map(x =>
-        '<li><div class="q">Q: ' + esc(x.question) + '</div><div class="a">' + esc(x.answer) + '</div></li>'
+        '<li><div class="q">Q: ' + esc(x.question) + '</div><div class="a">' + md(x.answer) + '</div></li>'
       ).join('') + '</ul>';
+    }
+
+    function md(text) {
+      const escaped = esc(text);
+      const blocks = escaped.split(/\n\s*\n/);
+      return blocks.map(renderBlock).join('');
+    }
+
+    function renderBlock(block) {
+      const trimmed = block.trim();
+      if (!trimmed) return '';
+      const lines = trimmed.split('\n');
+      if (lines.every(l => /^\s*[-*]\s+/.test(l))) {
+        return '<ul>' + lines.map(l => '<li>' + inline(l.replace(/^\s*[-*]\s+/, '')) + '</li>').join('') + '</ul>';
+      }
+      return '<p>' + inline(trimmed).replace(/\n/g, '<br>') + '</p>';
+    }
+
+    function inline(s) {
+      s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+      s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+      return s;
     }
 
     async function saveEdit(li) {
