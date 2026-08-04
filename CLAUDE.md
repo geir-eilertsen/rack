@@ -107,8 +107,7 @@ Committing after each write gives history, per-drawer undo, and free multi-site 
 - `/identify.html`, `POST /identify` → identify a part from a photo, no persistence
 - `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state
 - `/containers.html`, `POST /c` (register), `PATCH /c/{container}` (name + label scale), `DELETE /c/{container}` → maintain containers; also hosts registration and the label flow below
-- `GET /labels` (preview), `POST /labels` (mark + archive), `GET /labels/status` → one continuous run across every container
-- `GET /labels/{container}` (preview), `POST /labels/{container}` (mark + archive), `GET /labels/{container}/status` → a single container's sheet
+- `GET /labels/{container}` (preview), `POST /labels/{container}` (mark + archive), `GET /labels/{container}/status` → QR label sheets
 - Static pages resize phone photos to ~1600px client-side before upload; keeps below the 20MB multipart cap and shrinks the vision call.
 
 ### Labels
@@ -119,11 +118,9 @@ Physical paper is always Avery L7160 (A4 21-up, 63.5×38.1mm). Each container de
 
 **Several labels can share one physical sticker.** `LabelSheet.pack` greedily stacks consecutive labels down an L7160 slot while they still fit, so a 0.4-scale container puts two labels on one sticker to be trimmed apart; at 1.0 nothing packs. Mixed scales pack fine because each label is measured on its own — a full-scale label won't squeeze in behind a small one.
 
-The consequence: **printed labels and consumed sticker positions are different numbers**, so sheet offsets are counted in positions. `LabelSheet.positionCount` re-packs the already-printed labels in the same order to work out how far into the current sheet the last run reached.
+The consequence: **printed labels and consumed stickers are different numbers**, so sheet offsets are counted in stickers. `LabelSheet.positionCount` re-packs the already-printed labels to work out how far into the current sheet earlier runs reached.
 
-**A sheet of paper is a shared resource, so the global run spans containers.** `GET`/`POST /labels` walks every container in registration order and lays all pending labels into one continuous stream of sheets, so leftover positions on a part-peeled sheet get used by whichever container comes next. Global runs archive to `data/labels/<stamp>.pdf`; per-container runs still archive to `data/<container>/labels/`. A per-container run keeps its own offset — it does not consume the global sheet position.
-
-`GET /labels/status` is a literal path declared before `/labels/{container}`, which reserves `status` as a container id.
+**Sheet position is global, printing is per container.** A sheet of paper is a shared physical resource, so `resolveOffset` counts stickers consumed across *every* container: print 8 labels for a 0.4-scale container (4 stickers) and the next container's run starts at position 5, whichever container that is. There is deliberately no "print everything" run — not every container gets labels, so printing stays a per-container action. Packing only ever combines labels within one container's run, so a part-filled sticker is never continued by the next container; sharing happens at sticker granularity, not inside one.
 
 ### Maintaining containers
 

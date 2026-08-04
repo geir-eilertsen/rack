@@ -25,7 +25,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -43,82 +42,6 @@ public class LabelSheetController {
         this.index = index;
         this.dataDir = Path.of(props.dataDir()).toAbsolutePath();
         this.configuredBase = props.publicBaseUrl();
-    }
-
-    /**
-     * A sheet of Avery L7160 paper is a shared physical resource, so the global run walks every container in
-     * registration order and lays their pending labels into one continuous stream of sheets — the leftover
-     * positions on a part-peeled sheet get used by whichever container comes next.
-     */
-    @GetMapping("/labels")
-    public ResponseEntity<byte[]> previewAll(HttpServletRequest req,
-                                              @RequestParam(defaultValue = "unprinted") String scope,
-                                              @RequestParam(required = false) Integer offset,
-                                              @RequestParam(required = false) String base) throws IOException {
-        List<LabelSheet.Label> labels = pickAll(scope);
-        byte[] pdf = LabelSheet.build(resolveBase(base, req), labels, resolveGlobalOffset(offset));
-        return pdfResponse("all-containers", pdf);
-    }
-
-    @PostMapping("/labels")
-    public ResponseEntity<byte[]> printAll(HttpServletRequest req,
-                                            @RequestParam(defaultValue = "unprinted") String scope,
-                                            @RequestParam(required = false) Integer offset,
-                                            @RequestParam(required = false) String base) throws IOException {
-        List<LabelSheet.Label> labels = pickAll(scope);
-        byte[] pdf = LabelSheet.build(resolveBase(base, req), labels, resolveGlobalOffset(offset));
-        saveGlobalPdf(pdf);
-        Instant now = Instant.now();
-        for (LabelSheet.Label label : labels) {
-            markPrinted(label.container(), List.of(label.slot()), now);
-        }
-        return pdfResponse("all-containers", pdf);
-    }
-
-    /** Declared before {@code /labels/{container}} so the literal path wins; "status" is reserved as a container id. */
-    @GetMapping("/labels/status")
-    public GlobalLabelStatus statusAll() {
-        List<LabelStatus> perContainer = registry.all().stream().map(this::statusOf).toList();
-        int total = perContainer.stream().mapToInt(LabelStatus::total).sum();
-        int printed = perContainer.stream().mapToInt(LabelStatus::printed).sum();
-
-        int offset = resolveGlobalOffset(null);
-        int positions = LabelSheet.positionCount(pickAll("unprinted"));
-        int sheets = positions == 0 ? 0 : (offset + positions + LabelSheet.PER_SHEET - 1) / LabelSheet.PER_SHEET;
-
-        return new GlobalLabelStatus(total, printed, total - printed, offset, LabelSheet.PER_SHEET,
-            positions, sheets, perContainer);
-    }
-
-    /**
-     * {@code positions} is how many physical L7160 labels the pending run needs — lower than {@code unprinted}
-     * whenever small-scale containers let several labels share one sticker.
-     */
-    public record GlobalLabelStatus(int total, int printed, int unprinted, int nextOffset, int perSheet,
-                                    int positions, int sheets, List<LabelStatus> containers) {}
-
-    private List<LabelSheet.Label> pickAll(String scope) {
-        List<LabelSheet.Label> labels = new ArrayList<>();
-        for (Container c : registry.all()) {
-            for (SlotId sid : pickSlots(c, scope)) labels.add(new LabelSheet.Label(c, sid));
-        }
-        return labels;
-    }
-
-    /**
-     * Position on the current sheet, counted across every container. Packing means printed labels and consumed
-     * physical positions are not the same number, so the already-printed labels are re-packed in the same global
-     * order to work out how far into the sheet the last run actually got.
-     */
-    private int resolveGlobalOffset(Integer explicit) {
-        if (explicit != null) return Math.max(0, explicit % LabelSheet.PER_SHEET);
-        return LabelSheet.positionCount(pickAll("printed")) % LabelSheet.PER_SHEET;
-    }
-
-    private void saveGlobalPdf(byte[] pdf) throws IOException {
-        Path dir = dataDir.resolve("labels");
-        Files.createDirectories(dir);
-        Files.write(dir.resolve(LocalDateTime.now().format(STAMP) + ".pdf"), pdf);
     }
 
     @GetMapping("/labels/{container}")
@@ -163,19 +86,39 @@ public class LabelSheetController {
     private LabelStatus statusOf(Container c) {
         int printed = printedCount(c);
         int unprinted = c.slots().size() - printed;
-        int nextOffset = positionsPrinted(c) % LabelSheet.PER_SHEET;
-        return new LabelStatus(c.id().value(), c.slots().size(), printed, unprinted, nextOffset, LabelSheet.PER_SHEET);
+        int positions = LabelSheet.positionCount(pickSlots(c, "unprinted").stream()
+            .map(sid -> new LabelSheet.Label(c, sid))
+            .toList());
+        return new LabelStatus(c.id().value(), c.slots().size(), printed, unprinted,
+            resolveOffset(c, null), LabelSheet.PER_SHEET, positions);
     }
 
+    /**
+     * {@code positions} is how many physical stickers the pending labels need — lower than {@code unprinted}
+     * when a small label scale lets several share one. {@code nextOffset} is the shared sheet position.
+     */
     public record LabelStatus(String container, int total, int printed, int unprinted,
-                              int nextOffset, int perSheet) {}
+                              int nextOffset, int perSheet, int positions) {}
 
+    /**
+     * A sheet of Avery L7160 paper is a shared physical resource, so the position is counted across every
+     * container: if previous runs consumed 4 stickers, the next container's labels start at position 5.
+     * A container's own run still packs only its own labels, so a part-filled sticker is never continued
+     * by the next container — sharing happens at sticker granularity, not within one.
+     */
     private int resolveOffset(Container c, Integer explicit) {
         if (explicit != null) return Math.max(0, explicit % LabelSheet.PER_SHEET);
-        return positionsPrinted(c) % LabelSheet.PER_SHEET;
+        return positionsPrintedEverywhere() % LabelSheet.PER_SHEET;
     }
 
-    /** Physical L7160 positions this container's already-printed labels consumed. */
+    private int positionsPrintedEverywhere() {
+        return registry.all().stream().mapToInt(this::positionsPrinted).sum();
+    }
+
+    /**
+     * Physical L7160 positions this container's already-printed labels consumed. Packing means printed labels
+     * and consumed stickers are not the same number, so they are re-packed to find the real count.
+     */
     private int positionsPrinted(Container c) {
         return LabelSheet.positionCount(pickSlots(c, "printed").stream()
             .map(sid -> new LabelSheet.Label(c, sid))

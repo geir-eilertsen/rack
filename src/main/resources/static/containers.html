@@ -48,23 +48,6 @@
     <h1>Containers</h1>
     <p class="subtitle">Every rack, bin, and shelf you've registered. Print its labels, rename it, or retire it.</p>
 
-    <div class="cbox" id="allBox" hidden>
-      <h3>All pending labels</h3>
-      <div class="counts" id="allCounts"></div>
-      <div class="counts" id="allOffset"></div>
-      <div class="btn-row">
-        <button class="btn" id="allPreview" type="button">Preview</button>
-        <button class="btn primary" id="allPrint" type="button">Print &amp; mark as done</button>
-      </div>
-      <details class="advanced">
-        <summary>Advanced options</summary>
-        <label class="toggle-line"><input type="checkbox" id="allScope"> Include already-printed slots</label>
-        <label class="toggle-line"><input type="checkbox" id="allFresh"> Fresh sheet (start at position 1)</label>
-      </details>
-      <p class="note">One continuous run across every container, in the order below — leftover positions on a part-peeled sheet get used by whichever container comes next. Each label keeps its own container's scale.</p>
-      <div class="status" id="allStatus"></div>
-    </div>
-
     <div id="list"></div>
     <div class="status" id="pageStatus"></div>
 
@@ -125,14 +108,6 @@
   <script>
     const listEl = document.getElementById('list');
     const pageStatus = document.getElementById('pageStatus');
-    const allBox = document.getElementById('allBox');
-    const allCounts = document.getElementById('allCounts');
-    const allOffset = document.getElementById('allOffset');
-    const allScope = document.getElementById('allScope');
-    const allFresh = document.getElementById('allFresh');
-    const allPreview = document.getElementById('allPreview');
-    const allPrint = document.getElementById('allPrint');
-    const allStatus = document.getElementById('allStatus');
 
     init();
 
@@ -147,64 +122,11 @@
         pageStatus.textContent = containers.length ? '' : 'No containers yet. Register one to get started.';
         pageStatus.className = containers.length ? 'status' : 'status empty';
         containers.forEach(c => listEl.appendChild(card(c)));
-        allBox.hidden = !containers.length;
-        if (containers.length) await refreshAll();
       } catch (e) {
         pageStatus.className = 'status error';
         pageStatus.textContent = 'Failed to load containers: ' + e.message;
       }
     }
-
-    async function refreshAll() {
-      try {
-        const res = await fetch('/labels/status');
-        if (!res.ok) throw new Error(await errorText(res));
-        const s = await res.json();
-        allCounts.innerHTML =
-          '<span class="num">' + s.printed + '</span> printed · ' +
-          '<span class="num">' + s.unprinted + '</span> pending · ' +
-          '<span class="num">' + s.total + '</span> total across ' +
-          '<span class="num">' + s.containers.length + '</span> containers';
-        allOffset.textContent = s.next_offset > 0
-          ? 'Next sheet starts at position ' + (s.next_offset + 1) + ' — feeds around the ' + s.next_offset + ' labels already peeled.'
-          : 'Next sheet starts fresh.';
-        const pending = s.unprinted > 0 || allScope.checked;
-        allPreview.disabled = !pending;
-        allPrint.disabled = !pending;
-      } catch (e) {
-        allStatus.className = 'status error';
-        allStatus.textContent = 'Failed to load label status: ' + e.message;
-      }
-    }
-
-    function allParams() {
-      const params = new URLSearchParams();
-      params.set('scope', allScope.checked ? 'all' : 'unprinted');
-      if (allFresh.checked) params.set('offset', '0');
-      return params.toString();
-    }
-
-    allScope.addEventListener('change', refreshAll);
-
-    allPreview.addEventListener('click', () => {
-      window.open('/labels?' + allParams(), '_blank');
-    });
-
-    allPrint.addEventListener('click', async () => {
-      allStatus.className = 'status';
-      allStatus.textContent = 'Generating…';
-      try {
-        const res = await fetch('/labels?' + allParams(), { method: 'POST' });
-        if (!res.ok) throw new Error(await errorText(res));
-        window.open(URL.createObjectURL(await res.blob()), '_blank');
-        allStatus.className = 'status ok';
-        allStatus.textContent = 'Marked as printed and saved.';
-        await init();
-      } catch (e) {
-        allStatus.className = 'status error';
-        allStatus.textContent = 'Failed: ' + e.message;
-      }
-    });
 
     function card(c) {
       const el = document.createElement('article');
@@ -305,13 +227,16 @@
         const res = await fetch('/labels/' + encodeURIComponent(c.id) + '/status');
         if (!res.ok) throw new Error(await errorText(res));
         const s = await res.json();
+        const stickers = s.positions === s.unprinted
+          ? ''
+          : ' (<span class="num">' + s.positions + '</span> stickers)';
         q('.c-counts').innerHTML =
           '<span class="num">' + s.printed + '</span> printed · ' +
-          '<span class="num">' + s.unprinted + '</span> pending · ' +
+          '<span class="num">' + s.unprinted + '</span> pending' + stickers + ' · ' +
           '<span class="num">' + s.total + '</span> total';
         q('.c-offset').textContent = s.next_offset > 0
-          ? 'Next sheet starts at position ' + (s.next_offset + 1) + ' — feeds around the ' + s.next_offset + ' labels already peeled.'
-          : 'Next sheet starts fresh.';
+          ? 'Starts at position ' + (s.next_offset + 1) + ' — feeds around the ' + s.next_offset + ' stickers already used, counted across every container.'
+          : 'Starts on a fresh sheet.';
         const pending = s.unprinted > 0 || allBox.checked;
         preview.disabled = !pending;
         print.disabled = !pending;

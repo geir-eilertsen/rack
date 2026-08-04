@@ -62,8 +62,8 @@ class LabelSheetTest {
     }
 
     @Test
-    void continuesOneSheetAcrossContainers() throws IOException {
-        // 11 labels already peeled, so the run starts at position 12 and the sheet takes 10 more before spilling.
+    void startsAtTheGivenSheetOffset() throws IOException {
+        // 11 stickers already used, so the run starts at position 12 and the sheet takes 10 more before spilling.
         List<LabelSheet.Label> labels = new ArrayList<>();
         labels.addAll(labelsFor(BIN, 6));
         labels.addAll(labelsFor(LAB, 4));
@@ -82,7 +82,7 @@ class LabelSheetTest {
     }
 
     @Test
-    void mixesContainerScalesOnOneSheet() throws IOException {
+    void packsMixedScalesIndependently() throws IOException {
         List<LabelSheet.Label> labels = new ArrayList<>();
         labels.addAll(labelsFor(LAB, 3));
         labels.addAll(labelsFor(BIN, 3));
