@@ -378,3 +378,22 @@ label.field {
 .qa-log .a code { background: rgba(0,0,0,.05); padding: .1em .35em; border-radius: 3px; font-family: var(--font-mono); font-size: .9em; }
 .qa-log .a strong { font-weight: 700; color: var(--text); }
 .qa-log .a em { font-style: italic; }
+.qa-log .a h1,
+.qa-log .a h2,
+.qa-log .a h3,
+.qa-log .a h4 {
+  margin: .7em 0 .3em;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  font-family: var(--font-body);
+}
+.qa-log .a h1:first-child,
+.qa-log .a h2:first-child,
+.qa-log .a h3:first-child { margin-top: 0; }
+.qa-log .a h1 { font-size: 1rem; color: var(--primary-hover); }
+.qa-log .a h2 { font-size: .95rem; color: var(--primary-hover); }
+.qa-log .a h3 { font-size: .88rem; }
+.qa-log .a h4 { font-size: .82rem; color: var(--muted); }
+.qa-log .a hr { border: none; border-top: 1px solid var(--border); margin: .6em 0; }

@@ -192,6 +192,12 @@
     function renderBlock(block) {
       const trimmed = block.trim();
       if (!trimmed) return '';
+      if (/^---+$/.test(trimmed)) return '<hr>';
+      const heading = trimmed.match(/^(#{1,4})\s+(.+)$/);
+      if (heading && !trimmed.includes('\n')) {
+        const level = heading[1].length;
+        return '<h' + level + '>' + inline(heading[2]) + '</h' + level + '>';
+      }
       const lines = trimmed.split('\n');
       if (lines.every(l => /^\s*[-*]\s+/.test(l))) {
         return '<ul>' + lines.map(l => '<li>' + inline(l.replace(/^\s*[-*]\s+/, '')) + '</li>').join('') + '</ul>';
