@@ -160,8 +160,11 @@
         currentHeading.hidden = false;
         captureHeading.textContent = 'Add a photo';
         captureLabel.textContent = 'Take a photo of what\'s in ' + selectedContainer.id + '.' + selectedSlot;
-        manual.hidden = true;
-        manual.open = false;
+        // Keep the manual picker visible while a photo is waiting to be filed
+        // (so the "File in X.Y" button inside it stays reachable); otherwise
+        // hide since the user is just viewing this slot.
+        manual.hidden = !pendingPhoto;
+        if (!pendingPhoto) manual.open = false;
         loadCurrent();
       } else {
         title.textContent = 'Add an item';
