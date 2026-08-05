@@ -20,19 +20,6 @@
 
     <p class="callout" id="tip">Tip: scan a drawer's QR code with your phone camera to jump straight to that slot.</p>
 
-    <!-- Straight to a drawer, for when you know where you are going and the
-         QR label is on the other side of the room. -->
-    <div class="jump" id="jump" hidden>
-      <label class="picker-label" for="jumpContainer">Go to a drawer</label>
-      <div class="jump-row">
-        <select id="jumpContainer"></select>
-        <input id="jumpSlot" type="text" inputmode="text" autocomplete="off" placeholder="slot, e.g. B7" list="jumpSlots">
-        <datalist id="jumpSlots"></datalist>
-        <button class="btn primary" id="jumpGo" type="button">Go</button>
-      </div>
-      <p class="jump-hint" id="jumpHint"></p>
-    </div>
-
     <ul class="cards">
       <li>
         <a class="card" href="/find.html">
@@ -45,6 +32,24 @@
           <h2>Add an item</h2>
           <p>Take a photo, pick the slot, and it's filed.</p>
         </a>
+      </li>
+      <!-- For when you know where you are going and the QR label is on the other
+           side of the room. Opens in place rather than leading somewhere: the
+           picker is the whole errand. -->
+      <li>
+        <details class="card jump" id="jump" hidden>
+          <summary>
+            <h2>Go to a drawer</h2>
+            <p id="jumpHint">Pick a container and slot — the same picker as filing.</p>
+          </summary>
+          <div class="jump-body">
+            <div class="picker-label">Container</div>
+            <div class="containers" id="jumpContainers"></div>
+            <div class="picker-label" id="jumpSlotsLabel" hidden>Slot</div>
+            <div class="slots-legend" id="jumpLegend" hidden><span><span class="swatch empty"></span>empty</span><span><span class="swatch filled"></span>has items</span></div>
+            <div class="slots-grid" id="jumpSlots"></div>
+          </div>
+        </details>
       </li>
     </ul>
 
@@ -59,70 +64,72 @@
     </ul>
   </div>
   <style>
-    .jump { margin-bottom: 1.25rem; }
-    .jump-row { display: flex; gap: .4rem; }
-    .jump-row select { flex: 1 1 45%; min-width: 0; }
-    .jump-row input { flex: 1 1 40%; min-width: 0; font-family: var(--font-mono); text-transform: uppercase; }
-    .jump-row .btn { flex: 0 0 auto; }
-    .jump-hint { margin: .4rem 0 0; font-size: .78rem; color: var(--muted); min-height: 1.1em; }
-    .jump-hint.error { color: var(--error); }
+    /* A card that opens rather than leads. The marker goes because the other
+       two cards have none, and the heading is what you tap. */
+    .jump summary { cursor: pointer; list-style: none; display: block; }
+    .jump summary::-webkit-details-marker { display: none; }
+    .jump summary :last-child { margin-bottom: 0; }
+    .jump[open] { border-color: var(--border-strong); }
+    .jump[open] summary { margin-bottom: .9rem; }
+    .jump-body { border-top: 1px solid var(--border); padding-top: .9rem; }
   </style>
   <script>
-    // Straight to a drawer. Slot ids are the drawer's own labels ("B7", "3"),
-    // so the container picks the vocabulary and the box completes against it.
+    // The same picker as put.html's: tap a container, tap a drawer, go. Its
+    // classes live in rack.css precisely so both pages can use the real thing
+    // rather than two lookalikes drifting apart.
     (function () {
       const jump = document.getElementById('jump');
-      const pick = document.getElementById('jumpContainer');
-      const slot = document.getElementById('jumpSlot');
-      const list = document.getElementById('jumpSlots');
-      const go = document.getElementById('jumpGo');
       const hint = document.getElementById('jumpHint');
+      const containersHost = document.getElementById('jumpContainers');
+      const slotsHost = document.getElementById('jumpSlots');
+      const slotsLabel = document.getElementById('jumpSlotsLabel');
+      const legend = document.getElementById('jumpLegend');
       let containers = [];
 
       fetch('/c').then(r => r.ok ? r.json() : []).then(list => {
         containers = list;
         if (!containers.length) return;          // nothing registered yet
-        pick.innerHTML = containers
-          .map(c => '<option value="' + esc(c.id) + '">' + esc(c.name || c.id) + '</option>').join('');
+        containersHost.innerHTML = '';
+        containers.forEach(c => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'container-btn';
+          btn.textContent = c.name || c.id;
+          btn.addEventListener('click', () => pickContainer(c, btn));
+          containersHost.appendChild(btn);
+        });
         jump.hidden = false;
-        drawSlots();
+        // One container is no choice at all, so make its drawers the thing on
+        // screen rather than something to open first.
+        if (containers.length === 1) {
+          jump.open = true;
+          pickContainer(containers[0], containersHost.firstChild);
+        }
       }).catch(() => {});
 
-      function current() { return containers.find(c => c.id === pick.value); }
-
-      function drawSlots() {
-        const c = current();
-        const slots = (c && c.slots) || [];
-        list.innerHTML = slots.map(s => '<option value="' + esc(s) + '"></option>').join('');
-        hint.className = 'jump-hint';
-        hint.textContent = slots.length
-          ? slots.length + ' slots, ' + slots[0] + ' to ' + slots[slots.length - 1]
-          : '';
-      }
-
-      function open() {
-        const c = current();
-        if (!c) return;
-        const wanted = slot.value.trim();
-        if (!wanted) { slot.focus(); return; }
-        // Match the drawer's own casing rather than insisting on it: the label
-        // says B7 and a phone keyboard will happily offer b7.
-        const real = (c.slots || []).find(s => s.toLowerCase() === wanted.toLowerCase());
-        if (!real) {
-          hint.className = 'jump-hint error';
-          hint.textContent = 'No slot "' + wanted + '" in ' + (c.name || c.id) + '.';
-          return;
-        }
-        location.href = '/put.html?c=' + encodeURIComponent(c.id) + '&s=' + encodeURIComponent(real);
-      }
-
-      pick.addEventListener('change', () => { slot.value = ''; drawSlots(); });
-      go.addEventListener('click', open);
-      slot.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); open(); } });
-      slot.addEventListener('input', () => { hint.className = 'jump-hint'; drawSlots(); });
-
-      function esc(s) {
-        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      async function pickContainer(c, btn) {
+        containersHost.querySelectorAll('.container-btn')
+          .forEach(el => el.classList.toggle('selected', el === btn));
+        slotsLabel.hidden = false;
+        legend.hidden = false;
+        slotsHost.innerHTML = '<span style="font-size:.8rem;color:var(--muted)">Loading…</span>';
+        let filled = new Set();
+        try {
+          const res = await fetch('/c/' + encodeURIComponent(c.id) + '/summary');
+          if (res.ok) filled = new Set((await res.json()).filter(s => s.item_count > 0).map(s => s.slot));
+        } catch (e) { /* an unshaded grid still navigates */ }
+        slotsHost.innerHTML = '';
+        (c.slots || []).forEach(sid => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'slot-btn' + (filled.has(sid) ? ' filled' : '');
+          b.textContent = sid;
+          b.addEventListener('click', () => {
+            location.href = '/put.html?c=' + encodeURIComponent(c.id) + '&s=' + encodeURIComponent(sid);
+          });
+          slotsHost.appendChild(b);
+        });
+        hint.textContent = 'Tap a drawer in ' + (c.name || c.id) + ' to open it.';
       }
     })();
 
