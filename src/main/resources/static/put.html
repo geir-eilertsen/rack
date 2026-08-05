@@ -216,6 +216,14 @@
       return !!(c && (c.slots || []).length > 1);
     }
 
+    /** Where a thing is: the container alone when it has one storage space. */
+    function here() {
+      if (!selectedContainer) return '';
+      return isDivided(selectedContainer)
+        ? containerName(selectedContainer.id) + ' · ' + selectedSlot
+        : containerName(selectedContainer.id);
+    }
+
     function containerName(id) {
       const c = containers.find(c => c.id === id);
       return (c && c.name) ? c.name : id;
@@ -327,7 +335,7 @@
         return;
       }
       captureLabel.textContent = selectedContainer && selectedSlot
-        ? 'Take a photo of what\'s in ' + containerName(selectedContainer.id) + ' · ' + selectedSlot
+        ? 'Take a photo of what\'s in ' + here()
         : 'Take a photo';
     }
 
@@ -344,11 +352,11 @@
       fileBtn.disabled = false;
       const photos = n + ' photo' + (n === 1 ? '' : 's');
       if (resyncMode) {
-        fileBtn.textContent = 'Check ' + photos + ' against ' + containerName(selectedContainer.id) + ' · ' + selectedSlot;
+        fileBtn.textContent = 'Check ' + photos + ' against ' + here();
         return;
       }
       fileBtn.textContent = selectedContainer && selectedSlot
-        ? 'File ' + photos + ' in ' + containerName(selectedContainer.id) + ' · ' + selectedSlot
+        ? 'File ' + photos + ' in ' + here()
         : 'Identify ' + photos;
     }
 
@@ -643,6 +651,15 @@
         picked.container = c;
         picked.slot = null;
         containersHost.querySelectorAll('.container-btn').forEach(el => el.classList.toggle('selected', el === btn));
+        // A container with one storage space has nowhere else to go: choosing
+        // it has already chosen the destination.
+        if ((c.slots || []).length <= 1) {
+          picked.slot = (c.slots || [])[0] || null;
+          slotsHost.innerHTML = '';
+          moveBtn.disabled = !picked.slot;
+          moveBtn.textContent = 'Move to ' + (c.name || c.id);
+          return;
+        }
         slotsHost.innerHTML = '<span style="font-size:.8rem;color:var(--muted)">Loading…</span>';
         moveBtn.disabled = true;
         moveBtn.textContent = 'Pick a destination';
@@ -955,7 +972,7 @@
 
     async function previewResync() {
       const count = pendingPhotos.length;
-      const where = containerName(selectedContainer.id) + ' · ' + selectedSlot;
+      const where = here();
       fileBtn.disabled = true;
       fileBtn.textContent = 'Checking…';
       setStatus('', 'Checking ' + count + ' photo' + (count === 1 ? '' : 's') + ' against '
@@ -1127,7 +1144,7 @@
           { method: 'POST', body: form });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const slot = await res.json();
-        const where = containerName(selectedContainer.id) + ' · ' + selectedSlot;
+        const where = here();
         resyncMode = false;
         discardProposal();
         clearPending();

@@ -280,6 +280,13 @@
     // What a container's owner calls one of its subdivisions, and whether it has
     // any: a container with a single slot is itself the place.
     function containerOf(id) { return containers.find(c => c.id === id); }
+
+    // Where a thing is. A container with one storage space is the whole answer;
+    // appending its lone slot id would read as "Plastboks 1 · 1".
+    function placeName(containerId, slot) {
+      const c = containerOf(containerId);
+      return isDivided(c) ? containerName(containerId) + ' · ' + slot : containerName(containerId);
+    }
     function slotWord(c) { return (c && c.slot_label) || 'slot'; }
     function isDivided(c) { return !!(c && (c.slots || []).length > 1); }
 
@@ -353,7 +360,7 @@
         it.qty_estimate = entry.qty;
         status.className = 'status ok';
         status.textContent = (taken > 0 ? 'Took ' + taken : 'Put back ' + -taken) + ' · '
-          + itemName(it) + ' now ×' + entry.qty + ' in ' + containerName(entry.container) + ' · ' + entry.slot + '.';
+          + itemName(it) + ' now ×' + entry.qty + ' in ' + placeName(entry.container, entry.slot) + '.';
       } catch (e) {
         entry.qty = was;              // the drawer is the truth; put the number back
         const li = hits.querySelector('li[data-container="' + entry.container + '"]'
@@ -437,7 +444,7 @@
     }
 
     function renderGroup(g) {
-      const location = containerName(g.container) + ' · ' + g.slot;
+      const location = placeName(g.container, g.slot);
       const putUrl = '/put.html?c=' + encodeURIComponent(g.container) + '&s=' + encodeURIComponent(g.slot);
       const staleBadge = staleBadgeIfNeeded(g.lastVerified);
       const itemsHtml = g.hits.map(h => renderHitItem(h, g)).join('');
@@ -673,7 +680,7 @@
         status.className = 'status ok';
         // The kept wording was written for the smaller count, and the row it is
         // on has just moved — re-run the search rather than patch the list.
-        status.textContent = '✓ Merged in ' + containerName(container) + ' · ' + slot
+        status.textContent = '✓ Merged in ' + placeName(container, slot)
           + '. Open it to check the description still fits.';
         runSearch();
       } catch (e) {
@@ -714,6 +721,15 @@
         picked.container = c;
         picked.slot = null;
         containersHost.querySelectorAll('.container-btn').forEach(el => el.classList.toggle('selected', el === btn));
+        // A container with one storage space has nowhere else to go: choosing
+        // it has already chosen the destination.
+        if ((c.slots || []).length <= 1) {
+          picked.slot = (c.slots || [])[0] || null;
+          slotsHost.innerHTML = '';
+          moveBtn.disabled = !picked.slot;
+          moveBtn.textContent = 'Move to ' + (c.name || c.id);
+          return;
+        }
         slotsHost.innerHTML = '<span style="font-size:.8rem;color:var(--muted)">Loading…</span>';
         moveBtn.disabled = true;
         moveBtn.textContent = 'Pick a destination';

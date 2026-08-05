@@ -116,6 +116,12 @@
       async function pickContainer(c, btn) {
         containersHost.querySelectorAll('.container-btn')
           .forEach(el => el.classList.toggle('selected', el === btn));
+        // One storage space is not a choice. Tapping the box opens the box,
+        // rather than offering a grid of one button to press next.
+        if ((c.slots || []).length <= 1) {
+          location.href = '/put.html?c=' + encodeURIComponent(c.id);
+          return;
+        }
         slotsLabel.hidden = false;
         legend.hidden = false;
         slotsHost.innerHTML = '<span style="font-size:.8rem;color:var(--muted)">Loading…</span>';
@@ -135,7 +141,7 @@
           });
           slotsHost.appendChild(b);
         });
-        hint.textContent = 'Tap a drawer in ' + (c.name || c.id) + ' to open it.';
+        hint.textContent = 'Tap a ' + (c.slot_label || 'slot') + ' in ' + (c.name || c.id) + ' to open it.';
       }
     })();
 
