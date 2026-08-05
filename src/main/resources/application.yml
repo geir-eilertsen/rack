@@ -1,6 +1,15 @@
 spring:
   application:
     name: rack
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          # Without this the pages go out with Last-Modified and no Cache-Control,
+          # so a browser applies heuristic freshness (~10% of the file's age) and
+          # can serve a pre-deploy page for hours without asking. no-cache still
+          # caches — it just forces revalidation, which answers 304 when unchanged.
+          no-cache: true
   jackson:
     property-naming-strategy: SNAKE_CASE
   servlet:
