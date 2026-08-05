@@ -90,7 +90,7 @@ class JsonFilePartIndexTest {
     }
 
     @Test
-    void matchingEveryWordOutranksMatchingOne() throws IOException {
+    void anItemMatchingOnlySomeOfTheWordsIsNotAHit() throws IOException {
         writeSlot("A1", """
             {"id":"A1","items":[{"name":"Electrical tape","description":"black roll","category":"other","qty_estimate":1,"confidence":0.9,"tags":[]}],"photos":[],"last_verified":null,"printed_at":null}
             """);
@@ -100,9 +100,18 @@ class JsonFilePartIndexTest {
 
         List<SearchHit> hits = load().searchByKeyword("electrical tape");
 
-        assertThat(hits).hasSize(2);
-        assertThat(hits.get(0).slot()).isEqualTo(new SlotId("A1"));
-        assertThat(hits.get(1).slot()).isEqualTo(new SlotId("A2"));
+        assertThat(hits).extracting(SearchHit::slot).containsExactly(new SlotId("A1"));
+    }
+
+    @Test
+    void aWordThatMatchesNothingRulesOutTheItemsTheOtherWordsFound() throws IOException {
+        // The resistors come on tape reels, so they match "tape" strongly — but
+        // nothing here is "isolating", and they are not what was asked for.
+        writeSlot("B7", """
+            {"id":"B7","items":[{"name":"100K resistors","description":"strip cut from a tape reel","category":"resistor","qty_estimate":40,"confidence":0.9,"tags":["tape"]}],"photos":[],"last_verified":null,"printed_at":null}
+            """);
+
+        assertThat(load().searchByKeyword("isolating tape")).isEmpty();
     }
 
     @Test

@@ -138,23 +138,26 @@ public class JsonFilePartIndex implements PartIndex {
         return terms.isEmpty() ? List.of(phrase) : terms;
     }
 
+    /**
+     * Every word has to be accounted for. Searching "isolating tape" must not
+     * return the resistors that happen to come on tape reels: "isolating" is the
+     * word doing the work, and an item that matches only "tape" is not what was
+     * asked for however high it scores on that one word.
+     *
+     * <p>Dropping those leaves the query with nothing, which is the honest
+     * answer — and it is what lets {@code FindItems} see the query failed and
+     * widen it into the words this rack does use.
+     */
     private static double matchScore(Item item, List<String> terms, String phrase) {
         double score = 0;
-        int matched = 0;
         for (String term : terms) {
             double termScore = termScore(item, term);
-            if (termScore > 0) {
-                score += termScore;
-                matched++;
-            }
+            if (termScore == 0) return 0;
+            score += termScore;
         }
-        if (matched == 0) return 0;
-        if (terms.size() > 1) {
-            // Every word accounted for is a much better hit than a stray one;
-            // a partial match still shows, but below the items that matched fully.
-            score *= matched == terms.size() ? 1.5 : 0.6;
-            // The words in the order the user typed them beats them scattered.
-            if (contains(item.name(), phrase) || contains(item.description(), phrase)) score += 3;
+        // The words in the order the user typed them beats them scattered.
+        if (terms.size() > 1 && (contains(item.name(), phrase) || contains(item.description(), phrase))) {
+            score += 3;
         }
         return score;
     }
