@@ -75,6 +75,15 @@ public class FilesystemImageStore implements ImageStore {
         }
     }
 
+    @Override
+    public void delete(ContainerId container, SlotId slot, String filename) {
+        try {
+            Files.deleteIfExists(photoDir(container, slot).resolve(filename));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     private Path photoDir(ContainerId container, SlotId slot) {
         return dataDir.resolve(container.value()).resolve(slot.value());
     }

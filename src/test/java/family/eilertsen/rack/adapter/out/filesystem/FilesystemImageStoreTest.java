@@ -46,6 +46,21 @@ class FilesystemImageStoreTest {
     }
 
     @Test
+    void deletingDropsTheFrameAndShrugsAtOneThatHasAlreadyGone() throws IOException {
+        // A resync drops the frames it replaced. Running it twice, or after
+        // someone tidied the directory by hand, asks for a file that is already
+        // absent — which is the state being asked for, not a failure.
+        FilesystemImageStore store = new FilesystemImageStore(dataDir.toString());
+        String name = store.store(RACK, A1, "old".getBytes(StandardCharsets.UTF_8), "image/jpeg");
+
+        store.delete(RACK, A1, name);
+        store.delete(RACK, A1, name);
+        store.delete(RACK, A1, "never-existed.jpg");
+
+        assertThat(store.list(RACK, A1)).isEmpty();
+    }
+
+    @Test
     void keepsTheExtensionForTheContentType() throws IOException {
         FilesystemImageStore store = new FilesystemImageStore(dataDir.toString());
 

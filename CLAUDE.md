@@ -170,6 +170,20 @@ The consequence: **printed labels and consumed stickers are different numbers**,
 
 **Sheet position is global, printing is per container.** A sheet of paper is a shared physical resource, so `resolveOffset` counts stickers consumed across *every* container: print 8 labels for a 0.4-scale container (4 stickers) and the next container's run starts at position 5, whichever container that is. There is deliberately no "print everything" run — not every container gets labels, so printing stays a per-container action. Packing only ever combines labels within one container's run, so a part-filled sticker is never continued by the next container; sharing happens at sticker granularity, not inside one.
 
+### Resyncing a drawer
+
+`AddPhotoToSlot` appends, which is right when you are putting something in a drawer and wrong when you are checking one — shoot a drawer you already filed and you get two of everything. `ResyncSlot` is the other operation: **this is what is in here now.**
+
+It is a diff, in two halves. `POST /c/{container}/{slot}/resync/preview` extracts the batch, lines it up against what is recorded and writes nothing — not even the photos, so a preview you abandon leaves no frames for the real run to clean up. `POST /c/{container}/{slot}/resync` takes back the decisions and is the only half that touches disk. What you confirm is a removal, so it is worth the round trip.
+
+**Replacing the slot outright would be worse than the drift it fixes.** A corrected part number, a hand-written name, the answers stored under Ask AI, the frames an item was seen in — none of it can be redone by a camera. So a kept item keeps everything except its quantity and its frames.
+
+**Matching is one-to-one, greedy, best pair first.** Where both readings carry a part number that is the whole answer: equal is the same part, different is a different part, and no wording overlap may argue otherwise — this drawer holds 100K, 82K, 68K and 15K resistors, and BC547 beside BC557, whose names overlap more than enough to pair. Only where a part number is missing does wording decide it, at half the shorter label's words in common.
+
+**An item kept despite not being in the photos points at no frame.** Overruling a "gone" verdict says the thing is in the drawer, not that it is in these photos; its old frames are about to be deleted, so pinning it to a new one that does not show it would put a lie where the evidence used to be. It falls back to the slot's strip instead. An added item is the one case that may fall back to the first frame, because it demonstrably came out of the batch.
+
+Gone items are removed rather than zeroed, and the old photos are deleted — after the index write, so a crash leaves an orphan file rather than slot state naming a photo that no longer exists.
+
 ### Maintaining containers
 
 `/containers.html` lists every container with its slot/item/label counts and is the single place to register, print labels, rename, rescale, or delete one. There is no separate register page.

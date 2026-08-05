@@ -78,6 +78,32 @@
     .items.extracted { list-style: none; padding: 0; margin: 0; }
     .items.extracted li { padding: .5rem .75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: .35rem; background: var(--card); font-size: .9rem; }
     .items.extracted .pn { display: inline; margin-left: .35rem; }
+    /* Resync — the recorded list reconciled against fresh photos. Applying it
+       drops items and deletes the drawer's old photos, and neither comes back,
+       so the whole proposal is on screen and the consequence is spelled out
+       above the button that does it. */
+    #resyncBar { margin-top: .75rem; }
+    .resync-hint { font-size: .8rem; color: var(--muted); margin: .4rem 0 0; }
+    .resync { margin-top: 1rem; padding: .9rem 1rem 1rem; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); }
+    .resync .settled { margin-bottom: .9rem; padding: .6rem .8rem; background: var(--success-soft); color: var(--success); border-radius: var(--radius-sm); font-size: .88rem; }
+    .rs-group { margin-bottom: 1rem; }
+    .rs-group h3 { font-size: .72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin: 0 0 .2rem; }
+    .rs-group h3 .n { font-family: var(--font-mono); color: var(--primary-hover); margin-left: .3rem; }
+    .rs-group .help { font-size: .78rem; color: var(--muted); margin: 0 0 .45rem; }
+    .rs-group .help.none { font-style: italic; }
+    .proposal { list-style: none; padding: 0; margin: 0; }
+    .proposal li { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: .35rem; background: var(--bg); }
+    .proposal label { display: flex; align-items: center; gap: .6rem; padding: .55rem .7rem; cursor: pointer; }
+    .proposal input[type="checkbox"] { flex: 0 0 auto; width: 20px; height: 20px; margin: 0; accent-color: var(--primary); }
+    .proposal .body { flex: 1; min-width: 0; }
+    .proposal .body span { display: block; }
+    .proposal .desc { font-size: .92rem; font-weight: 500; }
+    .proposal .qty { flex: 0 0 auto; font-family: var(--font-mono); font-weight: 700; font-size: .9rem; color: var(--primary-hover); white-space: nowrap; }
+    .proposal .qty.changed { color: var(--error); }
+    /* An unchecked row is the one being overruled — fade it so the exceptions
+       read differently from the rows going through as proposed. */
+    .proposal li:has(input:not(:checked)) { opacity: .5; }
+    .resync .effect { margin: .2rem 0 .8rem; padding: .65rem .85rem; background: var(--error-soft); color: var(--error); border-left: 3px solid var(--error); border-radius: var(--radius-xs); font-size: .85rem; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -97,6 +123,11 @@
     <h2 id="currentHeading" hidden>What's already here</h2>
     <ul class="current" id="current"></ul>
 
+    <div id="resyncBar" hidden>
+      <button type="button" class="btn block" id="resyncBtn">Resync this drawer</button>
+      <p class="resync-hint" id="resyncHint">Drifted? Re-photograph the whole drawer and reconcile this list against what is actually in it.</p>
+    </div>
+
     <h2 id="captureHeading">Take a photo</h2>
     <label class="capture">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -110,6 +141,8 @@
     <div id="pending" class="pending"></div>
     <button class="btn primary block" id="fileBtn" style="margin-top:.75rem" hidden></button>
     <div class="status" id="status"></div>
+
+    <div class="resync" id="resyncPanel" hidden></div>
 
     <h2 id="extractedHeading" hidden>What I see</h2>
     <ul class="items extracted" id="extracted"></ul>
@@ -137,6 +170,10 @@
     const slotHeader = document.getElementById('slotHeader');
     const currentHeading = document.getElementById('currentHeading');
     const currentEl = document.getElementById('current');
+    const resyncBar = document.getElementById('resyncBar');
+    const resyncBtn = document.getElementById('resyncBtn');
+    const resyncHint = document.getElementById('resyncHint');
+    const resyncPanel = document.getElementById('resyncPanel');
     const captureHeading = document.getElementById('captureHeading');
     const captureLabel = document.getElementById('captureLabel');
     const photo = document.getElementById('photo');
@@ -168,6 +205,13 @@
     // Photos of one slot are collected here and filed as a batch, so a part and
     // its label go into a single extraction instead of being indexed twice.
     let pendingPhotos = [];
+    // A resync files nothing: the same batch is sent twice, once to be compared
+    // against the list and once to be applied. Holding the photos in memory is
+    // what lets the second call carry the identical frames — the proposal's
+    // frame indexes point into this array and mean nothing without it.
+    let resyncMode = false;
+    let resyncProposal = null;
+    let slotItemCount = 0;
 
     init();
 
@@ -191,34 +235,49 @@
       refreshUiForSelection();
     }
 
-    function refreshUiForSelection() {
+    // The resync response is the slot itself, so it is passed in as `known` and
+    // rendered rather than fetched back a second time.
+    function refreshUiForSelection(known) {
       const hasSlot = !!(selectedContainer && selectedSlot);
       if (hasSlot) {
         title.textContent = 'Slot ' + containerName(selectedContainer.id) + ' · ' + selectedSlot;
         slotHeader.hidden = false;
         slotHeader.textContent = containerName(selectedContainer.id) + ' · ' + selectedSlot;
         currentHeading.hidden = false;
-        captureHeading.textContent = pendingPhotos.length ? 'Photos of this slot' : 'Add a photo';
+        captureHeading.textContent = resyncMode
+          ? 'Photograph the whole drawer'
+          : (pendingPhotos.length ? 'Photos of this slot' : 'Add a photo');
         // Keep the manual picker visible while photos are waiting to be filed
         // (so the "File in X.Y" button inside it stays reachable); otherwise
-        // hide since the user is just viewing this slot.
-        manual.hidden = !pendingPhotos.length;
+        // hide since the user is just viewing this slot. During a resync it
+        // stays away: these photos describe this drawer and filing them
+        // anywhere would add what is already recorded a second time.
+        manual.hidden = resyncMode || !pendingPhotos.length;
         if (!pendingPhotos.length) manual.open = false;
-        loadCurrent();
+        if (known) renderCurrent(known.items || [], known.photos || []);
+        else loadCurrent();
       } else {
         title.textContent = 'Add an item';
         slotHeader.hidden = true;
         currentHeading.hidden = true;
         currentEl.innerHTML = '';
+        slotItemCount = 0;
         captureHeading.textContent = pendingPhotos.length ? 'Photos to file' : 'Take a photo';
         manual.hidden = false;
       }
       updateCaptureLabel();
       updateFileBtn();
       updateManualFileBtn();
+      updateResyncBar();
     }
 
     function updateCaptureLabel() {
+      if (resyncMode) {
+        captureLabel.textContent = pendingPhotos.length
+          ? 'Add another angle'
+          : 'Photograph everything in this drawer';
+        return;
+      }
       if (pendingPhotos.length) {
         captureLabel.textContent = 'Add another photo';
         return;
@@ -230,13 +289,20 @@
 
     function updateFileBtn() {
       const n = pendingPhotos.length;
-      if (!n) {
+      // While a proposal is on screen the confirm button below it is the only
+      // thing that may act on this batch — two live actions over one set of
+      // photos is how a drawer gets both replaced and re-filed.
+      if (!n || resyncProposal) {
         fileBtn.hidden = true;
         return;
       }
       fileBtn.hidden = false;
       fileBtn.disabled = false;
       const photos = n + ' photo' + (n === 1 ? '' : 's');
+      if (resyncMode) {
+        fileBtn.textContent = 'Check ' + photos + ' against ' + containerName(selectedContainer.id) + ' · ' + selectedSlot;
+        return;
+      }
       fileBtn.textContent = selectedContainer && selectedSlot
         ? 'File ' + photos + ' in ' + containerName(selectedContainer.id) + ' · ' + selectedSlot
         : 'Identify ' + photos;
@@ -265,6 +331,7 @@
       URL.revokeObjectURL(pendingPhotos[idx].url);
       pendingPhotos.splice(idx, 1);
       renderPending();
+      discardProposal();
       updateCaptureLabel();
       updateFileBtn();
       updateManualFileBtn();
@@ -282,6 +349,11 @@
 
     async function loadCurrent() {
       currentEl.innerHTML = '<li class="empty">Loading...</li>';
+      // Until the list lands we don't know whether this slot holds anything, and
+      // offering to resync a drawer that turns out to be empty is an offer that
+      // has to be taken back.
+      slotItemCount = 0;
+      updateResyncBar();
       try {
         const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot);
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -362,6 +434,19 @@
       if (minus) minus.disabled = qty <= 0;
     }
 
+    // Every write takes the whole item, not a delta, so changing one field means
+    // sending the rest back exactly as it stands.
+    function itemPayload(it, qty) {
+      return {
+        name: it.name || '',
+        description: it.description || '',
+        part_number: it.part_number || null,
+        category: it.category || '',
+        qty_estimate: qty == null ? (it.qty_estimate == null ? 1 : it.qty_estimate) : qty,
+        tags: it.tags || []
+      };
+    }
+
     async function saveCount(idx) {
       const entry = stock.get(idx);
       if (!entry || !selectedContainer) return;
@@ -372,14 +457,7 @@
         const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + idx, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: it.name || '',
-            description: it.description || '',
-            part_number: it.part_number || null,
-            category: it.category || '',
-            qty_estimate: entry.qty,
-            tags: it.tags || []
-          })
+          body: JSON.stringify(itemPayload(it, entry.qty))
         });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const taken = was - entry.qty;
@@ -398,6 +476,12 @@
 
     function renderCurrent(list, photos) {
       if (photos) slotPhotos = photos;
+      slotItemCount = list.length;
+      updateResyncBar();
+      // A proposal addresses items by their position in this list, so editing,
+      // removing or moving one while it is on screen would point its decisions
+      // at the wrong items. The list is the truth; the proposal goes.
+      discardProposal();
       if (!list.length) {
         currentEl.innerHTML = '<li class="empty">Nothing here yet.</li>';
         return;
@@ -711,10 +795,242 @@
       }
     }
 
+    // Resync reconciles a recorded list against fresh photos, so it only means
+    // anything where there is a list — an empty drawer is a filing job, not a
+    // reconciliation.
+    function updateResyncBar() {
+      resyncBar.hidden = !slotItemCount || !(selectedContainer && selectedSlot);
+      resyncBtn.textContent = resyncMode ? 'Cancel resync' : 'Resync this drawer';
+      resyncHint.hidden = resyncMode;
+    }
+
+    resyncBtn.addEventListener('click', () => resyncMode ? cancelResync() : startResync());
+
+    function startResync() {
+      resyncMode = true;
+      discardProposal();
+      refreshUiForSelection();
+      setStatus('', 'Photograph the whole drawer — anything the photos miss counts as gone.');
+      captureHeading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function cancelResync() {
+      // The photos were shot to stand for the whole drawer. Filing them as an
+      // ordinary batch would index everything that is already recorded a second
+      // time, so they leave with the resync.
+      clearPending();
+      resyncMode = false;
+      discardProposal();
+      refreshUiForSelection();
+      setStatus('', 'Resync cancelled — the drawer is unchanged.');
+    }
+
+    // Any change to the batch invalidates the proposal: its frame indexes point
+    // into the photos as they were when it was made.
+    function discardProposal() {
+      if (!resyncProposal) return;
+      resyncProposal = null;
+      resyncPanel.hidden = true;
+      resyncPanel.innerHTML = '';
+      updateFileBtn();      // the batch is actionable again now the proposal is gone
+    }
+
+    async function previewResync() {
+      const count = pendingPhotos.length;
+      const where = containerName(selectedContainer.id) + ' · ' + selectedSlot;
+      fileBtn.disabled = true;
+      fileBtn.textContent = 'Checking…';
+      setStatus('', 'Checking ' + count + ' photo' + (count === 1 ? '' : 's') + ' against '
+        + where + ' — Claude is comparing…');
+      const form = new FormData();
+      appendPending(form);
+      try {
+        const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot + '/resync/preview',
+          { method: 'POST', body: form });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        resyncProposal = await res.json();
+        renderProposal(resyncProposal);
+        setStatus('', 'Check this over — nothing has happened yet.');
+        if (window.rackUsage) rackUsage.refresh();
+      } catch (e) {
+        setStatus('error', 'Resync check failed: ' + e.message);
+      } finally {
+        updateFileBtn();
+      }
+    }
+
+    function renderProposal(p) {
+      const matched = p.matched || [], gone = p.gone || [], added = p.added || [];
+      const drifted = gone.length || added.length || matched.some(qtyChanged);
+      resyncPanel.innerHTML =
+        (drifted ? '' : '<div class="settled">Nothing has changed. Everything recorded is still here, '
+          + 'nothing has gone, and the photos turned up nothing new. Confirming just re-dates the drawer '
+          + 'and swaps in these photos.</div>') +
+        resyncGroup('Still here', matched.length,
+          'Found in the photos. Uncheck one to remove it anyway.',
+          'None of what is recorded turned up in the photos.',
+          matched.map(matchedRow).join('')) +
+        resyncGroup('Gone', gone.length,
+          'Recorded, but not in these photos. Leave it checked to remove it.',
+          'Everything recorded turned up in the photos.',
+          gone.map(goneRow).join('')) +
+        resyncGroup('New', added.length,
+          'In the photos, but not recorded. Leave it checked to add it.',
+          'The photos turned up nothing that is not already recorded.',
+          added.map(addedRow).join('')) +
+        '<div class="effect" id="resyncEffect"></div>' +
+        '<div class="btn-row">' +
+          '<button type="button" class="btn" id="resyncCancel">Cancel — change nothing</button>' +
+          '<button type="button" class="btn primary" id="resyncApply">' +
+            (drifted ? 'Replace this drawer\'s contents' : 'Confirm — replace the photos') +
+          '</button>' +
+        '</div>';
+      resyncPanel.hidden = false;
+      resyncPanel.querySelectorAll('.pick').forEach(cb => cb.addEventListener('change', paintEffect));
+      document.getElementById('resyncCancel').addEventListener('click', cancelResync);
+      document.getElementById('resyncApply').addEventListener('click', applyResync);
+      paintEffect();
+      updateFileBtn();
+      resyncPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function resyncGroup(title, n, help, emptyNote, rows) {
+      return '<div class="rs-group"><h3>' + title + '<span class="n">' + n + '</span></h3>' +
+        (n ? '<p class="help">' + help + '</p><ul class="proposal">' + rows + '</ul>'
+           : '<p class="help none">' + emptyNote + '</p>') +
+      '</div>';
+    }
+
+    function keptQty(m) {
+      if (m.qty_after != null) return m.qty_after;
+      if (m.qty_before != null) return m.qty_before;
+      return m.current && m.current.qty_estimate != null ? m.current.qty_estimate : 1;
+    }
+
+    // An absent qty_before is not a change: a number compared against nothing is
+    // always unequal, which would badge every row as a quantity change and leave
+    // no drawer able to come back settled.
+    function qtyChanged(m) {
+      return m.qty_before != null && keptQty(m) !== m.qty_before;
+    }
+
+    // The recorded item, not the fresh reading: a resync settles what is in the
+    // drawer and in what number, and leaves the wording it is catalogued under
+    // alone.
+    function matchedRow(m) {
+      const qty = keptQty(m);
+      const cell = qtyChanged(m)
+        ? '<span class="qty changed">&times;' + m.qty_before + ' → &times;' + qty + '</span>'
+        : '<span class="qty">&times;' + qty + '</span>';
+      return '<li><label>' +
+        '<input type="checkbox" class="pick" data-kind="keep" data-index="' + m.index +
+          '" data-qty="' + qty + '" data-frames="' + (m.frames || []).join(',') + '" checked>' +
+        proposalBody(m.current || m.found) + cell +
+      '</label></li>';
+    }
+
+    function goneRow(g) {
+      const it = g.current || {};
+      const qty = it.qty_estimate == null ? 1 : it.qty_estimate;
+      return '<li><label>' +
+        '<input type="checkbox" class="pick" data-kind="gone" data-index="' + g.index +
+          '" data-qty="' + qty + '" checked>' +
+        proposalBody(it) + '<span class="qty">&times;' + qty + '</span>' +
+      '</label></li>';
+    }
+
+    function addedRow(a, i) {
+      const it = a.found || {};
+      const qty = it.qty_estimate == null ? 1 : it.qty_estimate;
+      return '<li><label>' +
+        '<input type="checkbox" class="pick" data-kind="add" data-add="' + i + '" checked>' +
+        proposalBody(it) + '<span class="qty">&times;' + qty + '</span>' +
+      '</label></li>';
+    }
+
+    function proposalBody(it) {
+      return '<span class="body">' +
+        '<span class="desc">' + esc(itemName(it)) + '</span>' +
+        (itemDetail(it) ? '<span class="detail">' + esc(itemDetail(it)) + '</span>' : '') +
+        (it.part_number ? '<span class="detail pn">' + esc(it.part_number) + '</span>' : '') +
+      '</span>';
+    }
+
+    function decisions() {
+      const keep = [], add = [];
+      resyncPanel.querySelectorAll('.pick').forEach(cb => {
+        const kind = cb.dataset.kind;
+        if (kind === 'keep' && cb.checked) {
+          keep.push({ index: +cb.dataset.index, qty: +cb.dataset.qty, frames: frameList(cb) });
+        } else if (kind === 'gone' && !cb.checked) {
+          // Overruled: the model did not see it, the user says it is there. It
+          // stays at the count it had and names no frame of its own, since
+          // nothing in this batch was read as showing it.
+          keep.push({ index: +cb.dataset.index, qty: +cb.dataset.qty, frames: [] });
+        } else if (kind === 'add' && cb.checked) {
+          const a = (resyncProposal.added || [])[+cb.dataset.add];
+          if (a) add.push({ item: itemPayload(a.found || {}), frames: a.frames || [] });
+        }
+      });
+      return { keep, add };
+    }
+
+    function frameList(cb) {
+      return (cb.dataset.frames || '').split(',').filter(s => s !== '').map(Number);
+    }
+
+    function paintEffect() {
+      const d = decisions();
+      const held = (resyncProposal.matched || []).length + (resyncProposal.gone || []).length;
+      const photos = slotPhotos.length;
+      document.getElementById('resyncEffect').textContent =
+        d.keep.length + ' kept, ' + (held - d.keep.length) + ' removed, ' + d.add.length + ' added'
+        + (photos
+            ? ' — and the drawer\'s ' + photos + ' previous photo' + (photos === 1 ? '' : 's') + ' will be deleted.'
+            : '.');
+    }
+
+    async function applyResync() {
+      const d = decisions();
+      const held = (resyncProposal.matched || []).length + (resyncProposal.gone || []).length;
+      const removed = held - d.keep.length;
+      const apply = document.getElementById('resyncApply');
+      const cancel = document.getElementById('resyncCancel');
+      const original = apply.textContent;
+      apply.disabled = true;
+      cancel.disabled = true;
+      apply.textContent = 'Replacing…';
+      setStatus('', 'Replacing the drawer\'s contents…');
+      const form = new FormData();
+      appendPending(form);
+      form.append('decisions', JSON.stringify(d));
+      try {
+        const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot + '/resync',
+          { method: 'POST', body: form });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const slot = await res.json();
+        const where = containerName(selectedContainer.id) + ' · ' + selectedSlot;
+        resyncMode = false;
+        discardProposal();
+        clearPending();
+        refreshUiForSelection(slot);
+        if (window.rackUsage) rackUsage.refresh();
+        setStatus('ok', '✓ Resynced ' + where + ' — ' + d.keep.length + ' kept, '
+          + removed + ' removed, ' + d.add.length + ' added.');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (e) {
+        setStatus('error', 'Resync failed: ' + e.message);
+        apply.disabled = false;
+        cancel.disabled = false;
+        apply.textContent = original;
+      }
+    }
+
     photo.addEventListener('change', async () => {
       const files = Array.from(photo.files || []);
       if (!files.length) return;
       photo.value = '';
+      discardProposal();
 
       // Status first so mobile paints before the resize work starts.
       extractedEl.innerHTML = '';
@@ -737,13 +1053,18 @@
 
       refreshUiForSelection();
       const n = pendingPhotos.length;
-      setStatus('', n + ' photo' + (n === 1 ? '' : 's') + ' ready — add the label or another angle, or file '
-        + (n === 1 ? 'it' : 'them') + ' now.');
+      setStatus('', resyncMode
+        ? n + ' photo' + (n === 1 ? '' : 's') + ' of the drawer — add another angle, or check '
+          + (n === 1 ? 'it' : 'them') + ' against the list now.'
+        : n + ' photo' + (n === 1 ? '' : 's') + ' ready — add the label or another angle, or file '
+          + (n === 1 ? 'it' : 'them') + ' now.');
     });
 
     fileBtn.addEventListener('click', () => {
       if (!pendingPhotos.length) return;
-      if (selectedContainer && selectedSlot) {
+      if (resyncMode) {
+        previewResync();
+      } else if (selectedContainer && selectedSlot) {
         fileToPicked(selectedContainer.id, selectedSlot, fileBtn);
       } else {
         suggestAndPick();
@@ -865,7 +1186,7 @@
     }
 
     function updateManualFileBtn() {
-      const ready = !!(selectedContainer && selectedSlot && pendingPhotos.length);
+      const ready = !!(selectedContainer && selectedSlot && pendingPhotos.length && !resyncMode);
       fileManualBtn.hidden = !ready;
       if (ready) {
         const n = pendingPhotos.length;

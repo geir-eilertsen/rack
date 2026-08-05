@@ -167,6 +167,11 @@ class AddPhotoToSlotTest {
         public List<String> list(ContainerId container, SlotId slot) {
             return List.copyOf(stored);
         }
+
+        @Override
+        public void delete(ContainerId container, SlotId slot, String filename) {
+            stored.remove(filename);
+        }
     }
 
     private static final class FakeExtractor implements PartExtractor {
