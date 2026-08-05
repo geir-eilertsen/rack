@@ -23,16 +23,37 @@ spring:
       api-key: ${ANTHROPIC_API_KEY:}
       chat:
         options:
+          # Fallback only. Every call names its own model under rack.ai below,
+          # because the right answer differs per call and a single shared model
+          # silently makes the cheapest one the ceiling for the most important.
           model: claude-sonnet-4-6
           max-tokens: 4096
 
 rack:
   data-dir: ${RACK_DATA_DIR:./data}
   public-base-url: ${RACK_PUBLIC_BASE_URL:}
-  search:
-    # Bridging "isolating tape" to "electrical tape" is a synonym lookup, not a
-    # reasoning job, and it sits in front of a search box — so the cheapest,
-    # fastest model, not the one that reads the photos.
+  ai:
+    # Cheapest per job, not cheapest overall — the three calls are not alike.
+    #
+    # Reading the photos is the one that has to be good. Asked to extract this
+    # rack's own tool drawer, claude-haiku-4-5 read the desoldering braid's part
+    # number as "D21/1129" where it is "1.26/14329", and reported that at 0.95
+    # confidence; it also found four items where there are five and invented a
+    # soldering iron. A part number is meant to be null when it isn't legible,
+    # and a confidently wrong one is the drift the whole design is against.
+    extraction-model: ${RACK_EXTRACTION_MODEL:claude-sonnet-4-6}
+    extraction-max-tokens: 4096
+
+    # Answers are shown and stored under "Ask AI" rather than folded into the
+    # index, so a weaker answer is visibly a weaker answer. Haiku handles these
+    # adequately — it is the accuracy that argues for sonnet, not the cost, at a
+    # few tenths of a cent for a question you ask by hand.
+    ask-model: ${RACK_ASK_MODEL:claude-sonnet-4-6}
+    ask-max-tokens: 2048
+
+    # Bridging "isolating tape" to "electrical tape" is a synonym lookup against
+    # a list of words we hand it, not a reasoning job, and it sits in front of a
+    # search box. Haiku does it well and does it fast.
     expansion-model: ${RACK_EXPANSION_MODEL:claude-haiku-4-5}
     expansion-max-tokens: 300
 

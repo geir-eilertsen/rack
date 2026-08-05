@@ -62,8 +62,8 @@ public class SpringAiQueryExpander implements QueryExpander {
     public SpringAiQueryExpander(
         ChatClient.Builder builder,
         ObjectMapper mapper,
-        @Value("${rack.search.expansion-model}") String model,
-        @Value("${rack.search.expansion-max-tokens}") int maxTokens
+        @Value("${rack.ai.expansion-model}") String model,
+        @Value("${rack.ai.expansion-max-tokens}") int maxTokens
     ) {
         this.chat = builder.build();
         this.mapper = mapper;

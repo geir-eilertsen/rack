@@ -6,6 +6,8 @@ import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.port.PartIndex;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -25,10 +27,17 @@ public class AskAboutItem {
 
     private final PartIndex index;
     private final ChatClient chat;
+    private final ChatOptions options;
 
-    public AskAboutItem(PartIndex index, ChatClient.Builder builder) {
+    public AskAboutItem(
+        PartIndex index,
+        ChatClient.Builder builder,
+        @Value("${rack.ai.ask-model}") String model,
+        @Value("${rack.ai.ask-max-tokens}") int maxTokens
+    ) {
         this.index = index;
         this.chat = builder.build();
+        this.options = ChatOptions.builder().model(model).maxTokens(maxTokens).build();
     }
 
     public Slot execute(ContainerId container, SlotId slotId, int itemIndex, String question) {
@@ -46,7 +55,7 @@ public class AskAboutItem {
 
         Item current = existing.items().get(itemIndex);
         String prompt = buildPrompt(current, question.trim());
-        String answer = chat.prompt().system(SYSTEM).user(prompt).call().content().strip();
+        String answer = chat.prompt().options(options).system(SYSTEM).user(prompt).call().content().strip();
 
         List<Item.QA> qa = new ArrayList<>(current.qa() == null ? List.of() : current.qa());
         qa.add(new Item.QA(question.trim(), answer, Instant.now()));

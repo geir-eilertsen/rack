@@ -27,7 +27,21 @@ docker run --rm -p 8080:8080 -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY rack:local
 
 Multi-stage build (Maven + JDK → JRE-only runtime). The app boots without an `ANTHROPIC_API_KEY` (the Anthropic autoconfig only requires it on first call, not at bean construction), but `/identify` will 500 without one.
 
-Chat model is `claude-sonnet-4-6` (see `spring.ai.anthropic.chat.options.model` in `application.yml`). Claude has native vision, so the multipart-photo flow uses the same `ChatClient` API as any other model.
+## Model choice
+
+Three calls, three answers — all under `rack.ai` in `application.yml`, each overridable by env var. A single shared model makes the cheapest acceptable choice the ceiling for the most important call, so each names its own.
+
+| Call | Model | Why |
+|---|---|---|
+| `SpringAiPartExtractor` (vision) | `claude-sonnet-4-6` | The index is only as true as this call |
+| `AskAboutItem` | `claude-sonnet-4-6` | Accuracy, not cost — you ask by hand, so volume is tiny |
+| `SpringAiQueryExpander` | `claude-haiku-4-5` | A synonym lookup against a word list we supply |
+
+**Extraction is where cheap was measured and rejected.** Asked to read this rack's own tool drawer, `claude-haiku-4-5` returned the desoldering braid's part number as `D21/1129` where it is `1.26/14329` — at 0.95 confidence — misread the brand, found four items where there are five, and invented a soldering iron. `part_number` is meant to be null when it isn't legible; a confidently wrong one is exactly the drift the design exists to prevent, and it costs about a cent a photo to avoid. Both Sonnets read the number correctly.
+
+`claude-sonnet-5` also reads it correctly but sends the same 1600px photo as ~24% more input tokens (it is the first Sonnet with the 2576px high-resolution tier), so it is cheaper only while its introductory pricing lasts and dearer after. Worth revisiting by dropping the client-side resize to 1568px.
+
+Claude has native vision, so the multipart-photo flow uses the same `ChatClient` API as any other model.
 
 ## Purpose
 

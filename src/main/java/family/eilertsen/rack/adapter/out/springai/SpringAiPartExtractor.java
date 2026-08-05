@@ -6,7 +6,9 @@ import family.eilertsen.rack.domain.model.Extraction;
 import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.port.PartExtractor;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.content.Media;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.MimeTypeUtils;
@@ -49,10 +51,19 @@ public class SpringAiPartExtractor implements PartExtractor {
 
     private final ChatClient chat;
     private final ObjectMapper mapper;
+    private final ChatOptions options;
 
-    public SpringAiPartExtractor(ChatClient.Builder builder, ObjectMapper mapper) {
+    public SpringAiPartExtractor(
+        ChatClient.Builder builder,
+        ObjectMapper mapper,
+        @Value("${rack.ai.extraction-model}") String model,
+        @Value("${rack.ai.extraction-max-tokens}") int maxTokens
+    ) {
         this.chat = builder.build();
         this.mapper = mapper;
+        // Named here rather than left to the shared default: this is the call
+        // whose model choice decides whether the index is true.
+        this.options = ChatOptions.builder().model(model).maxTokens(maxTokens).build();
     }
 
     @Override
@@ -71,6 +82,7 @@ public class SpringAiPartExtractor implements PartExtractor {
         String prompt = PROMPT.formatted(images.size(), images.size() - 1);
 
         String reply = chat.prompt()
+            .options(options)
             .user(u -> u.text(prompt).media(media))
             .call()
             .content();
