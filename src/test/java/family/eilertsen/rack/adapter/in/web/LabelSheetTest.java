@@ -19,9 +19,9 @@ class LabelSheetTest {
     private static final String BASE = "https://rack.example";
 
     private static final Container LAB =
-        new Container(new ContainerId("lab"), "Lab", ContainerLayout.linear(11, ""), 1.0f);
+        new Container(new ContainerId("lab"), "Lab", ContainerLayout.linear(11, ""), 1.0f, "drawer");
     private static final Container BIN =
-        new Container(new ContainerId("bin"), "Bin", ContainerLayout.linear(6, "b"), 0.4f);
+        new Container(new ContainerId("bin"), "Bin", ContainerLayout.linear(6, "b"), 0.4f, "drawer");
 
     @Test
     void fullScaleLabelsGetOnePhysicalLabelEach() {

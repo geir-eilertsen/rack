@@ -276,6 +276,13 @@
 
     // Containers are keyed by a short id ("rack") but named by their owner
     // ("Skuffereol"). The key belongs in URLs; the name belongs on screen.
+
+    // What a container's owner calls one of its subdivisions, and whether it has
+    // any: a container with a single slot is itself the place.
+    function containerOf(id) { return containers.find(c => c.id === id); }
+    function slotWord(c) { return (c && c.slot_label) || 'slot'; }
+    function isDivided(c) { return !!(c && (c.slots || []).length > 1); }
+
     function containerName(id) {
       const c = containers.find(c => c.id === id);
       return (c && c.name) ? c.name : id;
@@ -445,7 +452,7 @@
     // ones show it, and those are what you want. Older items only ever recorded
     // the one frame they were read from, so they fall back to the slot's own —
     // which is what they showed before, honestly labelled.
-    function photoStrip(item, slotPhotos, urlOf) {
+    function photoStrip(item, slotPhotos, urlOf, container) {
       const source = item.source_photo;
       const own = (item.seen_in || []).filter(Boolean);
       const list = own.length ? own : (slotPhotos || []).filter(Boolean);
@@ -453,7 +460,7 @@
       const ordered = source && list.includes(source)
         ? [source].concat(list.filter(p => p !== source))
         : list;
-      const heading = own.length ? 'Photos of this item' : 'Photos of this drawer';
+      const heading = own.length ? 'Photos of this item' : 'Photos of this ' + slotWord(container);
       return '<div class="shots"><h4>' + heading + '</h4><div class="strip">' +
         ordered.map(fn =>
           '<a class="frame' + (fn === source ? ' source' : '') + '" href="' + urlOf(fn) +
@@ -505,7 +512,7 @@
             '<button class="btn primary save">Save</button>' +
             '<button class="remove" title="Remove this item">Remove</button>' +
           '</div>' +
-          photoStrip(it, g.photos, photoUrl) +
+          photoStrip(it, g.photos, photoUrl, containerOf(g.container)) +
           '<div class="ai">' +
             '<h4>Ask AI about this item</h4>' +
             renderQaLog(it.qa || []) +
@@ -515,18 +522,18 @@
             '</div>' +
           '</div>' +
           '<details class="merge-panel">' +
-            '<summary>Merge into another item in this drawer…</summary>' +
+            '<summary>Merge into another item here…</summary>' +
             '<div class="merge-body">' +
               '<p class="merge-hint">Adds this row\'s count and photos into the one you pick, and removes this row. The other row\'s wording is kept.</p>' +
               '<div class="merge-targets"></div>' +
             '</div>' +
           '</details>' +
           '<details class="move-panel">' +
-            '<summary>Move to another drawer…</summary>' +
+            '<summary>Move to another place…</summary>' +
             '<div class="move-body">' +
               '<div class="picker-label">Container</div>' +
               '<div class="containers move-containers"></div>' +
-              '<div class="picker-label">Drawer</div>' +
+              '<div class="picker-label">Place</div>' +
               '<div class="slots-grid move-slots"></div>' +
               '<button class="btn primary move-btn" disabled>Pick a destination</button>' +
             '</div>' +

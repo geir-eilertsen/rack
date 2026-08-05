@@ -68,7 +68,9 @@ Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all s
 ### Domain vocabulary
 
 - **Container** — a physical storage unit (rack of drawers, bin, shelf). Identified by lowercase `ContainerId` ("rack", "kitchen-bin").
-- **Slot** — one location inside a container. Identified by URL-safe `SlotId` ("A1", "3", "top-left"). Uniqueness is *per container*: two containers can both have an "A1". **The UI calls it a drawer**, because that is what it is to the person standing in front of it; `Slot` stays the code and URL vocabulary, which keeps it honest for a container that is a bin or a shelf.
+- **Slot** — one location inside a container. Identified by URL-safe `SlotId` ("A1", "3", "top-left"). Uniqueness is *per container*: two containers can both have an "A1". **Each container says what one of its slots is called** — `slotLabel`, defaulting to "slot". "Drawer" is right for a rack of drawers and wrong for a plastic box, and only the owner knows which they have. `Slot` stays the code and URL vocabulary, which is true of all of them.
+
+**A container with a single slot has no subdivisions at all**, and the UI stops mentioning them: no grid to pick from, no word for a part it has not got, and the title is just the container's name. Selecting it selects the one place. That is the plastic box — the box *is* the location, and asking which compartment would be asking about something that does not exist.
 - **Item** — one identified thing inside a slot (a transistor, a bag of screws, ...). Comes from vision extraction.
 - Containers are defined in `application.yml` under `rack.containers` and materialised at boot by `ContainerRegistry` (see `application/RackConfiguration.java`). Layout kinds: `grid` (cols × rows → A1..) and `linear` (N → 1..N with optional prefix).
 

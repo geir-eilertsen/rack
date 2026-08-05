@@ -37,7 +37,7 @@ class ContainerMaintenanceTest {
 
     @BeforeEach
     void setUp() {
-        store = new FakeStore(List.of(new Container(BIN, "Small bin", ContainerLayout.linear(3, "b"), 0.4f)));
+        store = new FakeStore(List.of(new Container(BIN, "Small bin", ContainerLayout.linear(3, "b"), 0.4f, "drawer")));
         index = new FakeIndex();
         registry = new ContainerRegistry(store);
         update = new UpdateContainer(registry);
@@ -48,7 +48,7 @@ class ContainerMaintenanceTest {
     void renamesWithoutTouchingSlots() {
         Container before = registry.get(BIN).orElseThrow();
 
-        Container after = update.execute(BIN, new UpdateContainer.Fields("Resistor bin", null));
+        Container after = update.execute(BIN, new UpdateContainer.Fields("Resistor bin", null, null));
 
         assertThat(after.name()).isEqualTo("Resistor bin");
         assertThat(after.slots()).isEqualTo(before.slots());
@@ -58,7 +58,7 @@ class ContainerMaintenanceTest {
 
     @Test
     void changesLabelScaleWithoutTouchingName() {
-        Container after = update.execute(BIN, new UpdateContainer.Fields(null, 1.0f));
+        Container after = update.execute(BIN, new UpdateContainer.Fields(null, 1.0f, null));
 
         assertThat(after.labelScale()).isEqualTo(1.0f);
         assertThat(after.name()).isEqualTo("Small bin");
@@ -66,15 +66,15 @@ class ContainerMaintenanceTest {
 
     @Test
     void rejectsBlankNameAndOutOfRangeScale() {
-        assertThatThrownBy(() -> update.execute(BIN, new UpdateContainer.Fields("  ", null)))
+        assertThatThrownBy(() -> update.execute(BIN, new UpdateContainer.Fields("  ", null, null)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("blank");
 
-        assertThatThrownBy(() -> update.execute(BIN, new UpdateContainer.Fields(null, 0f)))
+        assertThatThrownBy(() -> update.execute(BIN, new UpdateContainer.Fields(null, 0f, null)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("labelScale");
 
-        assertThatThrownBy(() -> update.execute(BIN, new UpdateContainer.Fields(null, 2.5f)))
+        assertThatThrownBy(() -> update.execute(BIN, new UpdateContainer.Fields(null, 2.5f, null)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("labelScale");
 
@@ -83,7 +83,7 @@ class ContainerMaintenanceTest {
 
     @Test
     void updatingAnUnknownContainerFails() {
-        assertThatThrownBy(() -> update.execute(new ContainerId("nope"), new UpdateContainer.Fields("x", null)))
+        assertThatThrownBy(() -> update.execute(new ContainerId("nope"), new UpdateContainer.Fields("x", null, null)))
             .isInstanceOf(NoSuchElementException.class);
     }
 
@@ -134,7 +134,7 @@ class ContainerMaintenanceTest {
     @Test
     void listsOccupiedSlotsInLayoutOrderNotAlphabetically() {
         ContainerId shelf = new ContainerId("shelf");
-        store.saveAll(List.of(new Container(shelf, "Shelf", ContainerLayout.linear(12, ""), 1.0f)));
+        store.saveAll(List.of(new Container(shelf, "Shelf", ContainerLayout.linear(12, ""), 1.0f, "drawer")));
         DeleteContainer deleteShelf = new DeleteContainer(new ContainerRegistry(store), index);
         index.put(shelf, new Slot(new SlotId("11"), List.of(item("a")), null, List.of(), null));
         index.put(shelf, new Slot(new SlotId("2"), List.of(item("b")), null, List.of(), null));

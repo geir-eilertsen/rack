@@ -155,14 +155,14 @@
     <h2 id="extractedHeading" hidden>What I see</h2>
     <ul class="items extracted" id="extracted"></ul>
 
-    <h2 id="pickHeading" hidden>Which drawer?</h2>
+    <h2 id="pickHeading" hidden>Where does it go?</h2>
     <ul class="sug-list" id="suggestions"></ul>
 
     <details class="manual" id="manual" open>
-      <summary id="manualSummary">Or pick a drawer manually</summary>
+      <summary id="manualSummary">Or pick a place manually</summary>
       <div class="picker-label">Container</div>
       <div class="containers" id="containers"></div>
-      <div class="picker-label" id="slotsLabel" hidden>Drawer</div>
+      <div class="picker-label" id="slotsLabel" hidden>Place</div>
       <div class="slots-legend" id="slotsLegend" hidden><span><span class="swatch empty"></span>empty</span><span><span class="swatch filled"></span>has items</span></div>
       <div class="slots-grid" id="slots"></div>
       <button class="btn primary block" id="fileManual" style="margin-top:.75rem" hidden>File in selected slot</button>
@@ -203,6 +203,19 @@
 
     // Containers are keyed by a short id ("rack") but named by their owner
     // ("Skuffereol"). The key belongs in URLs; the name belongs on screen.
+
+    // What this container's owner calls one of its subdivisions. A container
+    // with a single slot has none: the box itself is the place, so the screen
+    // must stop asking which one and stop naming it.
+    function slotWord(c, capital) {
+      const w = (c && c.slot_label) || 'slot';
+      return capital ? w.charAt(0).toUpperCase() + w.slice(1) : w;
+    }
+
+    function isDivided(c) {
+      return !!(c && (c.slots || []).length > 1);
+    }
+
     function containerName(id) {
       const c = containers.find(c => c.id === id);
       return (c && c.name) ? c.name : id;
@@ -265,13 +278,19 @@
     function refreshUiForSelection(known) {
       const hasSlot = !!(selectedContainer && selectedSlot);
       if (hasSlot) {
-        title.textContent = 'Drawer ' + containerName(selectedContainer.id) + ' · ' + selectedSlot;
+        // An undivided container is just itself; naming a subdivision it has
+        // not got would be noise.
+        title.textContent = isDivided(selectedContainer)
+          ? slotWord(selectedContainer, true) + ' ' + containerName(selectedContainer.id) + ' · ' + selectedSlot
+          : containerName(selectedContainer.id);
         slotHeader.hidden = false;
-        slotHeader.textContent = containerName(selectedContainer.id) + ' · ' + selectedSlot;
+        slotHeader.textContent = isDivided(selectedContainer)
+          ? containerName(selectedContainer.id) + ' · ' + selectedSlot
+          : containerName(selectedContainer.id);
         currentHeading.hidden = false;
         captureHeading.textContent = resyncMode
           ? 'Photograph the whole drawer'
-          : (pendingPhotos.length ? 'Photos of this drawer' : 'Add a photo');
+          : (pendingPhotos.length ? 'Photos of this ' + slotWord(selectedContainer) : 'Add a photo');
         // Keep the manual picker visible while photos are waiting to be filed
         // (so the "File in X.Y" button inside it stays reachable); otherwise
         // hide since the user is just viewing this slot. During a resync it
@@ -394,7 +413,7 @@
     // ones show it, and those are what you want. Older items only ever recorded
     // the one frame they were read from, so they fall back to the slot's own —
     // which is what they showed before, honestly labelled.
-    function photoStrip(item, slotPhotos, urlOf) {
+    function photoStrip(item, slotPhotos, urlOf, container) {
       const source = item.source_photo;
       const own = (item.seen_in || []).filter(Boolean);
       const list = own.length ? own : (slotPhotos || []).filter(Boolean);
@@ -402,7 +421,7 @@
       const ordered = source && list.includes(source)
         ? [source].concat(list.filter(p => p !== source))
         : list;
-      const heading = own.length ? 'Photos of this item' : 'Photos of this drawer';
+      const heading = own.length ? 'Photos of this item' : 'Photos of this ' + slotWord(container);
       return '<div class="shots"><h4>' + heading + '</h4><div class="strip">' +
         ordered.map(fn =>
           '<a class="frame' + (fn === source ? ' source' : '') + '" href="' + urlOf(fn) +
@@ -763,7 +782,7 @@
             '<button class="btn primary save">Save</button>' +
             '<button class="remove" title="Remove this item">Remove</button>' +
           '</div>' +
-          photoStrip(it, slotPhotos, photoUrl) +
+          photoStrip(it, slotPhotos, photoUrl, selectedContainer) +
           '<div class="ai">' +
             '<h4>Ask AI about this item</h4>' +
             renderQaLog(it.qa || []) +
@@ -773,14 +792,14 @@
             '</div>' +
           '</div>' +
           '<details class="merge-panel">' +
-            '<summary>Merge into another item in this drawer…</summary>' +
+            '<summary>Merge into another item here…</summary>' +
             '<div class="merge-body">' +
               '<p class="merge-hint">Adds this row\'s count and photos into the one you pick, and removes this row. The other row\'s wording is kept.</p>' +
               '<div class="merge-targets"></div>' +
             '</div>' +
           '</details>' +
           '<details class="move-panel">' +
-            '<summary>Move to another drawer…</summary>' +
+            '<summary>Move to another place…</summary>' +
             '<div class="move-body">' +
               '<div class="picker-label">Container</div>' +
               '<div class="containers move-containers"></div>' +
@@ -1243,6 +1262,19 @@
       selectedContainer = c;
       selectedSlot = null;
       document.querySelectorAll('.container-btn').forEach(el => el.classList.toggle('selected', el.textContent === (c.name || c.id)));
+      // A container with one place is not a choice. Picking it picks the place,
+      // and the grid stays away rather than showing a single button to press.
+      if (!isDivided(c)) {
+        selectedSlot = (c.slots || [])[0] || null;
+        slotsLabel.hidden = true;
+        slotsLegend.hidden = true;
+        slotsEl.innerHTML = '';
+        if (refreshUi) {
+          updateManualFileBtn();
+          refreshUiForSelection();
+        }
+        return;
+      }
       slotsLabel.hidden = false;
       slotsLegend.hidden = false;
       renderSlotPicker(c.slots || [], new Set());

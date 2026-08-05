@@ -33,11 +33,15 @@ public class UpdateContainer {
             ? existing.labelScale()
             : Container.validLabelScale(fields.labelScale());
 
-        Container updated = new Container(id, name, existing.slots(), scale);
+        String slotLabel = fields.slotLabel() == null
+            ? existing.slotLabel()
+            : Container.validSlotLabel(fields.slotLabel());
+
+        Container updated = new Container(id, name, existing.slots(), scale, slotLabel);
         registry.update(updated);
         return updated;
     }
 
     /** Absent (null) fields are left as they are. */
-    public record Fields(String name, Float labelScale) {}
+    public record Fields(String name, Float labelScale, String slotLabel) {}
 }

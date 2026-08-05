@@ -95,6 +95,9 @@
           </div>
         </fieldset>
 
+        <label class="field" for="regWord">What is one of its places called?</label>
+        <input id="regWord" type="text" placeholder="drawer, compartment, shelf — leave blank if it has none" autocomplete="off">
+
         <label class="field" for="regScale">Label scale</label>
         <input id="regScale" type="number" min="0.1" max="2" step="0.05" value="1.0">
         <p class="hint">1.0 fills the full L7160 label. At 0.4 four labels share one sticker as a 2×2 grid, to be trimmed apart.</p>
@@ -110,6 +113,17 @@
     const pageStatus = document.getElementById('pageStatus');
 
     init();
+
+    // "box" and "shelf" are the ones a naive + "s" gets wrong, and they are
+    // exactly the words someone names a plastic box with.
+    function plural(word) {
+      const w = String(word);
+      if (/(s|x|z|ch|sh)$/i.test(w)) return w + 'es';
+      if (/[^aeiou]y$/i.test(w)) return w.slice(0, -1) + 'ies';
+      if (/fe$/i.test(w)) return w.slice(0, -2) + 'ves';
+      if (/f$/i.test(w)) return w.slice(0, -1) + 'ves';
+      return w + 's';
+    }
 
     async function init() {
       pageStatus.className = 'status';
@@ -133,7 +147,7 @@
       el.className = 'cbox';
       el.innerHTML =
         '<h3 class="c-name"></h3>' +
-        '<div class="cmeta"><code class="c-id"></code> · <span class="c-slots"></span> slots · label scale <span class="c-scale"></span>×</div>' +
+        '<div class="cmeta"><code class="c-id"></code> · <span class="c-slots"></span> · label scale <span class="c-scale"></span>×</div>' +
         '<div class="cstats">Loading…</div>' +
         '<div class="btn-row">' +
           '<a class="btn c-put">Add an item</a>' +
@@ -161,6 +175,8 @@
               '<input type="text" class="c-name-input">' +
             '</div>' +
             '<div>' +
+              '<label class="field">What is one of its places called?</label>' +
+              '<input type="text" class="c-word-input" placeholder="drawer, compartment, shelf" autocomplete="off">' +
               '<label class="field">Label scale</label>' +
               '<input type="number" class="c-scale-input" min="0.1" max="2" step="0.05">' +
             '</div>' +
@@ -191,11 +207,17 @@
         c = container;
         q('.c-name').textContent = c.name || c.id;
         q('.c-id').textContent = c.id;
-        q('.c-slots').textContent = c.slots.length;
+        // A container with one place has no subdivisions to count, and saying
+        // "1 slots" about a plastic box is the awkwardness this is fixing.
+        const word = c.slot_label || 'slot';
+        q('.c-slots').textContent = c.slots.length > 1
+          ? c.slots.length + ' ' + plural(word)
+          : 'one place, undivided';
         q('.c-scale').textContent = c.label_scale;
         q('.c-put').href = '/put.html?c=' + encodeURIComponent(c.id);
         q('.c-name-input').value = c.name || '';
         q('.c-scale-input').value = c.label_scale;
+        q('.c-word-input').value = c.slot_label || '';
       }
 
       async function refreshStats() {
@@ -285,7 +307,8 @@
       q('.c-save').addEventListener('click', async () => {
         const body = {
           name: q('.c-name-input').value,
-          label_scale: parseFloat(q('.c-scale-input').value)
+          label_scale: parseFloat(q('.c-scale-input').value),
+          slot_label: q('.c-word-input').value.trim()
         };
         note('Saving…');
         try {
@@ -353,7 +376,8 @@
           count: grid ? null : parseInt(document.getElementById('regCount').value, 10),
           prefix: grid ? null : (document.getElementById('regPrefix').value.trim() || null)
         },
-        label_scale: parseFloat(document.getElementById('regScale').value)
+        label_scale: parseFloat(document.getElementById('regScale').value),
+        slot_label: document.getElementById('regWord').value.trim()
       };
       regStatus.className = 'status';
       regStatus.textContent = 'Registering…';
