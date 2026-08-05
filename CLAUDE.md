@@ -175,6 +175,14 @@ Printed part numbers on ICs / modules / connectors, text on bags / reels / manuf
 
 **Practical rule: photograph the labels as much as the parts.**
 
+### Suggesting where a photographed part belongs
+
+`POST /suggest` (`SuggestSlot`) is the search behind `put.html`: photograph a part, and it looks the extracted items up in the index to suggest the slot they belong in. It runs through `FindItems`, so it inherits both search behaviours — and it has to, because filing has a sharper version of the same problem. Photograph a roll of tape, have the extractor call it "Insulating tape", and a suggestion that misses the drawer already holding "Electrical tape" doesn't just fail to help: it files the roll a second time and *creates* the drift the whole design is against.
+
+**The name widens; the part number and tags stay literal.** The name is the short label the expander is built for. A part number is already precise, and tags are the extractor's own synonyms — widening those would pay for breadth twice. That caps a batch at one model call per extracted item, and only for items whose name found nothing.
+
+The name is searched at all now — before, only the part number and tags were, so the best label on the item was the one thing the lookup ignored.
+
 ### Filing a slot as a batch of photos
 
 That rule needs more than one frame per slot, so `put.html` collects photos into a pending strip — each tap of the camera appends a thumbnail, `×` drops one, and one **File N photos** action sends them all. Nothing is uploaded until then.

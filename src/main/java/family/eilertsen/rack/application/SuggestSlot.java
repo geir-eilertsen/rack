@@ -6,7 +6,6 @@ import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.SearchHit;
 import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.port.PartExtractor;
-import family.eilertsen.rack.domain.port.PartIndex;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -22,11 +21,11 @@ public class SuggestSlot {
     private static final int TOP_N = 5;
 
     private final PartExtractor extractor;
-    private final PartIndex index;
+    private final FindItems find;
 
-    public SuggestSlot(PartExtractor extractor, PartIndex index) {
+    public SuggestSlot(PartExtractor extractor, FindItems find) {
         this.extractor = extractor;
-        this.index = index;
+        this.find = find;
     }
 
     public Result execute(List<byte[]> photos) {
@@ -37,14 +36,12 @@ public class SuggestSlot {
         Map<Key, Bucket> buckets = new LinkedHashMap<>();
 
         for (Item queried : extracted) {
-            for (String term : searchTermsFor(queried)) {
-                for (SearchHit hit : index.searchByKeyword(term)) {
-                    Key k = new Key(hit.container(), hit.slot());
-                    Bucket b = buckets.computeIfAbsent(k, key -> new Bucket(key, hit.lastVerified()));
-                    b.score += hit.score();
-                    if (!containsItem(b.matches, hit.item())) {
-                        b.matches.add(hit.item());
-                    }
+            for (SearchHit hit : hitsFor(queried)) {
+                Key k = new Key(hit.container(), hit.slot());
+                Bucket b = buckets.computeIfAbsent(k, key -> new Bucket(key, hit.lastVerified()));
+                b.score += hit.score();
+                if (!containsItem(b.matches, hit.item())) {
+                    b.matches.add(hit.item());
                 }
             }
         }
@@ -58,13 +55,29 @@ public class SuggestSlot {
         return new Result(extracted, suggestions);
     }
 
-    private static List<String> searchTermsFor(Item item) {
-        List<String> terms = new ArrayList<>();
-        if (item.partNumber() != null && !item.partNumber().isBlank()) terms.add(item.partNumber());
+    /**
+     * Filing has the same problem finding has: photograph a roll of tape, have
+     * the extractor call it "Insulating tape", and the drawer already holding
+     * "Electrical tape" never comes up — so the same roll gets filed twice.
+     *
+     * <p>The name is the short label the expander is built for, so it is the one
+     * query allowed to widen. The part number and the tags are already precise —
+     * and the tags are the extractor's own synonyms — so they stay literal, which
+     * caps a batch at one model call per extracted item, and only for the items
+     * whose name found nothing.
+     */
+    private List<SearchHit> hitsFor(Item item) {
+        List<SearchHit> hits = new ArrayList<>();
+        if (notBlank(item.partNumber())) hits.addAll(find.literal(item.partNumber()).hits());
         if (item.tags() != null) {
-            for (String tag : item.tags()) if (tag != null && !tag.isBlank()) terms.add(tag);
+            for (String tag : item.tags()) if (notBlank(tag)) hits.addAll(find.literal(tag).hits());
         }
-        return terms;
+        if (notBlank(item.name())) hits.addAll(find.smart(item.name()).hits());
+        return hits;
+    }
+
+    private static boolean notBlank(String s) {
+        return s != null && !s.isBlank();
     }
 
     private static boolean containsItem(List<Item> list, Item item) {
