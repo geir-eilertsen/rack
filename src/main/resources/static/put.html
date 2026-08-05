@@ -503,8 +503,14 @@
         joinPanel.innerHTML = duplicates.map(d => {
           const was = d.existing.qty_estimate == null ? 1 : d.existing.qty_estimate;
           const more = d.added.qty_estimate == null ? 1 : d.added.qty_estimate;
+          // Both readings, because joining keeps one description and drops the
+          // other, and the one being dropped is the one that describes what was
+          // just put in. "Two AAA batteries" surviving as the text on a row of
+          // six is the whole reason this shows them.
           return '<p>This drawer already held <strong>' + esc(itemName(d.existing)) + '</strong>. '
             + 'It is now two rows: <span class="sums">×' + was + '</span> and <span class="sums">×' + more + '</span>.</p>'
+            + (itemDetail(d.existing) ? '<p class="detail">keeping: ' + esc(itemDetail(d.existing)) + '</p>' : '')
+            + (itemDetail(d.added) ? '<p class="detail">dropping: ' + esc(itemDetail(d.added)) + '</p>' : '')
             + '<div class="actions">'
             +   '<button type="button" class="btn" data-skip="1">Keep them separate</button>'
             +   '<button type="button" class="btn primary" data-keep="' + d.existing_index + '" data-drop="' + d.added_index
@@ -541,7 +547,16 @@
         pendingJoin = null;
         joinPanel.hidden = true;
         renderCurrent(slot.items || [], slot.photos || []);
-        setStatus('ok', '✓ Joined into one row of ×' + qty + '.');
+        // The surviving description was written for the old count and can now
+        // contradict it, so open the row rather than leaving the reader to
+        // notice. No automatic choice is right here: neither reading describes
+        // what is in the drawer once the two are added together.
+        const row = currentEl.querySelector('li[data-idx="' + keepIndex + '"]');
+        if (row) {
+          row.classList.add('editing');
+          row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+        setStatus('ok', '✓ Joined into one row of ×' + qty + '. Check the description still fits.');
       } catch (e) {
         btn.disabled = false;
         btn.textContent = 'Join into one row of ×' + qty;
