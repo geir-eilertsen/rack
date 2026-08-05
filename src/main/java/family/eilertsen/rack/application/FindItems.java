@@ -1,6 +1,7 @@
 package family.eilertsen.rack.application;
 
 import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.SearchHit;
 import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.port.PartIndex;
@@ -90,6 +91,59 @@ public class FindItems {
         List<SearchHit> hits = new ArrayList<>(merged.values());
         hits.sort((a, b) -> Double.compare(b.score(), a.score()));
         return new Result(query, terms, hits);
+    }
+
+    /**
+     * Hits for an item a vision model just described, whether that photo is
+     * being filed or searched for.
+     *
+     * <p>The name is the short label the expander is built for, so it is the one
+     * query allowed to widen. A part number is already precise. Tags only
+     * corroborate: a tag is a single generic word, so the rule that every word
+     * must match has nothing to bite on — the tag "tape" alone matched
+     * twenty-two resistors that come on tape reels. A tag raises an item the
+     * name or part number already found and can never add one on its own, so an
+     * item with neither — barely an identification — finds nothing rather than
+     * guessing from its tags.
+     */
+    public Result forPhotographed(Item item) {
+        Map<Key, SearchHit> found = new LinkedHashMap<>();
+        List<String> terms = new ArrayList<>();
+
+        if (notBlank(item.partNumber())) addAll(found, literal(item.partNumber()).hits());
+        if (notBlank(item.name())) {
+            Result byName = smart(item.name());
+            terms = byName.expandedTerms();
+            addAll(found, byName.hits());
+        }
+        if (item.tags() != null) {
+            for (String tag : item.tags()) {
+                if (!notBlank(tag)) continue;
+                for (SearchHit hit : literal(tag).hits()) {
+                    found.computeIfPresent(Key.of(hit), (k, anchored) -> plus(anchored, hit.score()));
+                }
+            }
+        }
+
+        List<SearchHit> hits = new ArrayList<>(found.values());
+        hits.sort((a, b) -> Double.compare(b.score(), a.score()));
+        return new Result(item.name(), terms, hits);
+    }
+
+    /** Two terms agreeing on an item is a stronger signal than either alone. */
+    private static void addAll(Map<Key, SearchHit> found, List<SearchHit> hits) {
+        for (SearchHit hit : hits) {
+            found.merge(Key.of(hit), hit, (existing, extra) -> plus(existing, extra.score()));
+        }
+    }
+
+    private static SearchHit plus(SearchHit hit, double score) {
+        return new SearchHit(hit.container(), hit.slot(), hit.index(), hit.item(),
+            hit.score() + score, hit.lastVerified(), hit.photos());
+    }
+
+    private static boolean notBlank(String s) {
+        return s != null && !s.isBlank();
     }
 
     /** Hits are sorted best first, so one convincing hit is the whole question. */

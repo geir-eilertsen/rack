@@ -10,8 +10,9 @@
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
   <style>
-    .search { margin-bottom: 1rem; }
-    .search input { font-size: 1.05rem; padding: .8rem 1rem; }
+    .search { margin-bottom: 1rem; display: flex; gap: .4rem; }
+    .search input { flex: 1; min-width: 0; font-size: 1.05rem; padding: .8rem 1rem; }
+    .search .shoot { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; padding: 0 .9rem; }
     .hits { list-style: none; padding: 0; margin: 0; }
     .group { padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: .75rem; background: var(--card); box-shadow: var(--shadow); }
     .group .loc { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .35rem; }
@@ -60,6 +61,11 @@
 
     <div class="search">
       <input id="q" type="search" placeholder="e.g. transistor, TO-220, red LED" autocomplete="off" autofocus>
+      <!-- For the part you are holding and cannot name. -->
+      <button class="btn shoot" id="shoot" type="button" title="Search by photo" aria-label="Search by photo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h3l1.5-2h7L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      </button>
+      <input type="file" accept="image/*" capture="environment" multiple id="photo" hidden>
     </div>
     <div class="status" id="status">Type to search.</div>
     <ul class="hits" id="hits"></ul>
@@ -69,6 +75,8 @@
     const q = document.getElementById('q');
     const status = document.getElementById('status');
     const hits = document.getElementById('hits');
+    const shoot = document.getElementById('shoot');
+    const photo = document.getElementById('photo');
 
     let controller = null;
     let smartController = null;
@@ -142,6 +150,51 @@
 
     function renderResult(result) {
       renderHits(result.hits || [], result.query, result.expanded_terms || []);
+    }
+
+    // Searching by photo is for the part in your hand that you cannot name, so
+    // there is nothing to type and nothing to widen a second time — one request,
+    // and the vision model's reading of the part becomes the query.
+    shoot.addEventListener('click', () => photo.click());
+    photo.addEventListener('change', async () => {
+      const files = [...photo.files];
+      photo.value = '';
+      if (!files.length) return;
+
+      clearTimeout(debounce);
+      clearTimeout(smartDebounce);
+      if (controller) controller.abort();
+      if (smartController) smartController.abort();
+      q.value = '';
+      shoot.disabled = true;
+      status.className = 'status';
+      status.textContent = 'Reading the photo...';
+      hits.innerHTML = '';
+      try {
+        const form = new FormData();
+        for (const file of files) form.append('photo', await resize(file));
+        const res = await fetch('/search/photo', { method: 'POST', body: form });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const result = await res.json();
+        q.value = result.query || '';        // leave the reading behind to edit
+        renderResult(result);
+      } catch (e) {
+        status.className = 'status error';
+        status.textContent = 'Photo search failed: ' + e.message;
+      } finally {
+        shoot.disabled = false;
+      }
+    });
+
+    async function resize(file, maxDim = 1600, quality = 0.85) {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+      if (scale >= 1 && file.size < 3_000_000) return file;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      return new Promise(resolve => canvas.toBlob(b => resolve(new File([b], 'photo.jpg', { type: 'image/jpeg' })), 'image/jpeg', quality));
     }
 
     function renderHits(results, query, expanded) {

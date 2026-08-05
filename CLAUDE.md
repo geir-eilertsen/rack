@@ -122,7 +122,7 @@ Committing after each write gives history, per-drawer undo, and free multi-site 
 
 - `/` → index page (hub)
 - `/identify.html`, `POST /identify` → identify a part from a photo, no persistence
-- `/find.html`, `GET /search?q=` → search; `&smart=true` widens a query that came up short (see Search above). Returns `{query, expanded_terms, hits}`
+- `/find.html`, `GET /search?q=` → search; `&smart=true` widens a query that came up short (see Search above). `POST /search/photo` searches by photo instead of by typing. All three return `{query, expanded_terms, hits}`
 - `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state. The photo endpoint (and `POST /suggest`) take **repeated `photo` parts** — one part is just a batch of one.
 - `/containers.html`, `POST /c` (register), `PATCH /c/{container}` (name + label scale), `DELETE /c/{container}` → maintain containers; also hosts registration and the label flow below
 - `GET /labels/{container}` (preview), `POST /labels/{container}` (mark + archive), `GET /labels/{container}/status` → QR label sheets
@@ -174,6 +174,14 @@ Items catalogued before the split have no `name` at all — no migration, per th
 Printed part numbers on ICs / modules / connectors, text on bags / reels / manufacturer labels, and coarse shapes ("TO-220 transistor", "M4 hex bolt", "JST connector"). It does *not* reliably read resistor colour bands, unlabelled ceramic capacitors, or exact counts of a loose pile.
 
 **Practical rule: photograph the labels as much as the parts.**
+
+### Searching by photo
+
+`POST /search/photo` (`FindByPhoto`) is the typed search's answer to the case it serves worst: **you cannot type a name you do not know.** Hold the part up to the camera instead, and the vision model's reading of it becomes the query.
+
+It is the filing pipeline read the other way round — each extracted item goes through the same `FindItems.forPhotographed` lookup that `SuggestSlot` uses, so a photo and a good guess at the name find the same drawer. The response is the same `{query, expanded_terms, hits}` shape as `GET /search`, so `find.html` renders both with the same code and the results stay editable, movable and askable.
+
+One request, not two: the server already widened per item, and there is nothing typed to debounce. The reading is left in the search box afterwards, so a wrong guess is edited rather than re-shot.
 
 ### Suggesting where a photographed part belongs
 

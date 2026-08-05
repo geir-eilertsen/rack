@@ -36,12 +36,10 @@ public class SuggestSlot {
         Map<Key, Bucket> buckets = new LinkedHashMap<>();
 
         for (Item queried : extracted) {
-            for (Match match : matchesFor(queried)) {
-                SearchHit hit = match.hit();
+            for (SearchHit hit : find.forPhotographed(queried).hits()) {
                 Key k = new Key(hit.container(), hit.slot());
                 Bucket b = buckets.computeIfAbsent(k, key -> new Bucket(key, hit.lastVerified()));
                 b.score += hit.score();
-                b.anchored |= match.anchoring();
                 if (!containsItem(b.matches, hit.item())) {
                     b.matches.add(hit.item());
                 }
@@ -49,52 +47,12 @@ public class SuggestSlot {
         }
 
         List<Suggestion> suggestions = buckets.values().stream()
-            .filter(b -> b.anchored)
             .sorted(Comparator.comparingDouble((Bucket b) -> -b.score))
             .limit(TOP_N)
             .map(b -> new Suggestion(b.key.container, b.key.slot, b.score, b.matches, b.lastVerified))
             .toList();
 
         return new Result(extracted, suggestions);
-    }
-
-    /**
-     * Filing has the same problem finding has: photograph a roll of tape, have
-     * the extractor call it "Insulating tape", and the drawer already holding
-     * "Electrical tape" never comes up — so the same roll gets filed twice.
-     *
-     * <p>The name is the short label the expander is built for, so it is the one
-     * query allowed to widen. The part number and the tags are already precise —
-     * and the tags are the extractor's own synonyms — so they stay literal, which
-     * caps a batch at one model call per extracted item, and only for the items
-     * whose name found nothing.
-     *
-     * <p>A name or part number <em>anchors</em> a slot; a tag only corroborates
-     * one. A tag is a single generic word, so the rule that every word must match
-     * can't discipline it: photograph a roll of tape and the tag "tape" alone
-     * scored the resistor drawer 66, because twenty-two of them come on tape
-     * reels. A tag can raise a slot the name already found and can't put one in
-     * the list on its own.
-     */
-    private List<Match> matchesFor(Item item) {
-        List<Match> matches = new ArrayList<>();
-        if (notBlank(item.partNumber())) add(matches, find.literal(item.partNumber()).hits(), true);
-        if (notBlank(item.name())) add(matches, find.smart(item.name()).hits(), true);
-        if (item.tags() != null) {
-            for (String tag : item.tags()) if (notBlank(tag)) add(matches, find.literal(tag).hits(), false);
-        }
-        return matches;
-    }
-
-    private static void add(List<Match> matches, List<SearchHit> hits, boolean anchoring) {
-        for (SearchHit hit : hits) matches.add(new Match(hit, anchoring));
-    }
-
-    /** Whether the term that found this hit can put a slot in the list, or only raise it. */
-    private record Match(SearchHit hit, boolean anchoring) {}
-
-    private static boolean notBlank(String s) {
-        return s != null && !s.isBlank();
     }
 
     private static boolean containsItem(List<Item> list, Item item) {
@@ -109,7 +67,6 @@ public class SuggestSlot {
         final Instant lastVerified;
         final List<Item> matches = new ArrayList<>();
         double score;
-        boolean anchored;
         Bucket(Key key, Instant lastVerified) {
             this.key = key;
             this.lastVerified = lastVerified;
