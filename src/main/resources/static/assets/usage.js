@@ -16,7 +16,11 @@
   }
 
   function render(u) {
-    if (!u || !u.calls) { foot.hidden = true; return; }
+    if (!u || !u.calls) {
+      foot.hidden = true;
+      document.body.classList.remove('has-usage');
+      return;
+    }
     const perModel = (u.models || [])
       .map(m => m.model + ': ' + count(m.input_tokens) + ' in, ' + count(m.output_tokens) + ' out'
         + ' over ' + m.calls + ' call' + (m.calls === 1 ? '' : 's'))
@@ -25,6 +29,7 @@
       + ' out · ' + u.calls + ' call' + (u.calls === 1 ? '' : 's');
     foot.title = perModel;          // the per-model split, for the curious
     foot.hidden = false;
+    document.body.classList.add('has-usage');
   }
 
   async function refresh() {

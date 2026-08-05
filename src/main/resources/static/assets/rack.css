@@ -430,16 +430,27 @@ label.field {
 .move-panel .move-body > .picker-label:first-child { margin-top: 0; }
 .move-panel .move-btn { display: block; width: 100%; margin-top: .6rem; }
 
-/* Running token tally, at the foot of every page. Deliberately quiet: it is
-   there to be glanced at, not read. */
+/* Running token tally, pinned to the bottom of the viewport. Deliberately
+   quiet: it is there to be glanced at, not read. */
 .usage {
-  max-width: 40rem;
-  margin: 2.5rem auto .75rem;
-  padding: 0 1rem;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  margin: 0;
+  /* The inset keeps it clear of the home indicator on a phone. */
+  padding: .5rem 1rem calc(.5rem + env(safe-area-inset-bottom, 0px));
   text-align: center;
   font-family: var(--font-mono);
   font-size: .72rem;
   letter-spacing: .02em;
   color: var(--muted);
-  opacity: .75;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 8px rgba(74, 45, 25, .05);
 }
+
+/* Only once there is a tally to show — an empty rack should not reserve the
+   space, and the last item on a page must not sit under the bar. */
+body.has-usage .container { padding-bottom: 4.5rem; }
