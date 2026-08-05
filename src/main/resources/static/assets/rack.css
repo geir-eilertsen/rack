@@ -429,3 +429,17 @@ label.field {
 .move-panel .move-body > .picker-label { margin-top: .5rem; }
 .move-panel .move-body > .picker-label:first-child { margin-top: 0; }
 .move-panel .move-btn { display: block; width: 100%; margin-top: .6rem; }
+
+/* Running token tally, at the foot of every page. Deliberately quiet: it is
+   there to be glanced at, not read. */
+.usage {
+  max-width: 40rem;
+  margin: 2.5rem auto .75rem;
+  padding: 0 1rem;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  letter-spacing: .02em;
+  color: var(--muted);
+  opacity: .75;
+}

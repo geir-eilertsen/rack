@@ -5,7 +5,10 @@ import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.port.PartIndex;
+import family.eilertsen.rack.domain.port.UsageLog;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -27,16 +30,19 @@ public class AskAboutItem {
 
     private final PartIndex index;
     private final ChatClient chat;
+    private final UsageLog usage;
     private final ChatOptions options;
 
     public AskAboutItem(
         PartIndex index,
         ChatClient.Builder builder,
+        UsageLog usage,
         @Value("${rack.ai.ask-model}") String model,
         @Value("${rack.ai.ask-max-tokens}") int maxTokens
     ) {
         this.index = index;
         this.chat = builder.build();
+        this.usage = usage;
         this.options = ChatOptions.builder().model(model).maxTokens(maxTokens).build();
     }
 
@@ -55,7 +61,9 @@ public class AskAboutItem {
 
         Item current = existing.items().get(itemIndex);
         String prompt = buildPrompt(current, question.trim());
-        String answer = chat.prompt().options(options).system(SYSTEM).user(prompt).call().content().strip();
+        ChatResponse response = chat.prompt().options(options).system(SYSTEM).user(prompt).call().chatResponse();
+        recordUsage(response);
+        String answer = response.getResult().getOutput().getText().strip();
 
         List<Item.QA> qa = new ArrayList<>(current.qa() == null ? List.of() : current.qa());
         qa.add(new Item.QA(question.trim(), answer, Instant.now()));
@@ -79,6 +87,16 @@ public class AskAboutItem {
             existing.photos(), existing.printedAt());
         index.save(container, saved);
         return saved;
+    }
+
+    /** Counted here rather than in an adapter because this call is made from here. */
+    private void recordUsage(ChatResponse response) {
+        ChatResponseMetadata metadata = response.getMetadata();
+        org.springframework.ai.chat.metadata.Usage tokens = metadata == null ? null : metadata.getUsage();
+        if (tokens == null) return;
+        Integer in = tokens.getPromptTokens();
+        Integer out = tokens.getCompletionTokens();
+        usage.record(metadata.getModel(), in == null ? 0 : in, out == null ? 0 : out);
     }
 
     private static String buildPrompt(Item item, String question) {

@@ -3,6 +3,7 @@ package family.eilertsen.rack.adapter.out.springai;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import family.eilertsen.rack.domain.port.QueryExpander;
+import family.eilertsen.rack.domain.port.UsageLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -57,16 +58,19 @@ public class SpringAiQueryExpander implements QueryExpander {
 
     private final ChatClient chat;
     private final ObjectMapper mapper;
+    private final UsageLog usage;
     private final ChatOptions options;
 
     public SpringAiQueryExpander(
         ChatClient.Builder builder,
         ObjectMapper mapper,
+        UsageLog usage,
         @Value("${rack.ai.expansion-model}") String model,
         @Value("${rack.ai.expansion-max-tokens}") int maxTokens
     ) {
         this.chat = builder.build();
         this.mapper = mapper;
+        this.usage = usage;
         // Synonyms are a small, fast job — a cheaper model than the vision
         // extractor keeps a mid-typing search from waiting on the big one.
         this.options = ChatOptions.builder().model(model).maxTokens(maxTokens).build();
@@ -79,7 +83,7 @@ public class SpringAiQueryExpander implements QueryExpander {
         String prompt = PROMPT.formatted(query.strip(), vocabularyList(vocabulary), MAX_TERMS);
         String reply;
         try {
-            reply = chat.prompt().options(options).user(prompt).call().content();
+            reply = SpringAi.tally(chat.prompt().options(options).user(prompt).call().chatResponse(), usage);
         } catch (RuntimeException e) {
             // No API key, rate limit, network — search still has its literal hits.
             log.warn("Query expansion unavailable for \"{}\": {}", query, e.toString());

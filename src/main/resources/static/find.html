@@ -142,6 +142,7 @@
         // Nothing to show yet when the literal pass came up empty, so render
         // whatever the widened pass found — including that it found nothing.
         if (widening || (result.expanded_terms && result.expanded_terms.length)) renderResult(result);
+        if (window.rackUsage) rackUsage.refresh();
       } catch (e) {
         if (e.name === 'AbortError') return;
         if (widening && q.value.trim() === query) renderHits([], query, []);
@@ -181,6 +182,7 @@
         const result = await res.json();
         q.value = result.query || '';        // leave the reading behind to edit
         renderResult(result);
+        if (window.rackUsage) rackUsage.refresh();
       } catch (e) {
         status.className = 'status error';
         status.textContent = 'Photo search failed: ' + e.message;
@@ -487,6 +489,7 @@
         const latestItem = slotData.items[+index];
         const latestQA = (latestItem.qa || []).slice(-1)[0];
         appendQaEntry(li, latestQA);
+        if (window.rackUsage) rackUsage.refresh();
       } catch (e) {
         status.className = 'status error';
         status.textContent = 'Ask failed: ' + e.message;
@@ -558,5 +561,6 @@
 
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   </script>
+  <script src="/assets/usage.js" defer></script>
 </body>
 </html>

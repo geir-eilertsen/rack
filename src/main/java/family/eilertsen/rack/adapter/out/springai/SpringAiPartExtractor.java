@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import family.eilertsen.rack.domain.model.Extraction;
 import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.port.PartExtractor;
+import family.eilertsen.rack.domain.port.UsageLog;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.content.Media;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,16 +53,19 @@ public class SpringAiPartExtractor implements PartExtractor {
 
     private final ChatClient chat;
     private final ObjectMapper mapper;
+    private final UsageLog usage;
     private final ChatOptions options;
 
     public SpringAiPartExtractor(
         ChatClient.Builder builder,
         ObjectMapper mapper,
+        UsageLog usage,
         @Value("${rack.ai.extraction-model}") String model,
         @Value("${rack.ai.extraction-max-tokens}") int maxTokens
     ) {
         this.chat = builder.build();
         this.mapper = mapper;
+        this.usage = usage;
         // Named here rather than left to the shared default: this is the call
         // whose model choice decides whether the index is true.
         this.options = ChatOptions.builder().model(model).maxTokens(maxTokens).build();
@@ -81,11 +86,12 @@ public class SpringAiPartExtractor implements PartExtractor {
 
         String prompt = PROMPT.formatted(images.size(), images.size() - 1);
 
-        String reply = chat.prompt()
+        ChatResponse response = chat.prompt()
             .options(options)
             .user(u -> u.text(prompt).media(media))
             .call()
-            .content();
+            .chatResponse();
+        String reply = SpringAi.tally(response, usage);
 
         String json = SpringAi.stripCodeFences(reply);
         try {

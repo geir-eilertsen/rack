@@ -47,6 +47,12 @@ Photos are resized client-side to **1568px**, the longest edge the vision model 
 
 Claude has native vision, so the multipart-photo flow uses the same `ChatClient` API as any other model.
 
+### What it has cost
+
+Every model call reports its token usage, and `JsonFileUsageLog` adds it up per model into `data/usage.json` — written the same way slot state is, to a `.tmp` and moved atomically. Per model rather than in total because the models are priced an order of magnitude apart, so the split is the part that tells you which call is doing the spending.
+
+`GET /usage` serves the tally; `assets/usage.js` puts it at the foot of every page, and pages that make a model call refresh it afterwards so the number moves while you watch. The count is read from each response rather than assumed from config, so it stays honest when a model is overridden by env var. Nothing about the tally can break the call it is counting: an unreadable file is logged and ignored at boot, and a failed write still counts in memory.
+
 ## Purpose
 
 Small-parts inventory system. Photograph the contents of a slot in a physical storage container, a vision model extracts what's there into structured JSON, everything is searchable. Originally a rack of 60 drawers (5×12, A1–E12) — now generic over arbitrary containers (see #17). The photo is ground truth; the extracted data is an index over it.

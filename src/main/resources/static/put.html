@@ -394,6 +394,7 @@
         const latestItem = slot.items[idx];
         const latestQA = (latestItem.qa || []).slice(-1)[0];
         appendQaEntry(li, latestQA);
+        if (window.rackUsage) rackUsage.refresh();
       } catch (e) {
         setStatus('error', 'Ask failed: ' + e.message);
       } finally {
@@ -627,6 +628,7 @@
         pickHeading.hidden = false;
         manual.open = !(data.suggestions && data.suggestions.length);
         setStatus('ok', 'Ready to file.');
+        if (window.rackUsage) rackUsage.refresh();
       } catch (e) {
         setStatus('error', 'Failed: ' + e.message);
       } finally {
@@ -756,6 +758,7 @@
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const data = await res.json();
         const items = (data.extracted || []).length;
+        if (window.rackUsage) rackUsage.refresh();
         setStatus('ok', '✓ Filed ' + items + ' item' + (items === 1 ? '' : 's') + ' from '
           + count + ' photo' + (count === 1 ? '' : 's') + ' into ' + containerId + '.' + slotId + '.');
         clearPending();
@@ -793,5 +796,6 @@
       return new Promise(resolve => canvas.toBlob(b => resolve(new File([b], 'photo.jpg', { type: 'image/jpeg' })), 'image/jpeg', quality));
     }
   </script>
+  <script src="/assets/usage.js" defer></script>
 </body>
 </html>
