@@ -1,22 +1,23 @@
 package family.eilertsen.rack.domain.port;
 
-import family.eilertsen.rack.domain.model.ContainerId;
-import family.eilertsen.rack.domain.model.SlotId;
-
-import java.util.List;
-
+/**
+ * Photographs, kept in one place rather than under the slot they were taken of.
+ *
+ * <p>A frame is a picture of some things that happened to be in a drawer at a
+ * moment, and filing it under that drawer encodes an ownership that stops being
+ * true twice over: eighteen frames in this rack are referenced by more than one
+ * item, one of them by twenty-two, and an item that moves takes its references
+ * with it. When the file lived under the slot, those references resolved against
+ * the new drawer's directory and answered 404 — so a moved item had to be
+ * stripped of its photographs to avoid showing a broken one.
+ */
 public interface ImageStore {
-    String store(ContainerId container, SlotId slot, byte[] image, String contentType);
 
-    byte[] read(ContainerId container, SlotId slot, String filename);
+    /** Returns the filename it was stored under, which is unique across the rack. */
+    String store(byte[] image, String contentType);
 
-    List<String> list(ContainerId container, SlotId slot);
+    byte[] read(String filename);
 
-    /**
-     * Drops a frame the slot no longer records. A photo that has already gone —
-     * hand-deleted, or a resync run twice — is the state this asks for, so it is
-     * not an error: refiling a drawer must never fail over a file that was
-     * already absent.
-     */
-    void delete(ContainerId container, SlotId slot, String filename);
+    /** Deleting a file that is already gone is not an error. */
+    void delete(String filename);
 }

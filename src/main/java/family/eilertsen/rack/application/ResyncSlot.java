@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Re-photographs a slot to answer "this is what is in here <em>now</em>".
@@ -101,7 +102,7 @@ public class ResyncSlot {
         // The capture page re-encodes every frame to JPEG on its way out, so the
         // batch is bytes without a type of its own by the time it reaches here.
         List<String> filenames = photos.stream()
-            .map(p -> images.store(container, slotId, p, "image/jpeg"))
+            .map(p -> images.store(p, "image/jpeg"))
             .toList();
 
         List<Item> items = new ArrayList<>();
@@ -126,9 +127,14 @@ public class ResyncSlot {
         // Only once the new state is recorded. A crash between the two leaves an
         // orphan file, which is nothing; the other order leaves the index naming
         // a photo that no longer exists, which is a broken drawer.
+        // One folder for the whole rack means a frame this drawer is done with may
+        // still be the only picture some other drawer's item has — eighteen frames
+        // here are referenced by more than one item. So ask the index what is
+        // still spoken for before removing anything.
+        Set<String> stillInUse = index.photosInUse();
         List<String> before = existing.photos() == null ? List.of() : existing.photos();
         for (String old : before) {
-            if (!filenames.contains(old)) images.delete(container, slotId, old);
+            if (!filenames.contains(old) && !stillInUse.contains(old)) images.delete(old);
         }
 
         return updated;

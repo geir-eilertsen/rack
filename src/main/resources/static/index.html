@@ -20,6 +20,19 @@
 
     <p class="callout" id="tip">Tip: scan a drawer's QR code with your phone camera to jump straight to that slot.</p>
 
+    <!-- Straight to a drawer, for when you know where you are going and the
+         QR label is on the other side of the room. -->
+    <div class="jump" id="jump" hidden>
+      <label class="picker-label" for="jumpContainer">Go to a drawer</label>
+      <div class="jump-row">
+        <select id="jumpContainer"></select>
+        <input id="jumpSlot" type="text" inputmode="text" autocomplete="off" placeholder="slot, e.g. B7" list="jumpSlots">
+        <datalist id="jumpSlots"></datalist>
+        <button class="btn primary" id="jumpGo" type="button">Go</button>
+      </div>
+      <p class="jump-hint" id="jumpHint"></p>
+    </div>
+
     <ul class="cards">
       <li>
         <a class="card" href="/find.html">
@@ -45,7 +58,74 @@
       </li>
     </ul>
   </div>
+  <style>
+    .jump { margin-bottom: 1.25rem; }
+    .jump-row { display: flex; gap: .4rem; }
+    .jump-row select { flex: 1 1 45%; min-width: 0; }
+    .jump-row input { flex: 1 1 40%; min-width: 0; font-family: var(--font-mono); text-transform: uppercase; }
+    .jump-row .btn { flex: 0 0 auto; }
+    .jump-hint { margin: .4rem 0 0; font-size: .78rem; color: var(--muted); min-height: 1.1em; }
+    .jump-hint.error { color: var(--error); }
+  </style>
   <script>
+    // Straight to a drawer. Slot ids are the drawer's own labels ("B7", "3"),
+    // so the container picks the vocabulary and the box completes against it.
+    (function () {
+      const jump = document.getElementById('jump');
+      const pick = document.getElementById('jumpContainer');
+      const slot = document.getElementById('jumpSlot');
+      const list = document.getElementById('jumpSlots');
+      const go = document.getElementById('jumpGo');
+      const hint = document.getElementById('jumpHint');
+      let containers = [];
+
+      fetch('/c').then(r => r.ok ? r.json() : []).then(list => {
+        containers = list;
+        if (!containers.length) return;          // nothing registered yet
+        pick.innerHTML = containers
+          .map(c => '<option value="' + esc(c.id) + '">' + esc(c.name || c.id) + '</option>').join('');
+        jump.hidden = false;
+        drawSlots();
+      }).catch(() => {});
+
+      function current() { return containers.find(c => c.id === pick.value); }
+
+      function drawSlots() {
+        const c = current();
+        const slots = (c && c.slots) || [];
+        list.innerHTML = slots.map(s => '<option value="' + esc(s) + '"></option>').join('');
+        hint.className = 'jump-hint';
+        hint.textContent = slots.length
+          ? slots.length + ' slots, ' + slots[0] + ' to ' + slots[slots.length - 1]
+          : '';
+      }
+
+      function open() {
+        const c = current();
+        if (!c) return;
+        const wanted = slot.value.trim();
+        if (!wanted) { slot.focus(); return; }
+        // Match the drawer's own casing rather than insisting on it: the label
+        // says B7 and a phone keyboard will happily offer b7.
+        const real = (c.slots || []).find(s => s.toLowerCase() === wanted.toLowerCase());
+        if (!real) {
+          hint.className = 'jump-hint error';
+          hint.textContent = 'No slot "' + wanted + '" in ' + (c.name || c.id) + '.';
+          return;
+        }
+        location.href = '/put.html?c=' + encodeURIComponent(c.id) + '&s=' + encodeURIComponent(real);
+      }
+
+      pick.addEventListener('change', () => { slot.value = ''; drawSlots(); });
+      go.addEventListener('click', open);
+      slot.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); open(); } });
+      slot.addEventListener('input', () => { hint.className = 'jump-hint'; drawSlots(); });
+
+      function esc(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      }
+    })();
+
     // A different tip each visit. Every one of these is something the app
     // actually does — a tip that overstates it is worse than no tip.
     const TIPS = [

@@ -63,7 +63,7 @@ class AddPhotoEndpointTest {
         AddPhotoToSlot addPhoto = new AddPhotoToSlot(images, extractor, new FakeIndex());
         ContainerController controller = new ContainerController(
             new ContainerRegistry(store), new FakeIndex(), addPhoto,
-            null, null, null, null, null, null, null, null, images);
+            null, null, null, null, null, null, null, null);
         // Match the app's snake_case output so the assertions below are the
         // wire contract the browser sees, not a MockMvc default.
         ObjectMapper mapper = new ObjectMapper()
@@ -113,24 +113,20 @@ class AddPhotoEndpointTest {
         private final List<String> stored = new ArrayList<>();
 
         @Override
-        public String store(ContainerId container, SlotId slot, byte[] image, String contentType) {
+        public String store(byte[] image, String contentType) {
             String marker = new String(image, StandardCharsets.UTF_8);
             stored.add(marker);
             return marker + ".jpg";
         }
 
         @Override
-        public byte[] read(ContainerId container, SlotId slot, String filename) {
+        public byte[] read(String filename) {
             return new byte[0];
         }
 
-        @Override
-        public List<String> list(ContainerId container, SlotId slot) {
-            return List.copyOf(stored);
-        }
 
         @Override
-        public void delete(ContainerId container, SlotId slot, String filename) {
+        public void delete(String filename) {
             stored.remove(filename);
         }
     }
@@ -176,6 +172,11 @@ class AddPhotoEndpointTest {
         @Override
         public List<SearchHit> searchBySimilarity(float[] queryVector, int topK) {
             return List.of();
+        }
+
+        @Override
+        public Set<String> photosInUse() {
+            return Set.of();
         }
 
         @Override

@@ -53,7 +53,7 @@ docker run --rm -p 8080:8080 \
 
 Spring Boot, Java 21, hexagonal — three ports, all swappable: `ImageStore`, `PartExtractor`, `PartIndex`. An ArchUnit test enforces the layering, keeps the domain free of any framework import, and fails the build on a package cycle.
 
-**No database.** Sixty slots of twenty items is about 1,200 records — a data structure, not a database. State is one JSON file per slot, written to a `.tmp` and moved atomically. `grep -ri "BC547" data/` is a valid diagnostic, and fixing a mislabelled part is a text edit. There are no schema migrations: fields get added and their absence tolerated, so a record written before a field existed still reads.
+**No database.** Sixty slots of twenty items is about 1,200 records — a data structure, not a database. Photographs live in one folder for the whole rack rather than under the drawer they were taken of: a frame often shows several things, and an item that moves keeps its pictures. State is one JSON file per slot, written to a `.tmp` and moved atomically. `grep -ri "BC547" data/` is a valid diagnostic, and fixing a mislabelled part is a text edit. There are no schema migrations: fields get added and their absence tolerated, so a record written before a field existed still reads.
 
 **Different models for different jobs.** Reading photographs is worth paying for — asked to read a tool drawer, a cheaper model returned a part number that wasn't there, at high confidence, which is precisely the drift the design exists to prevent. Expanding a search query is a synonym lookup and runs on the cheapest model available. Each is a separate setting.
 

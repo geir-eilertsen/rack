@@ -38,7 +38,7 @@ public class AddPhotoToSlot {
         }
 
         List<String> filenames = photos.stream()
-            .map(p -> images.store(container, slot, p.bytes(), p.contentType()))
+            .map(p -> images.store(p.bytes(), p.contentType()))
             .toList();
 
         List<Extraction> extractions = extractor.extract(photos.stream().map(Photo::bytes).toList());

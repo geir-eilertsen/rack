@@ -1,7 +1,5 @@
 package family.eilertsen.rack.adapter.out.filesystem;
 
-import family.eilertsen.rack.domain.model.ContainerId;
-import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.port.ImageStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -14,78 +12,74 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.stream.Stream;
 
 @Component
 public class FilesystemImageStore implements ImageStore {
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm-ss");
 
-    private final Path dataDir;
+    /** One folder for the whole rack: a frame belongs to what it shows, not to a drawer. */
+    private final Path photoDir;
 
     public FilesystemImageStore(@Value("${rack.data-dir}") String dataDir) throws IOException {
-        this.dataDir = Path.of(dataDir).toAbsolutePath();
-        Files.createDirectories(this.dataDir);
+        this.photoDir = Path.of(dataDir).toAbsolutePath().resolve("photos");
+        Files.createDirectories(this.photoDir);
     }
 
     @Override
-    public String store(ContainerId container, SlotId slot, byte[] image, String contentType) {
+    public String store(byte[] image, String contentType) {
         try {
-            Path dir = photoDir(container, slot);
-            Files.createDirectories(dir);
             String stamp = LocalDateTime.now().format(STAMP);
             String extension = extensionFor(contentType);
-            // A batch of photos of one slot arrives inside the same second, so the
-            // timestamp alone is not unique. Suffix until the name is free. The
+            // A batch arrives inside the same second, so the timestamp alone is
+            // not unique — and now that every drawer shares one folder, two
+            // drawers photographed at once would collide too. Suffix until the name is free. The
             // separator is '_' rather than '-' because '_' sorts after '.', so
             // "…-12_1.jpg" follows "…-12.jpg" and listing keeps capture order.
             for (int n = 0; n < 1000; n++) {
                 String filename = (n == 0 ? stamp : stamp + "_" + n) + extension;
                 try {
-                    Files.write(dir.resolve(filename), image, StandardOpenOption.CREATE_NEW);
+                    Files.write(photoDir.resolve(filename), image, StandardOpenOption.CREATE_NEW);
                     return filename;
                 } catch (FileAlreadyExistsException taken) {
                     // next suffix
                 }
             }
-            throw new IllegalStateException("Cannot find a free filename for " + stamp + " in " + dir);
+            throw new IllegalStateException("Cannot find a free filename for " + stamp + " in " + photoDir);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     @Override
-    public byte[] read(ContainerId container, SlotId slot, String filename) {
+    public byte[] read(String filename) {
         try {
-            return Files.readAllBytes(photoDir(container, slot).resolve(filename));
+            return Files.readAllBytes(resolve(filename));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     @Override
-    public List<String> list(ContainerId container, SlotId slot) {
-        Path dir = photoDir(container, slot);
-        if (!Files.isDirectory(dir)) return List.of();
-        try (Stream<Path> s = Files.list(dir)) {
-            return s.filter(Files::isRegularFile).map(p -> p.getFileName().toString()).sorted().toList();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public void delete(ContainerId container, SlotId slot, String filename) {
+    public void delete(String filename) {
         try {
-            Files.deleteIfExists(photoDir(container, slot).resolve(filename));
+            Files.deleteIfExists(resolve(filename));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
-    private Path photoDir(ContainerId container, SlotId slot) {
-        return dataDir.resolve(container.value()).resolve(slot.value());
+    /**
+     * Refuses anything that is not a plain filename. The name reaches here from
+     * a URL, and one folder for the whole rack means a {@code ../} would walk
+     * out of the data directory rather than merely into the next drawer.
+     */
+    private Path resolve(String filename) {
+        if (filename == null || filename.isBlank() || filename.contains("/") || filename.contains("\\")
+            || filename.contains("..")) {
+            throw new IllegalArgumentException("Not a photo filename: " + filename);
+        }
+        return photoDir.resolve(filename);
     }
 
     private static String extensionFor(String contentType) {

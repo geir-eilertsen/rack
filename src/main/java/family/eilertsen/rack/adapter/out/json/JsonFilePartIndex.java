@@ -198,6 +198,23 @@ public class JsonFilePartIndex implements PartIndex {
         return words;
     }
 
+    @Override
+    public Set<String> photosInUse() {
+        Set<String> used = new LinkedHashSet<>();
+        for (Map<SlotId, Slot> slots : byContainer.values()) {
+            for (Slot slot : slots.values()) {
+                if (slot.photos() != null) used.addAll(slot.photos());
+                for (Item item : slot.items()) {
+                    // Both, because an item that has moved carries its frames
+                    // without its old drawer's photo list following it.
+                    if (item.sourcePhoto() != null) used.add(item.sourcePhoto());
+                    if (item.seenIn() != null) used.addAll(item.seenIn());
+                }
+            }
+        }
+        return used;
+    }
+
     /** Items catalogued before the name/description split have only a description — clip it. */
     private static String label(Item item) {
         if (item.name() != null && !item.name().isBlank()) return item.name();

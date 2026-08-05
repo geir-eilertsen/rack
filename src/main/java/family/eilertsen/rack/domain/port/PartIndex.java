@@ -26,4 +26,14 @@ public interface PartIndex {
      * The words this rack actually uses, for grounding a {@link QueryExpander}.
      */
     Set<String> vocabulary();
+
+    /**
+     * Every photo filename anything still points at, across every container.
+     *
+     * <p>Photographs are kept in one folder for the whole rack, so a frame one
+     * drawer is finished with may be the only picture another drawer's item
+     * has. Deleting is only safe against this answer, not against one slot's
+     * own list.
+     */
+    Set<String> photosInUse();
 }

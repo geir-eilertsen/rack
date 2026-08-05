@@ -103,13 +103,19 @@ Order of magnitude: ~60 slots × ~20 items = ~1,200 items per container. That's 
 
 ```
 data/
+  photos/                # every photograph, for the whole rack
+    2026-08-04-1712.jpg
   <container>/
     <slot>.json          # slot state (items, photos list, last_verified, printed_at)
-    <slot>/              # photos for this slot
-      2026-08-04-1712.jpg
     labels/
       2026-08-04-1712.pdf   # archived label sheet from each print run
 ```
+
+**Photographs are not filed under the drawer they were taken of.** A frame is a picture of some things that happened to be in a drawer at a moment, and putting it under that drawer encodes an ownership that stops being true twice over: 18 frames in this rack are referenced by more than one item, one of them by 22, and an item that moves takes its references with it. While the file lived under the slot, a moved item's references resolved against the *new* drawer's directory and answered 404 — so `MoveItem` had to strip an item of its photographs to avoid showing a broken one. Now they simply follow it.
+
+`Slot.photos` survives as *frames taken of this drawer* — what the fallback strip shows and what a resync replaces. It no longer implies ownership of the files. `GET /photos/{filename}` serves them flat, and the filename is validated as a bare name: one folder for the whole rack means a `../` would walk out of the data directory rather than merely into the next drawer.
+
+**Deleting a frame is now a question about the whole rack, not one slot.** A resync asks `PartIndex.photosInUse()` first, because the frames it is finished with may be the only picture another drawer's item has.
 
 - `JsonFilePartIndex` walks `data/<container>/*.json` at startup into `Map<ContainerId, Map<SlotId, Slot>>`.
 - Writes: serialise to `<slot>.json.tmp`, then `Files.move` with `ATOMIC_MOVE`. Single writer on a single box.

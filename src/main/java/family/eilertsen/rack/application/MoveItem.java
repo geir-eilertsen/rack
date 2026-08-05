@@ -43,9 +43,9 @@ public class MoveItem {
         }
 
         Item original = src.items().get(itemIndex);
-        // Drop source_photo: the photo file lives in the source slot's directory
-        // and may have captured other items. User can re-photograph in the new
-        // location if they want a visual.
+        // The frames come with it, untouched. Photographs live in one folder for
+        // the whole rack, so a reference is still a reference from the new
+        // drawer — which is the point of keeping them there.
         Item moved = new Item(
             original.name(),
             original.description(),
@@ -56,9 +56,8 @@ public class MoveItem {
             original.tags(),
             original.embedding(),
             original.qa(),
-            // The frames stay in the slot the item came from.
-            null,
-            null
+            original.sourcePhoto(),
+            original.seenIn()
         );
 
         Instant now = Instant.now();

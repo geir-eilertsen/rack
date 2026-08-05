@@ -395,8 +395,10 @@
       '</div></div>';
     }
 
+    // Photographs live in one folder for the whole rack, so the drawer is not
+    // part of the address — which is what lets a moved item keep its pictures.
     function photoUrl(fn) {
-      return '/c/' + encodeURIComponent(selectedContainer.id) + '/' + encodeURIComponent(selectedSlot) + '/photos/' + encodeURIComponent(fn);
+      return '/photos/' + encodeURIComponent(fn);
     }
 
     // Taking stock from the row itself. Each tap moves the number at once and

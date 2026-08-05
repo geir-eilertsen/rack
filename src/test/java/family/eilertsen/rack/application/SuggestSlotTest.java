@@ -199,6 +199,11 @@ class SuggestSlotTest {
         }
 
         @Override
+        public Set<String> photosInUse() {
+            return Set.of();
+        }
+
+        @Override
         public Set<String> vocabulary() {
             return Set.of("Electrical tape");
         }

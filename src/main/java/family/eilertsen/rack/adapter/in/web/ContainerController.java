@@ -14,7 +14,6 @@ import family.eilertsen.rack.domain.model.Container;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
-import family.eilertsen.rack.domain.port.ImageStore;
 import family.eilertsen.rack.domain.port.PartIndex;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -50,13 +49,12 @@ public class ContainerController {
     private final MoveItem moveItem;
     private final MergeItems mergeItems;
     private final AskAboutItem askAboutItem;
-    private final ImageStore images;
 
     public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto,
                                 RegisterContainer registerContainer, UpdateContainer updateContainer,
                                 DeleteContainer deleteContainer, RemoveItem removeItem,
                                 EditItem editItem, MoveItem moveItem, MergeItems mergeItems,
-                                AskAboutItem askAboutItem, ImageStore images) {
+                                AskAboutItem askAboutItem) {
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
@@ -68,7 +66,6 @@ public class ContainerController {
         this.moveItem = moveItem;
         this.mergeItems = mergeItems;
         this.askAboutItem = askAboutItem;
-        this.images = images;
     }
 
     @GetMapping
@@ -258,27 +255,6 @@ public class ContainerController {
     }
 
     public record AskRequest(String question) {}
-
-    @GetMapping("/{container}/{slot}/photos/{filename}")
-    public ResponseEntity<byte[]> getPhoto(@PathVariable String container,
-                                            @PathVariable String slot,
-                                            @PathVariable String filename) {
-        ContainerId cid = new ContainerId(container);
-        SlotId sid = new SlotId(slot);
-        requireContainerExists(cid);
-
-        Slot s = index.get(cid, sid).orElseThrow(() ->
-            new ResponseStatusException(HttpStatus.NOT_FOUND, "No slot state: " + container + "/" + slot));
-        if (!s.photos().contains(filename)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No such photo: " + filename);
-        }
-
-        byte[] bytes = images.read(cid, sid, filename);
-        MediaType type = filename.toLowerCase().endsWith(".png")
-            ? MediaType.IMAGE_PNG
-            : MediaType.IMAGE_JPEG;
-        return ResponseEntity.ok().contentType(type).body(bytes);
-    }
 
     private void requireContainerExists(ContainerId id) {
         registry.get(id)

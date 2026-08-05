@@ -68,6 +68,14 @@
     .strip .badge { position: absolute; left: 0; right: 0; bottom: 0; padding: .1rem 0; text-align: center;
       background: var(--primary); color: #fff; font-size: .6rem; line-height: 1.4; letter-spacing: .03em;
       border-radius: 0 0 var(--radius-xs) var(--radius-xs); }
+    /* Same manual merge as the slot page. The targets cannot come from the
+       search results — a group holds only this slot's matching rows, and you
+       may well be merging into one that did not match. */
+    .merge-panel { margin-top: .6rem; }
+    .merge-panel summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--primary-hover); padding: .3rem 0; }
+    .merge-body { padding: .4rem 0 .2rem; }
+    .merge-hint { margin: 0 0 .5rem; font-size: .8rem; color: var(--muted); }
+    .merge-targets .merge-into { margin-bottom: .35rem; text-align: left; width: 100%; }
     .ai { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--border); }
     .ai h4 { margin: 0 0 .4rem; font-size: .7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
     .ai-input { display: flex; gap: .3rem; }
@@ -465,8 +473,10 @@
       '</div></div>';
     }
 
-    function photoUrl(container, slot, fn) {
-      return '/c/' + encodeURIComponent(container) + '/' + encodeURIComponent(slot) + '/photos/' + encodeURIComponent(fn);
+    // Photographs live in one folder for the whole rack, so the drawer is not
+    // part of the address — which is what lets a moved item keep its pictures.
+    function photoUrl(fn) {
+      return '/photos/' + encodeURIComponent(fn);
     }
 
     function renderHitItem(h, g) {
@@ -475,7 +485,7 @@
       const qty = it.qty_estimate == null ? 1 : it.qty_estimate;
       const tagsCsv = (it.tags || []).join(', ');
       const thumb = it.source_photo
-        ? '<a href="' + photoUrl(g.container, g.slot, it.source_photo) + '" target="_blank" onclick="event.stopPropagation()"><img class="thumb" src="' + photoUrl(g.container, g.slot, it.source_photo) + '" alt=""></a>'
+        ? '<a href="' + photoUrl(it.source_photo) + '" target="_blank" onclick="event.stopPropagation()"><img class="thumb" src="' + photoUrl(it.source_photo) + '" alt=""></a>'
         : '<div class="thumb-placeholder" title="no photo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg></div>';
       return '<li data-container="' + esc(g.container) + '" data-slot="' + esc(g.slot) + '" data-index="' + h.index + '">' +
         '<div class="row">' +
@@ -504,7 +514,7 @@
             '<button class="btn primary save">Save</button>' +
             '<button class="remove" title="Remove this item">Remove</button>' +
           '</div>' +
-          photoStrip(it, g.photos, fn => photoUrl(g.container, g.slot, fn)) +
+          photoStrip(it, g.photos, photoUrl) +
           '<div class="ai">' +
             '<h4>Ask AI about this item</h4>' +
             renderQaLog(it.qa || []) +
@@ -513,6 +523,13 @@
               '<button class="btn ask-btn">Ask</button>' +
             '</div>' +
           '</div>' +
+          '<details class="merge-panel">' +
+            '<summary>Merge into another item here…</summary>' +
+            '<div class="merge-body">' +
+              '<p class="merge-hint">Adds this row\'s count and photos into the one you pick, and removes this row. The other row\'s wording is kept.</p>' +
+              '<div class="merge-targets"></div>' +
+            '</div>' +
+          '</details>' +
           '<details class="move-panel">' +
             '<summary>Move to another slot…</summary>' +
             '<div class="move-body">' +
@@ -604,7 +621,69 @@
       hits.querySelectorAll('.remove').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); removeHit(b.closest('li')); }));
       hits.querySelectorAll('.ask-btn').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); askHit(b.closest('li')); }));
       hits.querySelectorAll('.ai-q').forEach(inp => inp.addEventListener('click', e => e.stopPropagation()));
+      hits.querySelectorAll('.merge-panel').forEach(panel => wireMergePanel(panel));
       hits.querySelectorAll('.move-panel').forEach(panel => wireMovePanel(panel));
+    }
+
+    // Whether two rows are the same thing is a person's judgement, so this only
+    // lists the drawer's other rows and does what it is told.
+    function wireMergePanel(panel) {
+      const host = panel.querySelector('.merge-targets');
+      const li = panel.closest('li');
+      const { container, slot } = li.dataset;
+      const from = +li.dataset.index;
+      panel.addEventListener('click', ev => ev.stopPropagation());
+      panel.addEventListener('toggle', async () => {
+        if (!panel.open || host.children.length) return;
+        host.innerHTML = '<p class="merge-hint">Loading…</p>';
+        let items = [];
+        try {
+          const res = await fetch('/c/' + container + '/' + slot);
+          if (res.ok) items = (await res.json()).items || [];
+        } catch (e) { /* handled below */ }
+        // Every row in the drawer, not just the ones that matched the search:
+        // the thing you are merging into may not be a hit at all.
+        const others = items.map((it, idx) => ({ it, idx })).filter(o => o.idx !== from);
+        if (!others.length) {
+          host.innerHTML = '<p class="merge-hint">Nothing else in this drawer to merge into.</p>';
+          return;
+        }
+        host.innerHTML = '';
+        others.forEach(o => {
+          const qty = o.it.qty_estimate == null ? 1 : o.it.qty_estimate;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn block merge-into';
+          btn.textContent = 'Merge into ' + itemName(o.it) + ' (×' + qty + ')';
+          btn.addEventListener('click', ev => { ev.stopPropagation(); mergeInto(container, slot, from, o.idx, btn); });
+          host.appendChild(btn);
+        });
+      });
+    }
+
+    async function mergeInto(container, slot, from, into, btn) {
+      const original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Merging…';
+      try {
+        const res = await fetch('/c/' + container + '/' + slot + '/items/' + from + '/merge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ into })
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        status.className = 'status ok';
+        // The kept wording was written for the smaller count, and the row it is
+        // on has just moved — re-run the search rather than patch the list.
+        status.textContent = '✓ Merged in ' + containerName(container) + ' · ' + slot
+          + '. Open it to check the description still fits.';
+        runSearch();
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = original;
+        status.className = 'status error';
+        status.textContent = 'Merge failed: ' + e.message;
+      }
     }
 
     function wireMovePanel(panel) {
