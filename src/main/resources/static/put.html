@@ -83,6 +83,13 @@
        so the whole proposal is on screen and the consequence is spelled out
        above the button that does it. */
     #resyncBar { margin-top: .75rem; }
+    /* Ten more of something the drawer already holds is one thing in two rows.
+       Offered, never taken — two bags of black heat shrink may not be one bag. */
+    .join { margin-top: .75rem; padding: .8rem .9rem; border: 1px solid var(--primary); border-radius: var(--radius-sm); background: var(--primary-soft); }
+    .join p { margin: 0 0 .55rem; font-size: .9rem; }
+    .join .sums { font-family: var(--font-mono); font-weight: 700; color: var(--primary-hover); }
+    .join .actions { display: flex; gap: .4rem; }
+    .join .actions .btn { flex: 1; }
     .resync-hint { font-size: .8rem; color: var(--muted); margin: .4rem 0 0; }
     .resync { margin-top: 1rem; padding: .9rem 1rem 1rem; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); }
     .resync .settled { margin-bottom: .9rem; padding: .6rem .8rem; background: var(--success-soft); color: var(--success); border-radius: var(--radius-sm); font-size: .88rem; }
@@ -122,6 +129,8 @@
 
     <h2 id="currentHeading" hidden>What's already here</h2>
     <ul class="current" id="current"></ul>
+
+    <div id="joinPanel" class="join" hidden></div>
 
     <div id="resyncBar" hidden>
       <button type="button" class="btn block" id="resyncBtn">Resync this drawer</button>
@@ -170,6 +179,7 @@
     const slotHeader = document.getElementById('slotHeader');
     const currentHeading = document.getElementById('currentHeading');
     const currentEl = document.getElementById('current');
+    const joinPanel = document.getElementById('joinPanel');
     const resyncBar = document.getElementById('resyncBar');
     const resyncBtn = document.getElementById('resyncBtn');
     const resyncHint = document.getElementById('resyncHint');
@@ -474,8 +484,74 @@
 
     let slotPhotos = [];
 
+    // Filing appends, so ten more of something already in the drawer lands as a
+    // second row. Joining them is offered rather than done: two bags of black
+    // heat shrink may genuinely be two bags, and the app cannot tell.
+    let pendingJoin = null;
+
+    function offerJoin(containerId, slotId, duplicates) {
+      // Held rather than painted straight away: filing re-renders the item list
+      // a moment later, and an offer painted before that would be wiped by it.
+      pendingJoin = duplicates.length ? { containerId, slotId, duplicates } : null;
+      showJoin();
+    }
+
+    function showJoin() {
+        joinPanel.hidden = !pendingJoin;
+        if (!pendingJoin) return;
+        const { containerId, slotId, duplicates } = pendingJoin;
+        joinPanel.innerHTML = duplicates.map(d => {
+          const was = d.existing.qty_estimate == null ? 1 : d.existing.qty_estimate;
+          const more = d.added.qty_estimate == null ? 1 : d.added.qty_estimate;
+          return '<p>This drawer already held <strong>' + esc(itemName(d.existing)) + '</strong>. '
+            + 'It is now two rows: <span class="sums">×' + was + '</span> and <span class="sums">×' + more + '</span>.</p>'
+            + '<div class="actions">'
+            +   '<button type="button" class="btn" data-skip="1">Keep them separate</button>'
+            +   '<button type="button" class="btn primary" data-keep="' + d.existing_index + '" data-drop="' + d.added_index
+            +     '" data-qty="' + (was + more) + '">Join into one row of ×' + (was + more) + '</button>'
+            + '</div>';
+        }).join('');
+        joinPanel.querySelectorAll('[data-skip]').forEach(b => b.addEventListener('click', () => {
+          pendingJoin = null;
+          joinPanel.hidden = true;
+          setStatus('ok', 'Left as two rows.');
+        }));
+        joinPanel.querySelectorAll('[data-keep]').forEach(b => b.addEventListener('click', () =>
+          join(containerId, slotId, +b.dataset.keep, +b.dataset.drop, +b.dataset.qty, b)));
+    }
+
+    async function join(containerId, slotId, keepIndex, dropIndex, qty, btn) {
+      btn.disabled = true;
+      btn.textContent = 'Joining…';
+      try {
+        const slotUrl = '/c/' + containerId + '/' + slotId + '/items/';
+        const current = await (await fetch('/c/' + containerId + '/' + slotId)).json();
+        const keep = current.items[keepIndex];
+        // Sum first, drop second. The added row is always the later index, so
+        // patching the earlier one cannot shift the one about to be deleted.
+        let res = await fetch(slotUrl + keepIndex, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(itemPayload(keep, qty))
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        res = await fetch(slotUrl + dropIndex, { method: 'DELETE' });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const slot = await res.json();
+        pendingJoin = null;
+        joinPanel.hidden = true;
+        renderCurrent(slot.items || [], slot.photos || []);
+        setStatus('ok', '✓ Joined into one row of ×' + qty + '.');
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Join into one row of ×' + qty;
+        setStatus('error', 'Could not join the rows: ' + e.message);
+      }
+    }
+
     function renderCurrent(list, photos) {
       if (photos) slotPhotos = photos;
+      joinPanel.hidden = true;
       slotItemCount = list.length;
       updateResyncBar();
       // A proposal addresses items by their position in this list, so editing,
@@ -505,6 +581,7 @@
       currentEl.querySelectorAll('.ask-btn').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); askItem(b.closest('li')); }));
       currentEl.querySelectorAll('.ai-q').forEach(inp => inp.addEventListener('click', e => e.stopPropagation()));
       currentEl.querySelectorAll('.move-panel').forEach(panel => wireMovePanel(panel));
+      showJoin();                 // an offer made just before this survives it
     }
 
     function wireMovePanel(panel) {
@@ -800,6 +877,9 @@
     // reconciliation.
     function updateResyncBar() {
       resyncBar.hidden = !slotItemCount || !(selectedContainer && selectedSlot);
+      // The offer names item positions in one slot; anything that moves off it
+      // or changes the list makes those positions someone else's.
+      if (resyncMode) { pendingJoin = null; joinPanel.hidden = true; }
       resyncBtn.textContent = resyncMode ? 'Cancel resync' : 'Resync this drawer';
       resyncHint.hidden = resyncMode;
     }
@@ -1222,7 +1302,8 @@
         const items = (data.extracted || []).length;
         if (window.rackUsage) rackUsage.refresh();
         setStatus('ok', '✓ Filed ' + items + ' item' + (items === 1 ? '' : 's') + ' from '
-          + count + ' photo' + (count === 1 ? '' : 's') + ' into ' + containerId + '.' + slotId + '.');
+          + count + ' photo' + (count === 1 ? '' : 's') + ' into ' + containerName(containerId) + ' · ' + slotId + '.');
+        offerJoin(containerId, slotId, data.duplicates || []);
         clearPending();
         suggestionsEl.innerHTML = '';
         pickHeading.hidden = true;

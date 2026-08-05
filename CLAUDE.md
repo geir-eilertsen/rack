@@ -196,7 +196,7 @@ Gone items are removed rather than zeroed, and the old photos are deleted — af
 ### Deployment
 
 - Frontend: PWA (`getUserMedia` for camera).
-- Fronted by a home-network reverse proxy that terminates TLS at `https://rack.apalveien5.eilertsen.family/` and forwards to the container on the box at `192.168.3.132:8080`.
+- Fronted by Vaier, a home-network reverse proxy that terminates TLS at `https://rack.apalveien5.eilertsen.family/` and forwards to the container on the box at `192.168.3.132:8080`. It challenges unauthenticated requests, so a **401 from the public URL is the proxy working, not the app failing** — verify against `localhost:8080` and treat the public check as proof only that the proxy still reaches the box.
 - Run with `-v /home/geir/rack/data:/app/data` so slot JSON, photos, and printed label sheets survive restarts.
 
 ## Domain notes

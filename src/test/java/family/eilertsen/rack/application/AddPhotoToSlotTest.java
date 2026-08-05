@@ -222,4 +222,58 @@ class AddPhotoToSlotTest {
             return Set.of();
         }
     }
+    @Test
+    void saysWhenTheDrawerAlreadyHeldTheThingBeingFiled() {
+        // Four AA batteries in the drawer and ten more photographed into it is
+        // one thing in two rows, and taking four out later decrements whichever
+        // row you happened to tap.
+        index.save(RACK, new Slot(A1, List.of(named("AA batteries", null, 4)), null, List.of(), null));
+        extractor.returns(new Extraction(named("AA batteries", null, 10), 0));
+
+        AddPhotoToSlot.Result result = addPhoto.execute(RACK, A1, List.of(photo("a")));
+
+        assertThat(result.duplicates()).hasSize(1);
+        AddPhotoToSlot.Duplicate duplicate = result.duplicates().get(0);
+        assertThat(duplicate.existingIndex()).isZero();
+        assertThat(duplicate.addedIndex()).isEqualTo(1);
+        assertThat(duplicate.existing().qtyEstimate()).isEqualTo(4);
+        assertThat(duplicate.added().qtyEstimate()).isEqualTo(10);
+    }
+
+    @Test
+    void filesItAnywayRatherThanMergingBehindYourBack() {
+        // The batteries really are in the drawer, so they are recorded. Joining
+        // the rows is offered, never assumed.
+        index.save(RACK, new Slot(A1, List.of(named("AA batteries", null, 4)), null, List.of(), null));
+        extractor.returns(new Extraction(named("AA batteries", null, 10), 0));
+
+        addPhoto.execute(RACK, A1, List.of(photo("a")));
+
+        assertThat(index.get(RACK, A1).orElseThrow().items())
+            .extracting(Item::qtyEstimate).containsExactly(4, 10);
+    }
+
+    @Test
+    void aDifferentPartNumberIsNotTheSameThingHoweverAlikeTheNames() {
+        // This drawer holds BC547 beside BC557 and 100K beside 82K. Offering to
+        // merge those would invite turning one part into another.
+        index.save(RACK, new Slot(A1, List.of(named("BC547 transistor", "BC547", 30)), null, List.of(), null));
+        extractor.returns(new Extraction(named("BC557 transistor", "BC557", 25), 0));
+
+        AddPhotoToSlot.Result result = addPhoto.execute(RACK, A1, List.of(photo("a")));
+
+        assertThat(result.duplicates()).isEmpty();
+    }
+
+    @Test
+    void nothingToJoinInAnEmptyDrawer() {
+        extractor.returns(new Extraction(named("AA batteries", null, 10), 0));
+
+        assertThat(addPhoto.execute(RACK, A1, List.of(photo("a"))).duplicates()).isEmpty();
+    }
+
+    private static Item named(String name, String partNumber, int qty) {
+        return new Item(name, "in the drawer", partNumber, "other", qty, 0.9, List.of(), null, List.of(), null, null);
+    }
+
 }
