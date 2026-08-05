@@ -148,7 +148,7 @@ class JsonFilePartIndexTest {
     void savedItemsKeepTheirNameAcrossAReload() throws IOException {
         JsonFilePartIndex index = load();
         Item item = new Item("M4 hex bolts", "bag of about fifty, DIN 933", null, "fastener",
-            50, 0.9, List.of("M4"), null, List.of(), null);
+            50, 0.9, List.of("M4"), null, List.of(), null, null);
         index.save(RACK, new Slot(new SlotId("B2"), List.of(item), null, List.of(), null));
 
         Item reloaded = load().get(RACK, new SlotId("B2")).orElseThrow().items().get(0);

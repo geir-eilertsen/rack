@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.MimeTypeUtils;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -46,7 +47,10 @@ public class SpringAiPartExtractor implements PartExtractor {
         - qty_estimate (integer): count visible across the photos, counting a thing once even when it shows up in several; 1 if unclear
         - confidence (number between 0 and 1): how sure you are of the identification
         - tags (array of strings): freeform useful tags (e.g. package type like "TO-220" or "SMD 0603")
-        - image_index (integer): index of the photo that shows this item best
+        - image_indexes (array of integers): EVERY photo that shows this item,
+          the clearest one first. One thing shot from two angles with its label
+          on a third is one entry listing all three. Do not list a photo that
+          does not show this item.
 
         Return ONLY the JSON array. No prose, no markdown, no code fences.
         """;
@@ -110,16 +114,26 @@ public class SpringAiPartExtractor implements PartExtractor {
         Integer qtyEstimate,
         double confidence,
         List<String> tags,
-        Integer imageIndex
+        List<Integer> imageIndexes
     ) {
         Extraction toExtraction(int imageCount) {
-            Item item = new Item(name, description, partNumber, category, qtyEstimate, confidence, tags, null, null, null);
-            return new Extraction(item, inRange(imageIndex, imageCount));
+            Item item = new Item(name, description, partNumber, category, qtyEstimate, confidence, tags, null, null, null, null);
+            return new Extraction(item, inRange(imageIndexes, imageCount));
         }
 
-        /** The model omits or invents an index often enough to be worth pinning to the first photo. */
-        private static int inRange(Integer index, int imageCount) {
-            return index == null || index < 0 || index >= imageCount ? 0 : index;
+        /**
+         * The model omits, repeats or invents an index often enough to be worth
+         * pinning: out-of-range and duplicate frames go, and an entry left with
+         * nothing falls back to the first photo rather than to no photo.
+         */
+        private static List<Integer> inRange(List<Integer> indexes, int imageCount) {
+            if (indexes == null) return List.of(0);
+            List<Integer> kept = new ArrayList<>();
+            for (Integer index : indexes) {
+                if (index == null || index < 0 || index >= imageCount) continue;
+                if (!kept.contains(index)) kept.add(index);
+            }
+            return kept.isEmpty() ? List.of(0) : List.copyOf(kept);
         }
     }
 }

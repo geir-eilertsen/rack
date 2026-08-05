@@ -136,7 +136,7 @@ class FindItemsTest {
     }
 
     private static SearchHit hit(String slot, int itemIndex, double score) {
-        Item item = new Item("tape", "a roll of tape", null, "other", 1, 0.9, List.of(), null, List.of(), null);
+        Item item = new Item("tape", "a roll of tape", null, "other", 1, 0.9, List.of(), null, List.of(), null, null);
         return new SearchHit(RACK, new SlotId(slot), itemIndex, item, score, null, List.of());
     }
 

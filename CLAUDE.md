@@ -229,7 +229,11 @@ Each extraction carries an `image_index` back, which `AddPhotoToSlot` maps to th
 
 Every frame is kept in `Slot.photos` whether or not an item references it — the photo is ground truth, and an unreferenced frame is exactly the evidence that the extraction missed something.
 
-**Expanding an item shows every frame of its slot**, the one it was read from first and badged. `Item.sourcePhoto` records which frame the model quoted, not the only frame the thing appears in: a part shot from two angles with its label on a third yields one item naming one photo. Across this rack 31 of 58 frames are named by no item, and almost none of them are spare — they are the label shots and second angles that were merged into items. Showing the slot's whole strip is what makes them reachable, and it is why the heading says *slot* while the badge says *read from this*: we know which frame it was read from and cannot know which others show it.
+**Expanding an item shows its frames**, the one it was read from first and badged. `Item.sourcePhoto` records which frame the model quoted, not the only frame the thing appears in: a part shot from two angles with its label on a third yields one item naming one photo. Across this rack 31 of 58 frames are named by no item, and almost none of them are spare — they are the label shots and second angles that were merged into items. Showing the slot's whole strip is what makes them reachable.
+
+**So the extractor is asked which frames show each item, not just the best one.** `image_indexes` replaces `image_index`: the model is already merging a part's front, side and label into one entry, so it knows which frames it merged, and asking costs a handful of output tokens. Given three views of one drawer it put the Wiha screwdriver in two of them and the pliers in one — which is the answer "photos of this item" needs and that a single index cannot give.
+
+`Item.seenIn` holds them, `sourcePhoto` stays the first so the thumbnail is unchanged, and `Extraction` drops repeats and invented indexes on the way in. Items filed before this have no `seenIn` and fall back to the slot's frames — the heading says *this item* or *this slot* accordingly, because claiming to know which frames show an old item would be a small lie. A moved item keeps neither: its frames stay in the slot it came from.
 
 `FilesystemImageStore` names photos to the second, so a batch collides. Names are suffixed `…-12_1.jpg` on collision, with `_` rather than `-` because `_` sorts *after* `.` — so a listing keeps capture order.
 

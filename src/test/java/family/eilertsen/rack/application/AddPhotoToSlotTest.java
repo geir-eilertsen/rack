@@ -83,6 +83,30 @@ class AddPhotoToSlotTest {
     }
 
     @Test
+    void anItemKeepsEveryFrameItWasSeenIn() {
+        // The whole point of the single call: the front shot, the side shot and
+        // the label shot are one item — and now the item can name all three.
+        extractor.returns(new Extraction(item("bag of M4 bolts"), List.of(2, 0)));
+
+        AddPhotoToSlot.Result result = addPhoto.execute(RACK, A1, List.of(photo("front"), photo("side"), photo("label")));
+
+        List<String> filenames = result.photoFilenames();
+        Item filed = result.extracted().get(0);
+        assertThat(filed.seenIn()).containsExactly(filenames.get(2), filenames.get(0));
+        // The first frame stays the thumbnail, so nothing about the row changes.
+        assertThat(filed.sourcePhoto()).isEqualTo(filenames.get(2));
+    }
+
+    @Test
+    void dropsFramesTheModelInventedButKeepsTheRest() {
+        extractor.returns(new Extraction(item("bolts"), List.of(1, 9, -1, 1)));
+
+        AddPhotoToSlot.Result result = addPhoto.execute(RACK, A1, List.of(photo("a"), photo("b")));
+
+        assertThat(result.extracted().get(0).seenIn()).containsExactly(result.photoFilenames().get(1));
+    }
+
+    @Test
     void anImageIndexOutsideTheBatchFallsBackToTheFirstPhoto() {
         extractor.returns(new Extraction(item("stray"), 7), new Extraction(item("negative"), -1));
 
@@ -121,7 +145,7 @@ class AddPhotoToSlotTest {
     }
 
     private static Item item(String description) {
-        return new Item(description, description, null, null, 1, 0.9, List.of(), null, List.of(), null);
+        return new Item(description, description, null, null, 1, 0.9, List.of(), null, List.of(), null, null);
     }
 
     private static final class FakeImages implements ImageStore {

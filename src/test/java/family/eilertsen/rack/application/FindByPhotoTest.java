@@ -88,11 +88,11 @@ class FindByPhotoTest {
     }
 
     private static Item item(String name) {
-        return new Item(name, "seen in the photo", null, "other", 1, 0.9, List.of(), null, List.of(), null);
+        return new Item(name, "seen in the photo", null, "other", 1, 0.9, List.of(), null, List.of(), null, null);
     }
 
     private static SearchHit hit(String slot, int index, double score) {
-        Item stored = new Item("stored", "on the shelf", null, "other", 1, 0.9, List.of(), null, List.of(), null);
+        Item stored = new Item("stored", "on the shelf", null, "other", 1, 0.9, List.of(), null, List.of(), null, null);
         return new SearchHit(LAB, new SlotId(slot), index, stored, score, null, List.of());
     }
 

@@ -442,16 +442,20 @@
     }
 
 
-    // The slot's frames, the one this item was read from first and marked. We
-    // know which frame it was read from; we do not know which others show it,
-    // so the heading says slot and the badge says which.
-    function photoStrip(photos, source, urlOf) {
-      const list = (photos || []).filter(Boolean);
+    // An item filed since the extractor was asked for every frame knows which
+    // ones show it, and those are what you want. Older items only ever recorded
+    // the one frame they were read from, so they fall back to the slot's own —
+    // which is what they showed before, honestly labelled.
+    function photoStrip(item, slotPhotos, urlOf) {
+      const source = item.source_photo;
+      const own = (item.seen_in || []).filter(Boolean);
+      const list = own.length ? own : (slotPhotos || []).filter(Boolean);
       if (!list.length) return '';
       const ordered = source && list.includes(source)
         ? [source].concat(list.filter(p => p !== source))
         : list;
-      return '<div class="shots"><h4>Photos of this slot</h4><div class="strip">' +
+      const heading = own.length ? 'Photos of this item' : 'Photos of this slot';
+      return '<div class="shots"><h4>' + heading + '</h4><div class="strip">' +
         ordered.map(fn =>
           '<a class="frame' + (fn === source ? ' source' : '') + '" href="' + urlOf(fn) +
             '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
@@ -500,7 +504,7 @@
             '<button class="btn primary save">Save</button>' +
             '<button class="remove" title="Remove this item">Remove</button>' +
           '</div>' +
-          photoStrip(g.photos, it.source_photo, fn => photoUrl(g.container, g.slot, fn)) +
+          photoStrip(it, g.photos, fn => photoUrl(g.container, g.slot, fn)) +
           '<div class="ai">' +
             '<h4>Ask AI about this item</h4>' +
             renderQaLog(it.qa || []) +

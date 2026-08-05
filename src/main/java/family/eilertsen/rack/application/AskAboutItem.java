@@ -78,7 +78,8 @@ public class AskAboutItem {
             current.tags(),
             current.embedding(),
             List.copyOf(qa),
-            current.sourcePhoto()
+            current.sourcePhoto(),
+            current.seenIn()
         );
 
         List<Item> newItems = new ArrayList<>(existing.items());

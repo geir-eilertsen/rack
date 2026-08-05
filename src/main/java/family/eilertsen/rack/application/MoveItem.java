@@ -56,6 +56,8 @@ public class MoveItem {
             original.tags(),
             original.embedding(),
             original.qa(),
+            // The frames stay in the slot the item came from.
+            null,
             null
         );
 

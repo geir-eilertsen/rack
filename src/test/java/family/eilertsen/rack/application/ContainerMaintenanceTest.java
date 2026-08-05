@@ -160,7 +160,7 @@ class ContainerMaintenanceTest {
     }
 
     private static Item item(String description) {
-        return new Item(description, description, null, null, null, 0.9, List.of(), null, List.of(), null);
+        return new Item(description, description, null, null, null, 0.9, List.of(), null, List.of(), null, null);
     }
 
     private static final class FakeStore implements ContainerStore {

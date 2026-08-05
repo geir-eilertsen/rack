@@ -43,7 +43,7 @@ public class AddPhotoToSlot {
 
         List<Extraction> extractions = extractor.extract(photos.stream().map(Photo::bytes).toList());
         List<Item> extracted = extractions.stream()
-            .map(e -> stampSource(e.item(), filenames.get(inRange(e.imageIndex(), filenames.size()))))
+            .map(e -> stampSource(e.item(), framesOf(e, filenames)))
             .toList();
 
         Slot existing = index.get(container, slot).orElse(new Slot(slot, List.of(), null, List.of(), null));
@@ -59,13 +59,18 @@ public class AddPhotoToSlot {
         return new Result(filenames, extracted);
     }
 
-    private static Item stampSource(Item i, String filename) {
+    /** Source stays the first frame, so the thumbnail is unchanged. */
+    private static Item stampSource(Item i, List<String> frames) {
         return new Item(i.name(), i.description(), i.partNumber(), i.category(), i.qtyEstimate(),
-            i.confidence(), i.tags(), i.embedding(), i.qa(), filename);
+            i.confidence(), i.tags(), i.embedding(), i.qa(), frames.get(0), frames);
     }
 
-    private static int inRange(int index, int photoCount) {
-        return index < 0 || index >= photoCount ? 0 : index;
+    private static List<String> framesOf(Extraction e, List<String> filenames) {
+        List<String> frames = new ArrayList<>();
+        for (int index : e.imageIndexes()) {
+            if (index >= 0 && index < filenames.size()) frames.add(filenames.get(index));
+        }
+        return frames.isEmpty() ? List.of(filenames.get(0)) : List.copyOf(frames);
     }
 
     public record Photo(byte[] bytes, String contentType) {}
