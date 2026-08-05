@@ -13,6 +13,12 @@
     .search { margin-bottom: 1rem; display: flex; gap: .4rem; }
     .search input { flex: 1; min-width: 0; font-size: 1.05rem; padding: .8rem 1rem; }
     .search .shoot { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; padding: 0 .9rem; }
+    /* The things you looked for before, for the trip you make twice. */
+    .recent { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 1rem; }
+    .recent .again { padding: .35rem .7rem; border: 1px solid var(--border); border-radius: 999px;
+      background: var(--card); color: var(--primary-hover); font-size: .82rem; font-family: inherit;
+      cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .recent .again:hover { background: var(--primary-soft); border-color: var(--primary); }
     .hits { list-style: none; padding: 0; margin: 0; }
     .group { padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: .75rem; background: var(--card); box-shadow: var(--shadow); }
     .group .loc { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .35rem; }
@@ -77,6 +83,7 @@
       </button>
       <input type="file" accept="image/*" capture="environment" multiple id="photo" hidden>
     </div>
+    <div class="recent" id="recent" hidden></div>
     <div class="status" id="status">Type to search.</div>
     <ul class="hits" id="hits"></ul>
   </div>
@@ -87,6 +94,7 @@
     const hits = document.getElementById('hits');
     const shoot = document.getElementById('shoot');
     const photo = document.getElementById('photo');
+    const recentEl = document.getElementById('recent');
 
     let controller = null;
     let smartController = null;
@@ -108,7 +116,36 @@
       });
     }
 
+    // The same drawers get hunted over and over — batteries, heat shrink, that
+    // one connector — so the second trip is a tap. Only shown with the box
+    // empty, where they are an offer rather than something in the way.
+    loadRecent();
+
+    async function loadRecent() {
+      try {
+        const res = await fetch('/searches');
+        if (res.ok) renderRecent(await res.json());
+      } catch (e) { /* the search box works without them */ }
+    }
+
+    function renderRecent(queries) {
+      recentEl.innerHTML = (queries || []).map(query =>
+        '<button type="button" class="again">' + esc(query) + '</button>').join('');
+      recentEl.querySelectorAll('.again').forEach(b => b.addEventListener('click', () => {
+        q.value = b.textContent;
+        clearTimeout(debounce);
+        clearTimeout(smartDebounce);
+        runSearch();
+      }));
+      showRecent();
+    }
+
+    function showRecent() {
+      recentEl.hidden = !recentEl.children.length || !!q.value.trim();
+    }
+
     q.addEventListener('input', () => {
+      showRecent();
       clearTimeout(debounce);
       clearTimeout(smartDebounce);
       debounce = setTimeout(runSearch, 250);
@@ -166,6 +203,7 @@
         // whatever the widened pass found — including that it found nothing.
         if (widening || (result.expanded_terms && result.expanded_terms.length)) renderResult(result);
         if (window.rackUsage) rackUsage.refresh();
+        loadRecent();                              // the server just recorded this one
       } catch (e) {
         if (e.name === 'AbortError') return;
         if (widening && q.value.trim() === query) renderHits([], query, []);

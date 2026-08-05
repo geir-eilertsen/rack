@@ -2,6 +2,7 @@ package family.eilertsen.rack.adapter.in.web;
 
 import family.eilertsen.rack.application.FindByPhoto;
 import family.eilertsen.rack.application.FindItems;
+import family.eilertsen.rack.domain.port.SearchHistory;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,10 +19,12 @@ public class SearchController {
 
     private final FindItems find;
     private final FindByPhoto findByPhoto;
+    private final SearchHistory history;
 
-    public SearchController(FindItems find, FindByPhoto findByPhoto) {
+    public SearchController(FindItems find, FindByPhoto findByPhoto, SearchHistory history) {
         this.find = find;
         this.findByPhoto = findByPhoto;
+        this.history = history;
     }
 
     /**
@@ -35,7 +38,19 @@ public class SearchController {
         @RequestParam String q,
         @RequestParam(defaultValue = "false") boolean smart
     ) {
-        return smart ? find.smart(q) : find.literal(q);
+        if (!smart) return find.literal(q);
+        // Only the settled query is worth remembering. The literal pass fires on
+        // every keystroke, so recording there would fill the list with "b", "ba",
+        // "bat"; this one runs 400ms after typing stops, which is the point at
+        // which someone meant it.
+        history.remember(q);
+        return find.smart(q);
+    }
+
+    /** The last few things someone went looking for, most recent first. */
+    @GetMapping("/searches")
+    public List<String> searches() {
+        return history.recent();
     }
 
     /**

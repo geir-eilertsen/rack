@@ -18,7 +18,7 @@
       <p class="tagline">Take a photo. Find it later.</p>
     </div>
 
-    <p class="callout">Tip: scan a drawer's QR code with your phone camera to jump straight to that slot.</p>
+    <p class="callout" id="tip">Tip: scan a drawer's QR code with your phone camera to jump straight to that slot.</p>
 
     <ul class="cards">
       <li>
@@ -45,6 +45,31 @@
       </li>
     </ul>
   </div>
+  <script>
+    // A different tip each visit. Every one of these is something the app
+    // actually does — a tip that overstates it is worse than no tip.
+    const TIPS = [
+      "scan a drawer's QR code with your phone camera to jump straight to that slot.",
+      "can't name the part? Tap the camera in Find and photograph it instead.",
+      "photograph the label as much as the part \u2014 printed text is what the model reads best.",
+      "taking a couple of something? Use the \u2212 on the search result. No form, and it re-dates the drawer.",
+      "search in whatever language comes to mind \u2014 \u201ckrympestr\u00f8mpe\u201d finds the heat shrink.",
+      "shoot the part and its label in one go \u2014 they are merged into one item, not two.",
+      "every word of a search has to match, so fewer words find more.",
+      "a search that finds nothing gets widened for you \u2014 \u201cisolating tape\u201d finds the electrical tape.",
+      "an unreferenced photo on a slot is the evidence the extraction missed something. Keep it.",
+      "small labels share one sticker \u2014 a 0.4-scale container prints four to a label, ready to trim.",
+      "the running total at the foot of the page is what this rack has cost in model calls.",
+      "filing a slot re-dates it, so \u201clast verified\u201d stays worth trusting."
+    ];
+    const tip = document.getElementById('tip');
+    // Don't repeat the one you just read; that reads as broken rather than random.
+    const last = sessionStorage.getItem('rack.tip');
+    let pick = Math.floor(Math.random() * TIPS.length);
+    if (TIPS.length > 1 && String(pick) === last) pick = (pick + 1) % TIPS.length;
+    sessionStorage.setItem('rack.tip', String(pick));
+    tip.textContent = 'Tip: ' + TIPS[pick];
+  </script>
   <script src="/assets/usage.js" defer></script>
 </body>
 </html>
