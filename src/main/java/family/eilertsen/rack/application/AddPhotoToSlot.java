@@ -1,6 +1,7 @@
 package family.eilertsen.rack.application;
 
 import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.Extraction;
 import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
@@ -26,10 +27,23 @@ public class AddPhotoToSlot {
         this.index = index;
     }
 
-    public Result execute(ContainerId container, SlotId slot, byte[] photo, String contentType) {
-        String filename = images.store(container, slot, photo, contentType);
-        List<Item> extracted = extractor.extract(photo).stream()
-            .map(i -> stampSource(i, filename))
+    /**
+     * Files a batch of photos of one slot. Every photo is kept — the photo is
+     * ground truth — but the batch is extracted in a single call so a part shot
+     * from two angles is indexed once rather than twice.
+     */
+    public Result execute(ContainerId container, SlotId slot, List<Photo> photos) {
+        if (photos == null || photos.isEmpty()) {
+            throw new IllegalArgumentException("at least one photo is required");
+        }
+
+        List<String> filenames = photos.stream()
+            .map(p -> images.store(container, slot, p.bytes(), p.contentType()))
+            .toList();
+
+        List<Extraction> extractions = extractor.extract(photos.stream().map(Photo::bytes).toList());
+        List<Item> extracted = extractions.stream()
+            .map(e -> stampSource(e.item(), filenames.get(inRange(e.imageIndex(), filenames.size()))))
             .toList();
 
         Slot existing = index.get(container, slot).orElse(new Slot(slot, List.of(), null, List.of(), null));
@@ -37,12 +51,12 @@ public class AddPhotoToSlot {
         List<Item> mergedItems = new ArrayList<>(existing.items());
         mergedItems.addAll(extracted);
         List<String> mergedPhotos = new ArrayList<>(existing.photos());
-        mergedPhotos.add(filename);
+        mergedPhotos.addAll(filenames);
 
         Slot updated = new Slot(slot, List.copyOf(mergedItems), Instant.now(), List.copyOf(mergedPhotos), existing.printedAt());
         index.save(container, updated);
 
-        return new Result(filename, extracted);
+        return new Result(filenames, extracted);
     }
 
     private static Item stampSource(Item i, String filename) {
@@ -50,5 +64,11 @@ public class AddPhotoToSlot {
             i.confidence(), i.tags(), i.embedding(), i.qa(), filename);
     }
 
-    public record Result(String photoFilename, List<Item> extracted) {}
+    private static int inRange(int index, int photoCount) {
+        return index < 0 || index >= photoCount ? 0 : index;
+    }
+
+    public record Photo(byte[] bytes, String contentType) {}
+
+    public record Result(List<String> photoFilenames, List<Item> extracted) {}
 }

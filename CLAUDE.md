@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Live at https://rack.apalveien5.eilertsen.family/. Working end-to-end: identify a part, add a photo to a slot, find/edit/move items, and maintain containers — register, rename, rescale, delete, and print QR labels (with per-container scale + printed-state tracking).
+Live at https://rack.apalveien5.eilertsen.family/. Working end-to-end: identify a part, file a slot from several photos at once, find/edit/move items, and maintain containers — register, rename, rescale, delete, and print QR labels (with per-container scale + printed-state tracking).
 
 ## Build and run
 
@@ -38,7 +38,7 @@ Small-parts inventory system. Photograph the contents of a slot in a physical st
 Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all swappable:
 
 - `ImageStore` — persists slot photos to disk
-- `PartExtractor` — vision-model call that turns a photo into `List<Item>` (Spring AI)
+- `PartExtractor` — one vision-model call that turns a batch of photos into `List<Extraction>` (Spring AI)
 - `PartIndex` — read/write of slot state; search
 
 ### Domain vocabulary
@@ -53,7 +53,7 @@ Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all s
 ```
 family.eilertsen.rack
 ├── domain
-│   ├── model      # records: Container, ContainerId, Slot, SlotId, Item, SearchHit, ContainerLayout
+│   ├── model      # records: Container, ContainerId, Slot, SlotId, Item, Extraction, SearchHit, ContainerLayout
 │   └── port       # interfaces: ImageStore, PartExtractor, PartIndex
 ├── application    # AddPhotoToSlot service, ContainerRegistry, RackProperties/Configuration
 └── adapter
@@ -105,10 +105,10 @@ Committing after each write gives history, per-drawer undo, and free multi-site 
 
 - `/` → index page (hub)
 - `/identify.html`, `POST /identify` → identify a part from a photo, no persistence
-- `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state
+- `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state. The photo endpoint (and `POST /suggest`) take **repeated `photo` parts** — one part is just a batch of one.
 - `/containers.html`, `POST /c` (register), `PATCH /c/{container}` (name + label scale), `DELETE /c/{container}` → maintain containers; also hosts registration and the label flow below
 - `GET /labels/{container}` (preview), `POST /labels/{container}` (mark + archive), `GET /labels/{container}/status` → QR label sheets
-- Static pages resize phone photos to ~1600px client-side before upload; keeps below the 20MB multipart cap and shrinks the vision call.
+- Static pages resize phone photos to ~1600px client-side before upload; keeps below the 20MB per-file multipart cap (`max-request-size` is 100MB, since a batch is one request) and shrinks the vision call.
 
 ### Labels
 
@@ -152,6 +152,18 @@ Strict JSON. `part_number` is null when not legible. `qty_estimate` is an estima
 Printed part numbers on ICs / modules / connectors, text on bags / reels / manufacturer labels, and coarse shapes ("TO-220 transistor", "M4 hex bolt", "JST connector"). It does *not* reliably read resistor colour bands, unlabelled ceramic capacitors, or exact counts of a loose pile.
 
 **Practical rule: photograph the labels as much as the parts.**
+
+### Filing a slot as a batch of photos
+
+That rule needs more than one frame per slot, so `put.html` collects photos into a pending strip — each tap of the camera appends a thumbnail, `×` drops one, and one **File N photos** action sends them all. Nothing is uploaded until then.
+
+**The whole batch goes into a single vision call.** That is what stops a bag shot from the front and its label shot from the side becoming two index entries: the model merges frames into one item and takes the part number off whichever frame it was legible on. It still returns *several* items when the slot holds several different things — merging is per physical item, not per batch.
+
+Each extraction carries an `image_index` back, which `AddPhotoToSlot` maps to the stored filename so `Item.sourcePhoto` points at the frame that actually shows that item. A missing or out-of-range index falls back to the first photo (the model omits it often enough to be worth pinning).
+
+Every frame is kept in `Slot.photos` whether or not an item references it — the photo is ground truth, and an unreferenced frame is exactly the evidence that the extraction missed something.
+
+`FilesystemImageStore` names photos to the second, so a batch collides. Names are suffixed `…-12_1.jpg` on collision, with `_` rather than `-` because `_` sorts *after* `.` — so a listing keeps capture order.
 
 ### The failure mode to design against
 

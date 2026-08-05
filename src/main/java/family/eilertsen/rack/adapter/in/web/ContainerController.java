@@ -142,14 +142,23 @@ public class ContainerController {
         return index.get(cid, sid).orElse(new Slot(sid, List.of(), null, List.of(), null));
     }
 
+    /** Repeated {@code photo} parts file a whole batch at once; a single part is just a batch of one. */
     @PostMapping(value = "/{container}/{slot}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AddPhotoToSlot.Result addPhoto(@PathVariable String container,
                                            @PathVariable String slot,
-                                           @RequestParam("photo") MultipartFile photo) throws IOException {
+                                           @RequestParam("photo") List<MultipartFile> photos) throws IOException {
         ContainerId cid = new ContainerId(container);
         SlotId sid = new SlotId(slot);
         requireContainerExists(cid);
-        return addPhoto.execute(cid, sid, photo.getBytes(), photo.getContentType());
+        List<AddPhotoToSlot.Photo> batch = new java.util.ArrayList<>(photos.size());
+        for (MultipartFile photo : photos) {
+            batch.add(new AddPhotoToSlot.Photo(photo.getBytes(), photo.getContentType()));
+        }
+        try {
+            return addPhoto.execute(cid, sid, batch);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
     }
 
     @DeleteMapping("/{container}/{slot}/items/{index}")

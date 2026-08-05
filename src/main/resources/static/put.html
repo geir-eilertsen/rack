@@ -47,6 +47,11 @@
     .sug .loc { font-family: var(--font-mono); font-weight: 700; font-size: 1rem; }
     .sug .why { font-size: .8rem; color: var(--muted); margin-bottom: .4rem; }
     .none { padding: .6rem .85rem; color: var(--muted); font-size: .85rem; font-style: italic; }
+    .pending { display: flex; gap: .55rem; flex-wrap: wrap; margin-top: 1rem; }
+    .pending .shot { position: relative; line-height: 0; }
+    .pending img { width: 88px; height: 88px; object-fit: cover; display: block; border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); }
+    .pending .drop { position: absolute; top: -7px; right: -7px; width: 23px; height: 23px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 50%; background: var(--card); color: var(--error); font-size: .95rem; line-height: 1; cursor: pointer; }
+    .pending .drop:hover { background: var(--error); border-color: var(--error); color: #fff; }
     .items.extracted { list-style: none; padding: 0; margin: 0; }
     .items.extracted li { padding: .5rem .75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: .35rem; background: var(--card); font-size: .9rem; }
     .items.extracted .pn { display: inline; margin-left: .35rem; }
@@ -76,10 +81,11 @@
         <circle cx="12" cy="13" r="4"/>
       </svg>
       <span id="captureLabel">Take a photo</span>
-      <input type="file" accept="image/*" capture="environment" id="photo">
+      <input type="file" accept="image/*" capture="environment" multiple id="photo">
     </label>
 
-    <div id="preview" class="preview"></div>
+    <div id="pending" class="pending"></div>
+    <button class="btn primary block" id="fileBtn" style="margin-top:.75rem" hidden></button>
     <div class="status" id="status"></div>
 
     <h2 id="extractedHeading" hidden>What I see</h2>
@@ -111,7 +117,8 @@
     const captureHeading = document.getElementById('captureHeading');
     const captureLabel = document.getElementById('captureLabel');
     const photo = document.getElementById('photo');
-    const preview = document.getElementById('preview');
+    const pendingEl = document.getElementById('pending');
+    const fileBtn = document.getElementById('fileBtn');
     const status = document.getElementById('status');
     const extractedHeading = document.getElementById('extractedHeading');
     const extractedEl = document.getElementById('extracted');
@@ -127,7 +134,9 @@
     let containers = [];
     let selectedContainer = null;
     let selectedSlot = null;
-    let pendingPhoto = null;
+    // Photos of one slot are collected here and filed as a batch, so a part and
+    // its label go into a single extraction instead of being indexed twice.
+    let pendingPhotos = [];
 
     init();
 
@@ -158,24 +167,86 @@
         slotHeader.hidden = false;
         slotHeader.textContent = selectedContainer.id + ' · ' + selectedSlot;
         currentHeading.hidden = false;
-        captureHeading.textContent = 'Add a photo';
-        captureLabel.textContent = 'Take a photo of what\'s in ' + selectedContainer.id + '.' + selectedSlot;
-        // Keep the manual picker visible while a photo is waiting to be filed
+        captureHeading.textContent = pendingPhotos.length ? 'Photos of this slot' : 'Add a photo';
+        // Keep the manual picker visible while photos are waiting to be filed
         // (so the "File in X.Y" button inside it stays reachable); otherwise
         // hide since the user is just viewing this slot.
-        manual.hidden = !pendingPhoto;
-        if (!pendingPhoto) manual.open = false;
+        manual.hidden = !pendingPhotos.length;
+        if (!pendingPhotos.length) manual.open = false;
         loadCurrent();
       } else {
         title.textContent = 'Add an item';
         slotHeader.hidden = true;
         currentHeading.hidden = true;
         currentEl.innerHTML = '';
-        captureHeading.textContent = 'Take a photo';
-        captureLabel.textContent = 'Take a photo';
+        captureHeading.textContent = pendingPhotos.length ? 'Photos to file' : 'Take a photo';
         manual.hidden = false;
       }
+      updateCaptureLabel();
+      updateFileBtn();
       updateManualFileBtn();
+    }
+
+    function updateCaptureLabel() {
+      if (pendingPhotos.length) {
+        captureLabel.textContent = 'Add another photo';
+        return;
+      }
+      captureLabel.textContent = selectedContainer && selectedSlot
+        ? 'Take a photo of what\'s in ' + selectedContainer.id + '.' + selectedSlot
+        : 'Take a photo';
+    }
+
+    function updateFileBtn() {
+      const n = pendingPhotos.length;
+      if (!n) {
+        fileBtn.hidden = true;
+        return;
+      }
+      fileBtn.hidden = false;
+      fileBtn.disabled = false;
+      const photos = n + ' photo' + (n === 1 ? '' : 's');
+      fileBtn.textContent = selectedContainer && selectedSlot
+        ? 'File ' + photos + ' in ' + selectedContainer.id + '.' + selectedSlot
+        : 'Identify ' + photos;
+    }
+
+    function renderPending() {
+      pendingEl.innerHTML = '';
+      pendingPhotos.forEach((p, idx) => {
+        const shot = document.createElement('div');
+        shot.className = 'shot';
+        const img = document.createElement('img');
+        img.src = p.url;
+        img.alt = 'photo ' + (idx + 1);
+        const drop = document.createElement('button');
+        drop.type = 'button';
+        drop.className = 'drop';
+        drop.title = 'Drop this photo';
+        drop.textContent = '×';
+        drop.addEventListener('click', () => dropPending(idx));
+        shot.append(img, drop);
+        pendingEl.appendChild(shot);
+      });
+    }
+
+    function dropPending(idx) {
+      URL.revokeObjectURL(pendingPhotos[idx].url);
+      pendingPhotos.splice(idx, 1);
+      renderPending();
+      updateCaptureLabel();
+      updateFileBtn();
+      updateManualFileBtn();
+      if (!pendingPhotos.length) {
+        setStatus('', '');
+        refreshUiForSelection();
+      }
+    }
+
+    function clearPending() {
+      pendingPhotos.forEach(p => URL.revokeObjectURL(p.url));
+      pendingPhotos = [];
+      renderPending();
     }
 
     async function loadCurrent() {
@@ -480,35 +551,50 @@
     }
 
     photo.addEventListener('change', async () => {
-      const file = photo.files[0];
-      if (!file) return;
+      const files = Array.from(photo.files || []);
+      if (!files.length) return;
+      photo.value = '';
 
-      // Show the preview + status FIRST so mobile paints immediately.
-      preview.innerHTML = '<img src="' + URL.createObjectURL(file) + '">';
+      // Status first so mobile paints before the resize work starts.
       extractedEl.innerHTML = '';
       suggestionsEl.innerHTML = '';
       extractedHeading.hidden = true;
       pickHeading.hidden = true;
-      captureLabel.textContent = 'Not what you wanted? Retake';
-      setStatus('', 'Preparing photo…');
+      setStatus('', files.length === 1 ? 'Preparing photo…' : 'Preparing ' + files.length + ' photos…');
       // Yield a frame so the paint above lands before we start heavy work.
       await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 
-      pendingPhoto = await resize(file);
-      photo.value = '';
-      updateManualFileBtn();
+      for (const file of files) {
+        const resized = await resize(file);
+        pendingPhotos.push({ file: resized, url: URL.createObjectURL(resized) });
+        renderPending();
+      }
 
+      refreshUiForSelection();
+      const n = pendingPhotos.length;
+      setStatus('', n + ' photo' + (n === 1 ? '' : 's') + ' ready — add the label or another angle, or file '
+        + (n === 1 ? 'it' : 'them') + ' now.');
+    });
+
+    fileBtn.addEventListener('click', () => {
+      if (!pendingPhotos.length) return;
       if (selectedContainer && selectedSlot) {
-        await fileToSelectedSlot();
+        fileToPicked(selectedContainer.id, selectedSlot, fileBtn);
       } else {
-        await suggestAndPick();
+        suggestAndPick();
       }
     });
 
+    function appendPending(form) {
+      // One field name repeated: the server binds it as the batch.
+      pendingPhotos.forEach(p => form.append('photo', p.file));
+    }
+
     async function suggestAndPick() {
+      fileBtn.disabled = true;
       setStatus('', 'Identifying...');
       const form = new FormData();
-      form.append('photo', pendingPhoto);
+      appendPending(form);
       try {
         const res = await fetch('/suggest', { method: 'POST', body: form });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
@@ -520,28 +606,8 @@
         setStatus('ok', 'Ready to file.');
       } catch (e) {
         setStatus('error', 'Failed: ' + e.message);
-      }
-    }
-
-    async function fileToSelectedSlot() {
-      setStatus('', 'Filing into ' + selectedContainer.id + '.' + selectedSlot + ' — Claude is extracting…');
-      const form = new FormData();
-      form.append('photo', pendingPhoto);
-      try {
-        const url = '/c/' + selectedContainer.id + '/' + selectedSlot + '/photo';
-        const res = await fetch(url, { method: 'POST', body: form });
-        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
-        const data = await res.json();
-        const extracted = data.extracted || [];
-        const count = extracted.length;
-        setStatus('ok', '✓ Filed ' + count + ' item' + (count === 1 ? '' : 's') + ' into ' + selectedContainer.id + '.' + selectedSlot + '.');
-        renderExtracted(extracted);
-        pendingPhoto = null;
-        preview.innerHTML = '';
-        refreshUiForSelection();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } catch (e) {
-        setStatus('error', 'Failed: ' + e.message);
+      } finally {
+        updateFileBtn();
       }
     }
 
@@ -632,38 +698,45 @@
     }
 
     function updateManualFileBtn() {
-      const ready = !!(selectedContainer && selectedSlot && pendingPhoto);
+      const ready = !!(selectedContainer && selectedSlot && pendingPhotos.length);
       fileManualBtn.hidden = !ready;
-      if (ready) fileManualBtn.textContent = 'File in ' + selectedContainer.id + '.' + selectedSlot;
+      if (ready) {
+        const n = pendingPhotos.length;
+        fileManualBtn.textContent = 'File ' + n + ' photo' + (n === 1 ? '' : 's')
+          + ' in ' + selectedContainer.id + '.' + selectedSlot;
+      }
     }
 
     fileManualBtn.addEventListener('click', () => {
-      if (selectedContainer && selectedSlot && pendingPhoto) {
+      if (selectedContainer && selectedSlot && pendingPhotos.length) {
         fileToPicked(selectedContainer.id, selectedSlot, fileManualBtn);
       }
     });
 
     async function fileToPicked(containerId, slotId, triggerBtn) {
-      if (!pendingPhoto) { setStatus('error', 'No photo to file.'); return; }
+      if (!pendingPhotos.length) { setStatus('error', 'No photos to file.'); return; }
+      const count = pendingPhotos.length;
       const originalText = triggerBtn ? triggerBtn.textContent : '';
       const allBtns = [];
       suggestionsEl.querySelectorAll('button').forEach(b => { b.disabled = true; allBtns.push(b); });
       if (fileManualBtn && !fileManualBtn.disabled) { fileManualBtn.disabled = true; allBtns.push(fileManualBtn); }
+      if (fileBtn && !fileBtn.disabled) { fileBtn.disabled = true; allBtns.push(fileBtn); }
       if (triggerBtn) triggerBtn.textContent = 'Filing…';
-      setStatus('', 'Filing into ' + containerId + '.' + slotId + ' — Claude is extracting…');
+      setStatus('', 'Filing ' + count + ' photo' + (count === 1 ? '' : 's') + ' into '
+        + containerId + '.' + slotId + ' — Claude is extracting…');
       const form = new FormData();
-      form.append('photo', pendingPhoto);
+      appendPending(form);
       try {
         const url = '/c/' + containerId + '/' + slotId + '/photo';
         const res = await fetch(url, { method: 'POST', body: form });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const data = await res.json();
-        const count = (data.extracted || []).length;
-        setStatus('ok', '✓ Filed ' + count + ' item' + (count === 1 ? '' : 's') + ' into ' + containerId + '.' + slotId + '.');
-        pendingPhoto = null;
+        const items = (data.extracted || []).length;
+        setStatus('ok', '✓ Filed ' + items + ' item' + (items === 1 ? '' : 's') + ' from '
+          + count + ' photo' + (count === 1 ? '' : 's') + ' into ' + containerId + '.' + slotId + '.');
+        clearPending();
         suggestionsEl.innerHTML = '';
         pickHeading.hidden = true;
-        preview.innerHTML = '';
         selectedContainer = containers.find(c => c.id === containerId) || selectedContainer;
         selectedSlot = slotId;
         refreshUiForSelection();
@@ -672,6 +745,7 @@
         setStatus('error', 'Failed: ' + e.message);
         allBtns.forEach(b => b.disabled = false);
         if (triggerBtn) triggerBtn.textContent = originalText;
+        updateFileBtn();
       }
     }
 

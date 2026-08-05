@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 @RestController
 public class SuggestController {
@@ -19,7 +21,9 @@ public class SuggestController {
     }
 
     @PostMapping(value = "/suggest", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public SuggestSlot.Result suggest(@RequestParam("photo") MultipartFile photo) throws IOException {
-        return suggest.execute(photo.getBytes());
+    public SuggestSlot.Result suggest(@RequestParam("photo") List<MultipartFile> photos) throws IOException {
+        List<byte[]> images = new ArrayList<>(photos.size());
+        for (MultipartFile photo : photos) images.add(photo.getBytes());
+        return suggest.execute(images);
     }
 }

@@ -6,7 +6,9 @@ spring:
   servlet:
     multipart:
       max-file-size: 20MB
-      max-request-size: 20MB
+      # A slot is filed as a batch of photos in one request, so the request cap
+      # has to be a multiple of the per-file cap rather than equal to it.
+      max-request-size: 100MB
   ai:
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}

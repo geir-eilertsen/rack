@@ -2,6 +2,7 @@ package family.eilertsen.rack.adapter.out.springai;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import family.eilertsen.rack.domain.model.Extraction;
 import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.port.PartExtractor;
 import org.springframework.ai.chat.client.ChatClient;
@@ -19,17 +20,25 @@ public class SpringAiPartExtractor implements PartExtractor {
     private static final String PROMPT = """
         You are cataloguing small electronic parts.
 
-        Look at the image and return a JSON array of items you can identify.
-        If the image shows one thing, return an array with one entry.
-        If the image shows multiple distinct parts, return one entry per part.
+        You are given %d photo(s) of the contents of ONE storage slot, numbered 0
+        to %d in the order supplied. When there is more than one they are views of
+        the same slot — a different angle, or a part in one frame and its printed
+        label or bag in another.
+
+        Return a JSON array with one entry per DISTINCT physical item across all
+        the photos. A slot usually holds several different things, so list each of
+        them. But one thing photographed more than once is a SINGLE entry, not one
+        per frame: merge what the frames tell you, so a part number legible only on
+        the label shot belongs to the entry for the part it labels.
 
         Each entry must be a JSON object with exactly these fields:
         - description (string): a short human-readable description
         - part_number (string or null): printed markings if legible, otherwise null
         - category (string): one of "ic", "transistor", "resistor", "capacitor", "diode", "connector", "module", "fastener", "cable", "other"
-        - qty_estimate (integer): count visible in frame; 1 if unclear
+        - qty_estimate (integer): count visible across the photos, counting a thing once even when it shows up in several; 1 if unclear
         - confidence (number between 0 and 1): how sure you are of the identification
         - tags (array of strings): freeform useful tags (e.g. package type like "TO-220" or "SMD 0603")
+        - image_index (integer): index of the photo that shows this item best
 
         Return ONLY the JSON array. No prose, no markdown, no code fences.
         """;
@@ -43,21 +52,29 @@ public class SpringAiPartExtractor implements PartExtractor {
     }
 
     @Override
-    public List<Item> extract(byte[] image) {
-        Media media = Media.builder()
-            .mimeType(MimeTypeUtils.IMAGE_JPEG)
-            .data(new ByteArrayResource(image))
-            .build();
+    public List<Extraction> extract(List<byte[]> images) {
+        if (images == null || images.isEmpty()) {
+            throw new IllegalArgumentException("at least one image is required");
+        }
+
+        Media[] media = images.stream()
+            .map(bytes -> Media.builder()
+                .mimeType(MimeTypeUtils.IMAGE_JPEG)
+                .data(new ByteArrayResource(bytes))
+                .build())
+            .toArray(Media[]::new);
+
+        String prompt = PROMPT.formatted(images.size(), images.size() - 1);
 
         String reply = chat.prompt()
-            .user(u -> u.text(PROMPT).media(media))
+            .user(u -> u.text(prompt).media(media))
             .call()
             .content();
 
         String json = stripCodeFences(reply);
         try {
             List<ExtractedItem> extracted = mapper.readValue(json, new TypeReference<>() {});
-            return extracted.stream().map(ExtractedItem::toItem).toList();
+            return extracted.stream().map(e -> e.toExtraction(images.size())).toList();
         } catch (IOException e) {
             throw new IllegalStateException("Model returned non-JSON reply: " + reply, e);
         }
@@ -81,10 +98,17 @@ public class SpringAiPartExtractor implements PartExtractor {
         String category,
         Integer qtyEstimate,
         double confidence,
-        List<String> tags
+        List<String> tags,
+        Integer imageIndex
     ) {
-        Item toItem() {
-            return new Item(description, partNumber, category, qtyEstimate, confidence, tags, null, null, null);
+        Extraction toExtraction(int imageCount) {
+            Item item = new Item(description, partNumber, category, qtyEstimate, confidence, tags, null, null, null);
+            return new Extraction(item, inRange(imageIndex, imageCount));
+        }
+
+        /** The model omits or invents an index often enough to be worth pinning to the first photo. */
+        private static int inRange(Integer index, int imageCount) {
+            return index == null || index < 0 || index >= imageCount ? 0 : index;
         }
     }
 }

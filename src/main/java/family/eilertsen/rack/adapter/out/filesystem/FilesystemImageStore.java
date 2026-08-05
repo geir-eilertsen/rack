@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -33,9 +34,22 @@ public class FilesystemImageStore implements ImageStore {
         try {
             Path dir = photoDir(container, slot);
             Files.createDirectories(dir);
-            String filename = LocalDateTime.now().format(STAMP) + extensionFor(contentType);
-            Files.write(dir.resolve(filename), image, StandardOpenOption.CREATE_NEW);
-            return filename;
+            String stamp = LocalDateTime.now().format(STAMP);
+            String extension = extensionFor(contentType);
+            // A batch of photos of one slot arrives inside the same second, so the
+            // timestamp alone is not unique. Suffix until the name is free. The
+            // separator is '_' rather than '-' because '_' sorts after '.', so
+            // "…-12_1.jpg" follows "…-12.jpg" and listing keeps capture order.
+            for (int n = 0; n < 1000; n++) {
+                String filename = (n == 0 ? stamp : stamp + "_" + n) + extension;
+                try {
+                    Files.write(dir.resolve(filename), image, StandardOpenOption.CREATE_NEW);
+                    return filename;
+                } catch (FileAlreadyExistsException taken) {
+                    // next suffix
+                }
+            }
+            throw new IllegalStateException("Cannot find a free filename for " + stamp + " in " + dir);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

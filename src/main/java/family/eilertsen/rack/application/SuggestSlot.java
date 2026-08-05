@@ -1,6 +1,7 @@
 package family.eilertsen.rack.application;
 
 import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.Extraction;
 import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.SearchHit;
 import family.eilertsen.rack.domain.model.SlotId;
@@ -28,8 +29,11 @@ public class SuggestSlot {
         this.index = index;
     }
 
-    public Result execute(byte[] photo) {
-        List<Item> extracted = extractor.extract(photo);
+    public Result execute(List<byte[]> photos) {
+        if (photos == null || photos.isEmpty()) {
+            throw new IllegalArgumentException("at least one photo is required");
+        }
+        List<Item> extracted = extractor.extract(photos).stream().map(Extraction::item).toList();
         Map<Key, Bucket> buckets = new LinkedHashMap<>();
 
         for (Item queried : extracted) {
