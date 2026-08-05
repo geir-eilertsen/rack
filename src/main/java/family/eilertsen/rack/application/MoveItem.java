@@ -47,6 +47,7 @@ public class MoveItem {
         // and may have captured other items. User can re-photograph in the new
         // location if they want a visual.
         Item moved = new Item(
+            original.name(),
             original.description(),
             original.partNumber(),
             original.category(),

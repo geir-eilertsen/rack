@@ -52,6 +52,7 @@ public class AskAboutItem {
         qa.add(new Item.QA(question.trim(), answer, Instant.now()));
 
         Item updated = new Item(
+            current.name(),
             current.description(),
             current.partNumber(),
             current.category(),
@@ -74,6 +75,7 @@ public class AskAboutItem {
     private static String buildPrompt(Item item, String question) {
         StringBuilder ctx = new StringBuilder();
         ctx.append("Item context:\n");
+        ctx.append("- Name: ").append(orUnknown(item.name())).append('\n');
         ctx.append("- Description: ").append(orUnknown(item.description())).append('\n');
         ctx.append("- Part number: ").append(orUnknown(item.partNumber())).append('\n');
         ctx.append("- Category: ").append(orUnknown(item.category())).append('\n');

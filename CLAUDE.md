@@ -147,6 +147,10 @@ The consequence: **printed labels and consumed stickers are different numbers**,
 
 Strict JSON. `part_number` is null when not legible. `qty_estimate` is an estimate — never trusted as exact. `confidence` drives whether the UI nudges the user to verify. `tags[]` is free-form, useful for project association.
 
+**`name` is the short label, `description` the long one.** A list is scanned by its titles, so `name` is capped at about four words ("BC547 transistor") while `description` carries packaging, markings, and whatever distinguishes this from the similar part in the same drawer. Keyword search scores a `name` hit as high as a `part_number` hit (+3) and a `description` hit lower (+2).
+
+Items catalogued before the split have no `name` at all — no migration, per the storage model. Both list pages fall back to a clipped `description` for the title (`itemName()` in `put.html` / `find.html`) and show the full text underneath only when it was clipped, so old rows read sensibly and fix themselves the first time one is edited.
+
 ### What the vision model reads reliably
 
 Printed part numbers on ICs / modules / connectors, text on bags / reels / manufacturer labels, and coarse shapes ("TO-220 transistor", "M4 hex bolt", "JST connector"). It does *not* reliably read resistor colour bands, unlabelled ceramic capacitors, or exact counts of a loose pile.

@@ -105,7 +105,7 @@ class AddPhotoEndpointTest {
     }
 
     private static Item item(String description) {
-        return new Item(description, null, null, 1, 0.9, List.of(), null, List.of(), null);
+        return new Item(description, description, null, null, 1, 0.9, List.of(), null, List.of(), null);
     }
 
     private static final class FakeImages implements ImageStore {

@@ -122,6 +122,7 @@ public class JsonFilePartIndex implements PartIndex {
     private static double matchScore(Item item, String q) {
         double score = 0;
         if (contains(item.partNumber(), q)) score += 3;
+        if (contains(item.name(), q)) score += 3;
         if (contains(item.description(), q)) score += 2;
         if (contains(item.category(), q)) score += 1;
         if (item.tags() != null) {

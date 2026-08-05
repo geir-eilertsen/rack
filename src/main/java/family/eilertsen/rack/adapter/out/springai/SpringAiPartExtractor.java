@@ -32,7 +32,11 @@ public class SpringAiPartExtractor implements PartExtractor {
         the label shot belongs to the entry for the part it labels.
 
         Each entry must be a JSON object with exactly these fields:
-        - description (string): a short human-readable description
+        - name (string): a short label to scan a list by, at most four words —
+          "BC547 transistor", "M4 hex bolts", "Raspberry Pi 4". No sentence, no
+          punctuation, no colour or packaging detail; that belongs below.
+        - description (string): a fuller line — packaging, markings, condition,
+          what distinguishes this from a similar part in the same drawer
         - part_number (string or null): printed markings if legible, otherwise null
         - category (string): one of "ic", "transistor", "resistor", "capacitor", "diode", "connector", "module", "fastener", "cable", "other"
         - qty_estimate (integer): count visible across the photos, counting a thing once even when it shows up in several; 1 if unclear
@@ -93,6 +97,7 @@ public class SpringAiPartExtractor implements PartExtractor {
     }
 
     private record ExtractedItem(
+        String name,
         String description,
         String partNumber,
         String category,
@@ -102,7 +107,7 @@ public class SpringAiPartExtractor implements PartExtractor {
         Integer imageIndex
     ) {
         Extraction toExtraction(int imageCount) {
-            Item item = new Item(description, partNumber, category, qtyEstimate, confidence, tags, null, null, null);
+            Item item = new Item(name, description, partNumber, category, qtyEstimate, confidence, tags, null, null, null);
             return new Extraction(item, inRange(imageIndex, imageCount));
         }
 

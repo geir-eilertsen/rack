@@ -32,6 +32,7 @@ public class EditItem {
 
         Item current = existing.items().get(itemIndex);
         Item updated = new Item(
+            blankToNull(update.name()),
             blankToNull(update.description()),
             blankToNull(update.partNumber()),
             blankToNull(update.category()),
@@ -56,6 +57,7 @@ public class EditItem {
     }
 
     public record Fields(
+        String name,
         String description,
         String partNumber,
         String category,

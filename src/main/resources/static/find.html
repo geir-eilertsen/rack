@@ -27,6 +27,7 @@
     .thumb-placeholder { flex: 0 0 auto; width: 48px; height: 48px; border-radius: var(--radius-xs); background: var(--primary-soft); display: flex; align-items: center; justify-content: center; color: var(--primary); }
     .body { flex: 1; min-width: 0; }
     .desc { font-weight: 500; font-size: .95rem; }
+    .detail { font-size: .82rem; color: var(--muted); margin-top: .15rem; font-weight: 400; }
     .qty { font-family: var(--font-mono); font-weight: 700; color: var(--primary-hover); font-size: .9rem; }
     .pn-line { margin-top: .2rem; }
     .tags-line { margin-top: .3rem; }
@@ -157,18 +158,20 @@
         '<div class="row">' +
           thumb +
           '<div class="body">' +
-            '<div class="desc">' + esc(it.description || '(unknown)') + '</div>' +
+            '<div class="desc">' + esc(itemName(it)) + '</div>' +
+            (itemDetail(it) ? '<div class="detail">' + esc(itemDetail(it)) + '</div>' : '') +
             (it.part_number ? '<div class="pn-line pn">' + esc(it.part_number) + '</div>' : '') +
             (tags ? '<div class="tags-line">' + tags + '</div>' : '') +
           '</div>' +
           '<div class="qty">×' + qty + '</div>' +
         '</div>' +
         '<div class="edit-form">' +
-          '<label>Description</label><input class="f-description" value="' + esc(it.description || '') + '">' +
-          '<label>Part number</label><input class="f-part_number" value="' + esc(it.part_number || '') + '">' +
-          '<label>Category</label><input class="f-category" value="' + esc(it.category || '') + '">' +
+          '<label>Name</label><input class="f-name" type="text" value="' + esc(it.name || '') + '">' +
+          '<label>Description</label><textarea class="f-description" rows="2">' + esc(it.description || '') + '</textarea>' +
+          '<label>Part number</label><input class="f-part_number" type="text" value="' + esc(it.part_number || '') + '">' +
+          '<label>Category</label><input class="f-category" type="text" value="' + esc(it.category || '') + '">' +
           '<label>Quantity</label><input class="f-qty_estimate" type="number" min="0" value="' + qty + '">' +
-          '<label>Tags (comma separated)</label><input class="f-tags" value="' + esc(tagsCsv) + '">' +
+          '<label>Tags (comma separated)</label><input class="f-tags" type="text" value="' + esc(tagsCsv) + '">' +
           '<div class="edit-actions">' +
             '<button class="btn cancel">Cancel</button>' +
             '<button class="btn primary save">Save</button>' +
@@ -194,6 +197,21 @@
           '</details>' +
         '</div>' +
       '</li>';
+    }
+
+    // Items catalogued before the name/description split carry only a description.
+    // Clip it for the title line rather than migrating what is on disk.
+    function itemName(it) {
+      if (it.name && it.name.trim()) return it.name.trim();
+      const d = (it.description || '').trim();
+      if (!d) return '(unknown)';
+      return d.length <= 42 ? d : d.slice(0, 42).replace(/[\s,;:—–-]+\S*$/, '') + '…';
+    }
+
+    function itemDetail(it) {
+      const d = (it.description || '').trim();
+      if (it.name && it.name.trim()) return d;
+      return d === itemName(it) ? '' : d;   // don't repeat a description used as the title
     }
 
     function renderQaLog(qa) {
@@ -395,6 +413,7 @@
 
     async function saveHit(li) {
       const payload = {
+        name: li.querySelector('.f-name').value,
         description: li.querySelector('.f-description').value,
         part_number: li.querySelector('.f-part_number').value || null,
         category: li.querySelector('.f-category').value,

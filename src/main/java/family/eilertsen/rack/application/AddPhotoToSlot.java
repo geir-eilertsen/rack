@@ -60,7 +60,7 @@ public class AddPhotoToSlot {
     }
 
     private static Item stampSource(Item i, String filename) {
-        return new Item(i.description(), i.partNumber(), i.category(), i.qtyEstimate(),
+        return new Item(i.name(), i.description(), i.partNumber(), i.category(), i.qtyEstimate(),
             i.confidence(), i.tags(), i.embedding(), i.qa(), filename);
     }
 
