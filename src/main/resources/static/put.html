@@ -133,6 +133,14 @@
     const fileManualBtn = document.getElementById('fileManual');
 
     let containers = [];
+
+    // Containers are keyed by a short id ("rack") but named by their owner
+    // ("Skuffereol"). The key belongs in URLs; the name belongs on screen.
+    function containerName(id) {
+      const c = containers.find(c => c.id === id);
+      return (c && c.name) ? c.name : id;
+    }
+
     let selectedContainer = null;
     let selectedSlot = null;
     // Photos of one slot are collected here and filed as a batch, so a part and
@@ -164,9 +172,9 @@
     function refreshUiForSelection() {
       const hasSlot = !!(selectedContainer && selectedSlot);
       if (hasSlot) {
-        title.textContent = 'Slot ' + selectedContainer.id + ' · ' + selectedSlot;
+        title.textContent = 'Slot ' + containerName(selectedContainer.id) + ' · ' + selectedSlot;
         slotHeader.hidden = false;
-        slotHeader.textContent = selectedContainer.id + ' · ' + selectedSlot;
+        slotHeader.textContent = containerName(selectedContainer.id) + ' · ' + selectedSlot;
         currentHeading.hidden = false;
         captureHeading.textContent = pendingPhotos.length ? 'Photos of this slot' : 'Add a photo';
         // Keep the manual picker visible while photos are waiting to be filed
@@ -194,7 +202,7 @@
         return;
       }
       captureLabel.textContent = selectedContainer && selectedSlot
-        ? 'Take a photo of what\'s in ' + selectedContainer.id + '.' + selectedSlot
+        ? 'Take a photo of what\'s in ' + containerName(selectedContainer.id) + ' · ' + selectedSlot
         : 'Take a photo';
     }
 
@@ -208,7 +216,7 @@
       fileBtn.disabled = false;
       const photos = n + ' photo' + (n === 1 ? '' : 's');
       fileBtn.textContent = selectedContainer && selectedSlot
-        ? 'File ' + photos + ' in ' + selectedContainer.id + '.' + selectedSlot
+        ? 'File ' + photos + ' in ' + containerName(selectedContainer.id) + ' · ' + selectedSlot
         : 'Identify ' + photos;
     }
 
@@ -656,7 +664,7 @@
           .map(m => esc(itemName(m)))
           .join('; ');
         return '<li class="sug' + (i === 0 ? ' top' : '') + '">' +
-          '<div class="head"><span class="loc">' + esc(s.container) + ' · ' + esc(s.slot) + '</span></div>' +
+          '<div class="head"><span class="loc">' + esc(containerName(s.container)) + ' · ' + esc(s.slot) + '</span></div>' +
           (matches ? '<div class="why">has: ' + matches + '</div>' : '') +
           '<button class="btn primary block" data-c="' + esc(s.container) + '" data-s="' + esc(s.slot) + '">File here</button>' +
         '</li>';
