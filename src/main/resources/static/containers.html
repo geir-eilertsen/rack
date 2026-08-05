@@ -175,8 +175,10 @@
               '<input type="text" class="c-name-input">' +
             '</div>' +
             '<div>' +
-              '<label class="field">What is one of its places called?</label>' +
-              '<input type="text" class="c-word-input" placeholder="drawer, compartment, shelf" autocomplete="off">' +
+              '<div class="c-word-field">' +
+                '<label class="field">What is one of its places called?</label>' +
+                '<input type="text" class="c-word-input" placeholder="drawer, compartment, shelf" autocomplete="off">' +
+              '</div>' +
               '<label class="field">Label scale</label>' +
               '<input type="number" class="c-scale-input" min="0.1" max="2" step="0.05">' +
             '</div>' +
@@ -218,6 +220,8 @@
         q('.c-name-input').value = c.name || '';
         q('.c-scale-input').value = c.label_scale;
         q('.c-word-input').value = c.slot_label || '';
+        // Nothing to name when the container is the place.
+        q('.c-word-field').hidden = c.slots.length <= 1;
       }
 
       async function refreshStats() {
@@ -228,9 +232,15 @@
           const filled = slots.filter(s => s.item_count > 0).length;
           const items = slots.reduce((n, s) => n + s.item_count, 0);
           const printed = slots.filter(s => s.printed).length;
+          // "1 of 1 slots filled" about a plastic box counts a subdivision it
+          // has not got. Whether it holds anything is the whole story there.
+          const divided = slots.length > 1;
           stats.innerHTML =
-            '<span class="num">' + filled + '</span> of <span class="num">' + slots.length + '</span> slots filled · ' +
-            '<span class="num">' + items + '</span> items · ' +
+            (divided
+              ? '<span class="num">' + filled + '</span> of <span class="num">' + slots.length + '</span> '
+                + plural(c.slot_label || 'slot') + ' filled · '
+              : (items ? 'in use · ' : 'empty · ')) +
+            '<span class="num">' + items + '</span> item' + (items === 1 ? '' : 's') + ' · ' +
             '<span class="num">' + printed + '</span> labelled';
 
           // A photo counts as content even with nothing extracted from it, matching what the server will allow.

@@ -167,4 +167,27 @@ class LabelSheetTest {
             return doc.getNumberOfPages();
         }
     }
+    @Test
+    void aLongSlotIdShrinksItsTypeRatherThanRunningOffTheSticker() {
+        // At scale 1.0 a 30mm QR and 40pt type leave room for two characters on
+        // a 63.5mm sticker. "E12" wanted 67.8mm and "Box1" 78.3mm, and both were
+        // drawn anyway — this rack's A10 through E12 are all three characters.
+        for (String id : List.of("1", "A1", "E12", "Box1", "top-left")) {
+            LabelSheet.Label label = new LabelSheet.Label(LAB, new SlotId(id));
+
+            assertThat(LabelSheet.widthOf(label))
+                .as("content width for %s", id)
+                .isLessThanOrEqualTo(LabelSheet.stickerWidth());
+        }
+    }
+
+    @Test
+    void aShortIdKeepsItsFullSize() {
+        // Only the ones that would overflow give way; nothing else changes.
+        LabelSheet.Label two = new LabelSheet.Label(LAB, new SlotId("A1"));
+
+        assertThat(LabelSheet.widthOf(two)).isLessThan(LabelSheet.stickerWidth());
+        assertThat(LabelSheet.widthOf(two)).isGreaterThan(LabelSheet.stickerWidth() * 0.8f);
+    }
+
 }

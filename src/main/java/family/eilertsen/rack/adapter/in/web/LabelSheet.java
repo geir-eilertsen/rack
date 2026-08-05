@@ -72,8 +72,30 @@ final class LabelSheet {
     private static float contentWidth(Label label) {
         float scale = scaleOf(label);
         float padding = PADDING_1X * scale;
-        float text = label.slot().value().length() * 0.75f * FONT_SIZE_1X * scale;
+        float text = label.slot().value().length() * 0.75f * fontSize(label);
         return padding + QR_SIZE_1X * scale + padding + text + padding;
+    }
+
+    /**
+     * The type size, shrunk when the id will not otherwise fit beside its QR.
+     *
+     * <p>At scale 1.0 a 30mm QR and 40pt type leave room for two characters on a 63.5mm sticker; "E12" wants
+     * 67.8mm and "Box1" 78.3mm, and both used to be drawn anyway, running off the edge. The QR is the part
+     * that has to work — its module size is already the floor on how small a label can go — so it keeps its
+     * size and the type gives way.
+     */
+    private static float fontSize(Label label) {
+        float scale = scaleOf(label);
+        float wanted = FONT_SIZE_1X * scale;
+        int length = label.slot().value().length();
+        if (length == 0) return wanted;
+
+        float padding = PADDING_1X * scale;
+        float room = LABEL_W - (padding + QR_SIZE_1X * scale + padding + padding);
+        float needed = length * 0.75f * wanted;
+        // A hair under, so float arithmetic cannot land a shrunk label a
+        // rounding error over the edge it was shrunk to fit inside.
+        return needed <= room ? wanted : Math.max(room / (length * 0.75f) * 0.999f, 0f);
     }
 
     /** One label's spot inside a sticker, as offsets right and down from the sticker's top-left corner. */
@@ -168,7 +190,7 @@ final class LabelSheet {
                             float scale = scaleOf(placed.label());
                             drawLabel(doc, cs, font, placed.label().container(), placed.label().slot(), baseUrl,
                                 x + placed.dx(), y + LABEL_H - placed.dy(),
-                                QR_SIZE_1X * scale, PADDING_1X * scale, FONT_SIZE_1X * scale);
+                                QR_SIZE_1X * scale, PADDING_1X * scale, fontSize(placed.label()));
                         }
                     }
                 }

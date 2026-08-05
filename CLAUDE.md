@@ -170,7 +170,9 @@ Physical paper is always Avery L7160 (A4 21-up, 63.5×38.1mm). Each container de
 
 **Several labels can share one physical sticker.** `LabelSheet.pack` shelf-packs consecutive labels into an L7160 slot, filling across before dropping to the next row, so a 0.4-scale container puts *four* labels on one sticker as a 2×2 grid to be trimmed apart; at 1.0 nothing packs. Mixed scales pack fine because each label is measured on its own — a full-scale label won't squeeze in beside a small one.
 
-Width is estimated, not measured: the slot id is budgeted at 0.75em per character (Helvetica-Bold caps peak at 0.722em), so the estimate errs wide, and erring wide costs a column rather than causing an overlap. Longer slot ids therefore fit fewer per row — at scale 0.4 a 3-character id like `E12` still gets 2 columns, but the ceiling for 2 columns is scale 0.47 for 3-character ids versus 0.56 for 2-character ones.
+Width is estimated, not measured: the slot id is budgeted at 0.75em per character (Helvetica-Bold caps peak at 0.722em), so the estimate errs wide, and erring wide costs a column rather than causing an overlap.
+
+**The type gives way when the id will not fit beside its QR.** At scale 1.0 a 30mm QR and 40pt type leave room for two characters on a 63.5mm sticker: "E12" wanted 67.8mm and "Box1" 78.3mm, and both were drawn anyway and ran off the edge — this rack's A10 through E12 are all three characters. The QR keeps its size, because its module size is already the floor on how small a label can go, and the font shrinks to whatever room is left (`Box1` sets at 26pt rather than 40pt and lands 2mm inside the edge). Longer slot ids therefore fit fewer per row — at scale 0.4 a 3-character id like `E12` still gets 2 columns, but the ceiling for 2 columns is scale 0.47 for 3-character ids versus 0.56 for 2-character ones.
 
 **QR module size is the real limit on how small a scale can go.** A slot URL encodes to a 41-module symbol including its quiet zone, so a QR drawn at *S* mm has *S*/41 mm modules and phone cameras want roughly 0.33mm or more. Scale 0.4 gives 12mm → 0.29mm, which is under that; 0.46 gives 13.8mm → 0.34mm and still packs 4-up.
 
