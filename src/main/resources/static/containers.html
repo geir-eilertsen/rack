@@ -165,6 +165,9 @@
             '<summary>Advanced options</summary>' +
             '<label class="toggle-line"><input type="checkbox" class="c-all"> Include already-printed slots</label>' +
             '<label class="toggle-line"><input type="checkbox" class="c-fresh"> Fresh sheet (start at position 1)</label>' +
+            '<label class="field">Start at sticker</label>' +
+            '<input type="number" class="c-start" min="1" max="21" step="1">' +
+            '<div class="note">A part-used sheet is a physical thing the app cannot see. Count the stickers already gone, top-left to bottom-right, and set the next one.</div>' +
           '</details>' +
           '<div class="note">Preview generates a PDF without marking slots. Print &amp; mark saves a copy under <code>data/&lt;container&gt;/labels/</code> and offsets past positions already used on the current sheet.</div>' +
         '</div>' +
@@ -199,6 +202,13 @@
       const editPanel = q('.c-edit');
       const allBox = q('.c-all');
       const freshBox = q('.c-fresh');
+      const startBox = q('.c-start');
+      // "Fresh sheet" is the same statement as "start at 1", so it drives the
+      // field rather than quietly disagreeing with it.
+      freshBox.addEventListener('change', () => {
+        startBox.disabled = freshBox.checked;
+        if (freshBox.checked) startBox.value = 1;
+      });
       const preview = q('.c-preview');
       const print = q('.c-print');
 
@@ -266,6 +276,8 @@
           '<span class="num">' + s.printed + '</span> printed · ' +
           '<span class="num">' + s.unprinted + '</span> pending' + stickers + ' · ' +
           '<span class="num">' + s.total + '</span> total';
+        startBox.value = s.next_offset + 1;
+        startBox.disabled = freshBox.checked;
         q('.c-offset').textContent = s.next_offset > 0
           ? 'Starts at position ' + (s.next_offset + 1) + ' — feeds around the ' + s.next_offset + ' stickers already used, counted across every container.'
           : 'Starts on a fresh sheet.';
@@ -277,7 +289,14 @@
       function queryParams() {
         const params = new URLSearchParams();
         params.set('scope', allBox.checked ? 'all' : 'unprinted');
-        if (freshBox.checked) params.set('offset', '0');
+        if (freshBox.checked) {
+          params.set('offset', '0');
+        } else {
+          // Sent as a position counting from 1, because that is how a sheet is
+          // counted by eye; the endpoint takes how many are already gone.
+          const start = parseInt(startBox.value, 10);
+          if (start >= 1) params.set('offset', String(start - 1));
+        }
         return params.toString();
       }
 

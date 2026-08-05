@@ -44,4 +44,23 @@ class ContainerLayoutTest {
     void linearWithNullPrefixIsSameAsEmpty() {
         assertEquals(ContainerLayout.linear(2, ""), ContainerLayout.linear(2, null));
     }
+    @Test
+    void oneThingWithANameIsNotNumbered() {
+        // A prefix of "Box2" and a count of one meant the place is called Box2.
+        // It produced "Box21", which is what got printed on the label.
+        assertEquals(List.of(new SlotId("Box2")), ContainerLayout.linear(1, "Box2"));
+    }
+
+    @Test
+    void oneThingWithoutANameStillNeedsOne() {
+        assertEquals(List.of(new SlotId("1")), ContainerLayout.linear(1, ""));
+        assertEquals(List.of(new SlotId("1")), ContainerLayout.linear(1, null));
+    }
+
+    @Test
+    void moreThanOneIsStillNumbered() {
+        assertEquals(List.of(new SlotId("b1"), new SlotId("b2"), new SlotId("b3")),
+            ContainerLayout.linear(3, "b"));
+    }
+
 }

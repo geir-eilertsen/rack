@@ -176,7 +176,11 @@ Width is estimated, not measured: the slot id is budgeted at 0.75em per characte
 
 **QR module size is the real limit on how small a scale can go.** A slot URL encodes to a 41-module symbol including its quiet zone, so a QR drawn at *S* mm has *S*/41 mm modules and phone cameras want roughly 0.33mm or more. Scale 0.4 gives 12mm → 0.29mm, which is under that; 0.46 gives 13.8mm → 0.34mm and still packs 4-up.
 
-The consequence: **printed labels and consumed stickers are different numbers**, so sheet offsets are counted in stickers. `LabelSheet.positionCount` re-packs the already-printed labels to work out how far into the current sheet earlier runs reached.
+The consequence: **printed labels and consumed stickers are different numbers**, so sheet offsets are counted in stickers.
+
+**Where the next run starts is recorded, not recalculated.** Each print writes a `LabelRun` to `data/label-runs.json` — which container, where on the sheet it began, how many stickers it took — and the next offset comes from the last one. It used to be re-derived by re-packing whatever was currently marked printed, which made a physical fact a function of present state: consolidating one container's two duplicate slots, both already printed, rewound the count by a sticker and aimed the next run at a position already used. A sticker that has been peeled off does not un-peel because a slot was edited. An empty ledger falls back to the old reckoning, so runs made before it existed are not read as an untouched sheet.
+
+**And the sheet can be set by hand.** A part-used sheet is a physical thing the app cannot see, so the labels panel takes a start position, defaulting to the ledger's answer. Count the stickers already gone, top-left to bottom-right, and say which is next.
 
 **Sheet position is global, printing is per container.** A sheet of paper is a shared physical resource, so `resolveOffset` counts stickers consumed across *every* container: print 8 labels for a 0.4-scale container (4 stickers) and the next container's run starts at position 5, whichever container that is. There is deliberately no "print everything" run — not every container gets labels, so printing stays a per-container action. Packing only ever combines labels within one container's run, so a part-filled sticker is never continued by the next container; sharing happens at sticker granularity, not inside one.
 

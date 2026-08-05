@@ -28,6 +28,9 @@ public final class ContainerLayout {
 
     public static List<SlotId> linear(int count, String prefix) {
         String p = prefix == null ? "" : prefix;
+        // Numbering one thing is meaningless: a prefix of "Box2" and a count of
+        // one meant the place is called Box2, and produced "Box21".
+        if (count == 1 && !p.isBlank()) return List.of(new SlotId(p));
         List<SlotId> slots = new ArrayList<>(count);
         for (int i = 1; i <= count; i++) {
             slots.add(new SlotId(p + i));

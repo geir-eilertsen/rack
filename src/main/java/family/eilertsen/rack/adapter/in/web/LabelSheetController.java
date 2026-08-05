@@ -3,6 +3,8 @@ package family.eilertsen.rack.adapter.in.web;
 import family.eilertsen.rack.application.ContainerRegistry;
 import family.eilertsen.rack.application.RackProperties;
 import family.eilertsen.rack.domain.model.Container;
+import family.eilertsen.rack.domain.model.LabelRun;
+import family.eilertsen.rack.domain.port.LabelRuns;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
@@ -36,10 +38,13 @@ public class LabelSheetController {
     private final PartIndex index;
     private final Path dataDir;
     private final String configuredBase;
+    private final LabelRuns labelRuns;
 
-    public LabelSheetController(ContainerRegistry registry, PartIndex index, RackProperties props) {
+    public LabelSheetController(ContainerRegistry registry, PartIndex index, RackProperties props,
+                                 LabelRuns labelRuns) {
         this.registry = registry;
         this.index = index;
+        this.labelRuns = labelRuns;
         this.dataDir = Path.of(props.dataDir()).toAbsolutePath();
         this.configuredBase = props.publicBaseUrl();
     }
@@ -69,6 +74,11 @@ public class LabelSheetController {
         byte[] pdf = LabelSheet.build(resolveBase(base, req), c, slots, firstPageOffset);
         savePdf(c, pdf);
         markPrinted(c, slots, Instant.now());
+        // How much of the sheet this run took, recorded now rather than worked
+        // out again later from state that may have changed since.
+        int stickers = LabelSheet.positionCount(
+            slots.stream().map(sid -> new LabelSheet.Label(c, sid)).toList());
+        labelRuns.record(new LabelRun(Instant.now(), c.id().value(), firstPageOffset, stickers));
         return pdfResponse(c.id().value(), pdf);
     }
 
@@ -106,9 +116,26 @@ public class LabelSheetController {
      * A container's own run still packs only its own labels, so a part-filled sticker is never continued
      * by the next container — sharing happens at sticker granularity, not within one.
      */
+    /**
+     * Where the next run starts on the sheet.
+     *
+     * <p>Taken from the last recorded run, because a sticker that has been
+     * peeled off is a fact and re-deriving it from what is currently marked
+     * printed makes it a function of present state — edit a slot and the sheet
+     * position moves under you. Runs made before the ledger existed left no
+     * record, so an empty ledger falls back to the old reckoning rather than
+     * claiming the sheet is untouched.
+     */
     private int resolveOffset(Container c, Integer explicit) {
         if (explicit != null) return Math.max(0, explicit % LabelSheet.PER_SHEET);
-        return positionsPrintedEverywhere() % LabelSheet.PER_SHEET;
+        return nextOffset();
+    }
+
+    private int nextOffset() {
+        List<LabelRun> runs = labelRuns.all();
+        if (runs.isEmpty()) return positionsPrintedEverywhere() % LabelSheet.PER_SHEET;
+        LabelRun last = runs.get(runs.size() - 1);
+        return Math.floorMod(last.startedAt() + last.stickers(), LabelSheet.PER_SHEET);
     }
 
     private int positionsPrintedEverywhere() {
