@@ -15,6 +15,14 @@
     return String(n);
   }
 
+  // Keep the small numbers legible rather than rounding a real cost to $0.00.
+  function money(d) {
+    if (d >= 1) return '$' + d.toFixed(2);
+    if (d >= 0.01) return '$' + d.toFixed(2);
+    if (d > 0) return '$' + d.toFixed(4);
+    return '$0.00';
+  }
+
   function render(u) {
     if (!u || !u.calls) {
       foot.hidden = true;
@@ -23,10 +31,14 @@
     }
     const perModel = (u.models || [])
       .map(m => m.model + ': ' + count(m.input_tokens) + ' in, ' + count(m.output_tokens) + ' out'
-        + ' over ' + m.calls + ' call' + (m.calls === 1 ? '' : 's'))
+        + ' over ' + m.calls + ' call' + (m.calls === 1 ? '' : 's')
+        + ' — ' + (m.cost == null ? 'no price configured' : money(m.cost)))
       .join('\n');
-    foot.textContent = 'tokens spent · ' + count(u.input_tokens) + ' in · ' + count(u.output_tokens)
-      + ' out · ' + u.calls + ' call' + (u.calls === 1 ? '' : 's');
+    // "at least" when a model has no configured price: its tokens are counted
+    // but its cost isn't, and a short total should not read as the whole bill.
+    foot.textContent = (u.all_priced ? '' : 'at least ') + money(u.cost)
+      + ' · ' + count(u.input_tokens) + ' in · ' + count(u.output_tokens) + ' out · '
+      + u.calls + ' call' + (u.calls === 1 ? '' : 's');
     foot.title = perModel;          // the per-model split, for the curious
     foot.hidden = false;
     document.body.classList.add('has-usage');
