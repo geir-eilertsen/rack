@@ -83,13 +83,13 @@
        so the whole proposal is on screen and the consequence is spelled out
        above the button that does it. */
     #resyncBar { margin-top: .75rem; }
-    /* Ten more of something the drawer already holds is one thing in two rows.
-       Offered, never taken — two bags of black heat shrink may not be one bag. */
-    .join { margin-top: .75rem; padding: .8rem .9rem; border: 1px solid var(--primary); border-radius: var(--radius-sm); background: var(--primary-soft); }
-    .join p { margin: 0 0 .55rem; font-size: .9rem; }
-    .join .sums { font-family: var(--font-mono); font-weight: 700; color: var(--primary-hover); }
-    .join .actions { display: flex; gap: .4rem; }
-    .join .actions .btn { flex: 1; }
+    /* Filing appends, so topping a drawer up leaves the thing in two rows.
+       Joining them is a person's call, made here rather than guessed at. */
+    .merge-panel { margin-top: .6rem; }
+    .merge-panel summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--primary-hover); padding: .3rem 0; }
+    .merge-body { padding: .4rem 0 .2rem; }
+    .merge-hint { margin: 0 0 .5rem; font-size: .8rem; color: var(--muted); }
+    .merge-targets .merge-into { margin-bottom: .35rem; text-align: left; }
     .resync-hint { font-size: .8rem; color: var(--muted); margin: .4rem 0 0; }
     .resync { margin-top: 1rem; padding: .9rem 1rem 1rem; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); }
     .resync .settled { margin-bottom: .9rem; padding: .6rem .8rem; background: var(--success-soft); color: var(--success); border-radius: var(--radius-sm); font-size: .88rem; }
@@ -129,8 +129,6 @@
 
     <h2 id="currentHeading" hidden>What's already here</h2>
     <ul class="current" id="current"></ul>
-
-    <div id="joinPanel" class="join" hidden></div>
 
     <div id="resyncBar" hidden>
       <button type="button" class="btn block" id="resyncBtn">Resync this drawer</button>
@@ -179,7 +177,6 @@
     const slotHeader = document.getElementById('slotHeader');
     const currentHeading = document.getElementById('currentHeading');
     const currentEl = document.getElementById('current');
-    const joinPanel = document.getElementById('joinPanel');
     const resyncBar = document.getElementById('resyncBar');
     const resyncBtn = document.getElementById('resyncBtn');
     const resyncHint = document.getElementById('resyncHint');
@@ -487,86 +484,8 @@
     // Filing appends, so ten more of something already in the drawer lands as a
     // second row. Joining them is offered rather than done: two bags of black
     // heat shrink may genuinely be two bags, and the app cannot tell.
-    let pendingJoin = null;
-
-    function offerJoin(containerId, slotId, duplicates) {
-      // Held rather than painted straight away: filing re-renders the item list
-      // a moment later, and an offer painted before that would be wiped by it.
-      pendingJoin = duplicates.length ? { containerId, slotId, duplicates } : null;
-      showJoin();
-    }
-
-    function showJoin() {
-        joinPanel.hidden = !pendingJoin;
-        if (!pendingJoin) return;
-        const { containerId, slotId, duplicates } = pendingJoin;
-        joinPanel.innerHTML = duplicates.map(d => {
-          const was = d.existing.qty_estimate == null ? 1 : d.existing.qty_estimate;
-          const more = d.added.qty_estimate == null ? 1 : d.added.qty_estimate;
-          // Both readings, because joining keeps one description and drops the
-          // other, and the one being dropped is the one that describes what was
-          // just put in. "Two AAA batteries" surviving as the text on a row of
-          // six is the whole reason this shows them.
-          return '<p>This drawer already held <strong>' + esc(itemName(d.existing)) + '</strong>. '
-            + 'It is now two rows: <span class="sums">×' + was + '</span> and <span class="sums">×' + more + '</span>.</p>'
-            + (itemDetail(d.existing) ? '<p class="detail">keeping: ' + esc(itemDetail(d.existing)) + '</p>' : '')
-            + (itemDetail(d.added) ? '<p class="detail">dropping: ' + esc(itemDetail(d.added)) + '</p>' : '')
-            + '<div class="actions">'
-            +   '<button type="button" class="btn" data-skip="1">Keep them separate</button>'
-            +   '<button type="button" class="btn primary" data-keep="' + d.existing_index + '" data-drop="' + d.added_index
-            +     '" data-qty="' + (was + more) + '">Join into one row of ×' + (was + more) + '</button>'
-            + '</div>';
-        }).join('');
-        joinPanel.querySelectorAll('[data-skip]').forEach(b => b.addEventListener('click', () => {
-          pendingJoin = null;
-          joinPanel.hidden = true;
-          setStatus('ok', 'Left as two rows.');
-        }));
-        joinPanel.querySelectorAll('[data-keep]').forEach(b => b.addEventListener('click', () =>
-          join(containerId, slotId, +b.dataset.keep, +b.dataset.drop, +b.dataset.qty, b)));
-    }
-
-    async function join(containerId, slotId, keepIndex, dropIndex, qty, btn) {
-      btn.disabled = true;
-      btn.textContent = 'Joining…';
-      try {
-        const slotUrl = '/c/' + containerId + '/' + slotId + '/items/';
-        const current = await (await fetch('/c/' + containerId + '/' + slotId)).json();
-        const keep = current.items[keepIndex];
-        // Sum first, drop second. The added row is always the later index, so
-        // patching the earlier one cannot shift the one about to be deleted.
-        let res = await fetch(slotUrl + keepIndex, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(itemPayload(keep, qty))
-        });
-        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
-        res = await fetch(slotUrl + dropIndex, { method: 'DELETE' });
-        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
-        const slot = await res.json();
-        pendingJoin = null;
-        joinPanel.hidden = true;
-        renderCurrent(slot.items || [], slot.photos || []);
-        // The surviving description was written for the old count and can now
-        // contradict it, so open the row rather than leaving the reader to
-        // notice. No automatic choice is right here: neither reading describes
-        // what is in the drawer once the two are added together.
-        const row = currentEl.querySelector('li[data-idx="' + keepIndex + '"]');
-        if (row) {
-          row.classList.add('editing');
-          row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        }
-        setStatus('ok', '✓ Joined into one row of ×' + qty + '. Check the description still fits.');
-      } catch (e) {
-        btn.disabled = false;
-        btn.textContent = 'Join into one row of ×' + qty;
-        setStatus('error', 'Could not join the rows: ' + e.message);
-      }
-    }
-
     function renderCurrent(list, photos) {
       if (photos) slotPhotos = photos;
-      joinPanel.hidden = true;
       slotItemCount = list.length;
       updateResyncBar();
       // A proposal addresses items by their position in this list, so editing,
@@ -595,8 +514,67 @@
       currentEl.querySelectorAll('.remove').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); removeItem(b.closest('li')); }));
       currentEl.querySelectorAll('.ask-btn').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); askItem(b.closest('li')); }));
       currentEl.querySelectorAll('.ai-q').forEach(inp => inp.addEventListener('click', e => e.stopPropagation()));
+      currentEl.querySelectorAll('.merge-panel').forEach(panel => wireMergePanel(panel, list));
       currentEl.querySelectorAll('.move-panel').forEach(panel => wireMovePanel(panel));
-      showJoin();                 // an offer made just before this survives it
+    }
+
+    // Whether two rows are the same thing is a person's judgement — two bags of
+    // black heat shrink may genuinely be two bags — so this only ever offers the
+    // other rows and does exactly what it is told.
+    function wireMergePanel(panel, list) {
+      const host = panel.querySelector('.merge-targets');
+      const li = panel.closest('li');
+      const from = +li.dataset.idx;
+      panel.addEventListener('click', ev => ev.stopPropagation());
+      panel.addEventListener('toggle', () => {
+        if (!panel.open || host.children.length) return;
+        const others = list.map((it, idx) => ({ it, idx })).filter(o => o.idx !== from);
+        if (!others.length) {
+          host.innerHTML = '<p class="merge-hint">Nothing else in this drawer to merge into.</p>';
+          return;
+        }
+        host.innerHTML = '';
+        others.forEach(o => {
+          const qty = o.it.qty_estimate == null ? 1 : o.it.qty_estimate;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn block merge-into';
+          btn.textContent = 'Merge into ' + itemName(o.it) + ' (×' + qty + ')';
+          btn.addEventListener('click', ev => { ev.stopPropagation(); mergeInto(from, o.idx, btn); });
+          host.appendChild(btn);
+        });
+      });
+    }
+
+    async function mergeInto(from, into, btn) {
+      const original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Merging…';
+      try {
+        const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + from + '/merge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ into })
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const slot = await res.json();
+        renderCurrent(slot.items || [], slot.photos || []);
+        // Removing a row shifts everything after it, so the survivor is only
+        // where it was if it came first.
+        const survivor = into < from ? into : into - 1;
+        const row = currentEl.querySelector('li[data-idx="' + survivor + '"]');
+        if (row) {
+          row.classList.add('editing');
+          row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+        // The kept wording was written for the old count and may now describe
+        // less than the row holds.
+        setStatus('ok', '✓ Merged. Check the description still fits.');
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = original;
+        setStatus('error', 'Merge failed: ' + e.message);
+      }
     }
 
     function wireMovePanel(panel) {
@@ -774,6 +752,13 @@
               '<button class="btn ask-btn">Ask</button>' +
             '</div>' +
           '</div>' +
+          '<details class="merge-panel">' +
+            '<summary>Merge into another item here…</summary>' +
+            '<div class="merge-body">' +
+              '<p class="merge-hint">Adds this row\'s count and photos into the one you pick, and removes this row. The other row\'s wording is kept.</p>' +
+              '<div class="merge-targets"></div>' +
+            '</div>' +
+          '</details>' +
           '<details class="move-panel">' +
             '<summary>Move to another slot…</summary>' +
             '<div class="move-body">' +
@@ -894,7 +879,6 @@
       resyncBar.hidden = !slotItemCount || !(selectedContainer && selectedSlot);
       // The offer names item positions in one slot; anything that moves off it
       // or changes the list makes those positions someone else's.
-      if (resyncMode) { pendingJoin = null; joinPanel.hidden = true; }
       resyncBtn.textContent = resyncMode ? 'Cancel resync' : 'Resync this drawer';
       resyncHint.hidden = resyncMode;
     }
@@ -1318,7 +1302,6 @@
         if (window.rackUsage) rackUsage.refresh();
         setStatus('ok', '✓ Filed ' + items + ' item' + (items === 1 ? '' : 's') + ' from '
           + count + ' photo' + (count === 1 ? '' : 's') + ' into ' + containerName(containerId) + ' · ' + slotId + '.');
-        offerJoin(containerId, slotId, data.duplicates || []);
         clearPending();
         suggestionsEl.innerHTML = '';
         pickHeading.hidden = true;

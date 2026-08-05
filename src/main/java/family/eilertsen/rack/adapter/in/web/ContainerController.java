@@ -5,6 +5,7 @@ import family.eilertsen.rack.application.AskAboutItem;
 import family.eilertsen.rack.application.ContainerRegistry;
 import family.eilertsen.rack.application.DeleteContainer;
 import family.eilertsen.rack.application.EditItem;
+import family.eilertsen.rack.application.MergeItems;
 import family.eilertsen.rack.application.MoveItem;
 import family.eilertsen.rack.application.RegisterContainer;
 import family.eilertsen.rack.application.RemoveItem;
@@ -47,13 +48,15 @@ public class ContainerController {
     private final RemoveItem removeItem;
     private final EditItem editItem;
     private final MoveItem moveItem;
+    private final MergeItems mergeItems;
     private final AskAboutItem askAboutItem;
     private final ImageStore images;
 
     public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto,
                                 RegisterContainer registerContainer, UpdateContainer updateContainer,
                                 DeleteContainer deleteContainer, RemoveItem removeItem,
-                                EditItem editItem, MoveItem moveItem, AskAboutItem askAboutItem, ImageStore images) {
+                                EditItem editItem, MoveItem moveItem, MergeItems mergeItems,
+                                AskAboutItem askAboutItem, ImageStore images) {
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
@@ -63,6 +66,7 @@ public class ContainerController {
         this.removeItem = removeItem;
         this.editItem = editItem;
         this.moveItem = moveItem;
+        this.mergeItems = mergeItems;
         this.askAboutItem = askAboutItem;
         this.images = images;
     }
@@ -210,6 +214,31 @@ public class ContainerController {
     }
 
     public record MoveRequest(String targetContainer, String targetSlot) {}
+
+    /**
+     * Folds this item into another row of the same slot: quantities added,
+     * frames added, the target's wording kept. Deciding that two rows are the
+     * same thing is a person's job, so this endpoint only ever does what it is
+     * told — see {@link family.eilertsen.rack.application.MergeItems}.
+     */
+    @PostMapping("/{container}/{slot}/items/{index}/merge")
+    public Slot mergeItem(@PathVariable String container,
+                          @PathVariable String slot,
+                          @PathVariable int index,
+                          @RequestBody MergeRequest req) {
+        ContainerId cid = new ContainerId(container);
+        requireContainerExists(cid);
+        try {
+            return mergeItems.execute(cid, new SlotId(slot), req.into(), index);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        } catch (IndexOutOfBoundsException | java.util.NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+        }
+    }
+
+    /** The row that survives; the one in the path is the one folded into it. */
+    public record MergeRequest(int into) {}
 
     @PostMapping("/{container}/{slot}/items/{index}/ask")
     public Slot askItem(@PathVariable String container,

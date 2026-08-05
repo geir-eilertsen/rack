@@ -56,7 +56,7 @@ public class AddPhotoToSlot {
         Slot updated = new Slot(slot, List.copyOf(mergedItems), Instant.now(), List.copyOf(mergedPhotos), existing.printedAt());
         index.save(container, updated);
 
-        return new Result(filenames, extracted, alreadyHere(existing.items(), extracted));
+        return new Result(filenames, extracted);
     }
 
     /** Source stays the first frame, so the thumbnail is unchanged. */
@@ -75,32 +75,5 @@ public class AddPhotoToSlot {
 
     public record Photo(byte[] bytes, String contentType) {}
 
-    /**
-     * Ten more AA batteries into a drawer that already holds four is one thing
-     * in two rows, and taking four out later decrements whichever row you
-     * happened to tap. Filing still appends — the batteries really are in the
-     * drawer, and a silent merge of two bags of black heat shrink that are not
-     * the same bag would be worse than the duplicate. So it is reported, and
-     * the page offers to join them.
-     *
-     * <p>Only the first match for each new item: a second candidate means the
-     * drawer already had the thing twice, which is the same question again
-     * rather than a different one.
-     */
-    private static List<Duplicate> alreadyHere(List<Item> held, List<Item> added) {
-        List<Duplicate> duplicates = new ArrayList<>();
-        for (int a = 0; a < added.size(); a++) {
-            for (int h = 0; h < held.size(); h++) {
-                if (!ItemMatch.sameThing(held.get(h), added.get(a))) continue;
-                duplicates.add(new Duplicate(h, held.size() + a, held.get(h), added.get(a)));
-                break;
-            }
-        }
-        return List.copyOf(duplicates);
-    }
-
-    /** Both indexes are positions in the slot's item list as it now stands. */
-    public record Duplicate(int existingIndex, int addedIndex, Item existing, Item added) {}
-
-    public record Result(List<String> photoFilenames, List<Item> extracted, List<Duplicate> duplicates) {}
+    public record Result(List<String> photoFilenames, List<Item> extracted) {}
 }
