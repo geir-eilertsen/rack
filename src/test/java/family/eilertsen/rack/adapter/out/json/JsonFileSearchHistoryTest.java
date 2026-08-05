@@ -60,10 +60,45 @@ class JsonFileSearchHistoryTest {
     }
 
     @Test
+    void aQueryBeingTypedIsOneSearchAndNotFour() throws IOException {
+        // What actually reached the list before: typing "batteri" slowly enough
+        // that each prefix settled left b, ba, batt and batteri all remembered.
+        JsonFileSearchHistory history = load();
+        history.remember("ba");
+        history.remember("bat");
+        history.remember("batt");
+        history.remember("batteri");
+
+        assertThat(history.recent()).containsExactly("batteri");
+    }
+
+    @Test
+    void backspacingToAShorterQueryKeepsWhatYouStoppedOn() throws IOException {
+        JsonFileSearchHistory history = load();
+        history.remember("batteries");
+        history.remember("batt");
+
+        assertThat(history.recent()).containsExactly("batt");
+    }
+
+    @Test
+    void onlyCollapsesAgainstTheSearchBeingTyped() throws IOException {
+        // "led" is not mid-typing here — something else was searched in between,
+        // so it is a search of its own and both are worth keeping.
+        JsonFileSearchHistory history = load();
+        history.remember("led");
+        history.remember("resistor");
+        history.remember("led strip");
+
+        assertThat(history.recent()).containsExactly("led strip", "resistor", "led");
+    }
+
+    @Test
     void ignoresWhatIsNotWorthRemembering() throws IOException {
         JsonFileSearchHistory history = load();
         history.remember(null);
         history.remember("   ");
+        history.remember("b");                  // someone starting to type
         history.remember("x".repeat(200));
 
         assertThat(history.recent()).isEmpty();

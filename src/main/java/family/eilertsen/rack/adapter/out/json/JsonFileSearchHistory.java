@@ -17,6 +17,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Kept on the box rather than in the browser, so the search you did at the rack
@@ -30,6 +31,8 @@ public class JsonFileSearchHistory implements SearchHistory {
 
     /** Enough to cover the things you look for repeatedly, few enough to scan. */
     private static final int KEEP = 12;
+    /** A single letter is someone starting to type, never something they looked for. */
+    private static final int MIN_LENGTH = 2;
     private static final int MAX_LENGTH = 100;
 
     private final Path file;
@@ -58,7 +61,15 @@ public class JsonFileSearchHistory implements SearchHistory {
     public synchronized void remember(String query) {
         if (query == null) return;
         String trimmed = query.strip();
-        if (trimmed.isEmpty() || trimmed.length() > MAX_LENGTH) return;
+        if (trimmed.length() < MIN_LENGTH || trimmed.length() > MAX_LENGTH) return;
+
+        // "b", "ba", "batt", "batteri" is one search being typed, not four.
+        // Timing cannot tell them apart — pause long enough between keystrokes
+        // and every prefix looks like a query someone meant — but the text can:
+        // when one of a pair extends the other they belong to the same chain, so
+        // the newer wins. That also covers backspacing to a shorter query.
+        String head = recent.peekFirst();
+        if (head != null && sameChain(head, trimmed)) recent.removeFirst();
 
         // Searching the same thing again moves it to the front rather than
         // filling the list with itself.
@@ -78,5 +89,12 @@ public class JsonFileSearchHistory implements SearchHistory {
     @Override
     public synchronized List<String> recent() {
         return List.copyOf(recent);
+    }
+
+    /** One query extends the other, so they are the same search mid-typing. */
+    private static boolean sameChain(String a, String b) {
+        String x = a.toLowerCase(Locale.ROOT);
+        String y = b.toLowerCase(Locale.ROOT);
+        return x.startsWith(y) || y.startsWith(x);
     }
 }

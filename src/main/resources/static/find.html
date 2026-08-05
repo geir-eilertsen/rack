@@ -76,7 +76,12 @@
     <h1>Find an item</h1>
 
     <div class="search">
-      <input id="q" type="search" placeholder="e.g. transistor, TO-220, red LED" autocomplete="off" autofocus>
+      <input id="q" type="search" placeholder="e.g. transistor, TO-220, red LED" autocomplete="off"
+             enterkeyhint="search" autofocus>
+      <!-- Results come as you type; this says you meant it, and is what gets remembered. -->
+      <button class="btn primary shoot" id="go" type="button" title="Search" aria-label="Search">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+      </button>
       <!-- For the part you are holding and cannot name. -->
       <button class="btn shoot" id="shoot" type="button" title="Search by photo" aria-label="Search by photo">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h3l1.5-2h7L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
@@ -95,6 +100,7 @@
     const shoot = document.getElementById('shoot');
     const photo = document.getElementById('photo');
     const recentEl = document.getElementById('recent');
+    const go = document.getElementById('go');
 
     let controller = null;
     let smartController = null;
@@ -133,15 +139,41 @@
         '<button type="button" class="again">' + esc(query) + '</button>').join('');
       recentEl.querySelectorAll('.again').forEach(b => b.addEventListener('click', () => {
         q.value = b.textContent;
-        clearTimeout(debounce);
-        clearTimeout(smartDebounce);
-        runSearch();
+        submit();                                  // picking one is submitting it
       }));
       showRecent();
     }
 
     function showRecent() {
       recentEl.hidden = !recentEl.children.length || !!q.value.trim();
+    }
+
+    // Typing searches; submitting says you meant it. Only what you submit is
+    // remembered — a pause between keystrokes was never evidence of intent.
+    go.addEventListener('click', submit);
+    q.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') { ev.preventDefault(); submit(); }
+    });
+
+    function submit() {
+      const query = q.value.trim();
+      if (!query) { q.focus(); return; }
+      clearTimeout(debounce);
+      clearTimeout(smartDebounce);
+      q.blur();                                  // let the results have the screen
+      runSearch();
+      remember(query);
+    }
+
+    async function remember(query) {
+      try {
+        const res = await fetch('/searches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })
+        });
+        if (res.ok) renderRecent(await res.json());
+      } catch (e) { /* the search still ran */ }
     }
 
     q.addEventListener('input', () => {
@@ -203,7 +235,6 @@
         // whatever the widened pass found — including that it found nothing.
         if (widening || (result.expanded_terms && result.expanded_terms.length)) renderResult(result);
         if (window.rackUsage) rackUsage.refresh();
-        loadRecent();                              // the server just recorded this one
       } catch (e) {
         if (e.name === 'AbortError') return;
         if (widening && q.value.trim() === query) renderHits([], query, []);
