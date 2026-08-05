@@ -587,6 +587,10 @@
         const resized = await resize(file);
         pendingPhotos.push({ file: resized, url: URL.createObjectURL(resized) });
         renderPending();
+        // Yield a frame again so each thumbnail paints as it lands. Coming back
+        // from the camera straight into canvas work, iOS holds the repaint until
+        // the next touch — the photo is there, the strip just looks empty.
+        await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
       }
 
       refreshUiForSelection();
@@ -776,7 +780,9 @@
 
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-    async function resize(file, maxDim = 1600, quality = 0.85) {
+    // 1568px is the longest edge the vision model keeps; anything larger is
+    // downsampled on arrival, so sending more is upload time for nothing.
+    async function resize(file, maxDim = 1568, quality = 0.85) {
       const bitmap = await createImageBitmap(file);
       const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
       if (scale >= 1 && file.size < 3_000_000) return file;

@@ -170,6 +170,9 @@
       status.className = 'status';
       status.textContent = 'Reading the photo...';
       hits.innerHTML = '';
+      // Yield a frame so that lands before the canvas work starts: coming back
+      // from the camera, iOS otherwise holds the repaint until the next touch.
+      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
       try {
         const form = new FormData();
         for (const file of files) form.append('photo', await resize(file));
@@ -186,7 +189,8 @@
       }
     });
 
-    async function resize(file, maxDim = 1600, quality = 0.85) {
+    // Matches put.html: 1568px is the longest edge the vision model keeps.
+    async function resize(file, maxDim = 1568, quality = 0.85) {
       const bitmap = await createImageBitmap(file);
       const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
       if (scale >= 1 && file.size < 3_000_000) return file;

@@ -39,7 +39,11 @@ Three calls, three answers — all under `rack.ai` in `application.yml`, each ov
 
 **Extraction is where cheap was measured and rejected.** Asked to read this rack's own tool drawer, `claude-haiku-4-5` returned the desoldering braid's part number as `D21/1129` where it is `1.26/14329` — at 0.95 confidence — misread the brand, found four items where there are five, and invented a soldering iron. `part_number` is meant to be null when it isn't legible; a confidently wrong one is exactly the drift the design exists to prevent, and it costs about a cent a photo to avoid. Both Sonnets read the number correctly.
 
-`claude-sonnet-5` also reads it correctly but sends the same 1600px photo as ~24% more input tokens (it is the first Sonnet with the 2576px high-resolution tier), so it is cheaper only while its introductory pricing lasts and dearer after. Worth revisiting by dropping the client-side resize to 1568px.
+**`claude-sonnet-5` does not run on this stack.** Spring AI 1.0.0 sends a `temperature` on every request and Sonnet 5 rejects non-default sampling parameters outright — `HTTP 400: temperature is deprecated for this model`. Leaving `spring.ai.anthropic.chat.options.temperature` blank does not help; the option class fills its own default back in. It needs a Spring AI upgrade, not a config change.
+
+It would not pay for itself anyway. Measured on the same photo, Sonnet 5 reads the part number correctly but costs ~18% more input tokens at the *same* pixel size — 605 vs 475 for the prompt text (its tokenizer) and 1800 vs 1570 for the image (it tokenizes the same pixels more densely, not merely allowing more of them). It also runs adaptive thinking by default, which adds output tokens and returns a `thinking` block ahead of the JSON.
+
+Photos are resized client-side to **1568px**, the longest edge the vision model keeps — larger is downsampled on arrival, so sending more is upload time for nothing. That is also why the resize does not rescue Sonnet 5: it recovers 122 of the 352-token image gap and none of the tokenizer's.
 
 Claude has native vision, so the multipart-photo flow uses the same `ChatClient` API as any other model.
 
