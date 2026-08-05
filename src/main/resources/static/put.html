@@ -21,6 +21,16 @@
     .current .desc { font-size: .95rem; font-weight: 500; }
     .detail { font-size: .82rem; color: var(--muted); margin-top: .15rem; font-weight: 400; }
     .current .qty { font-family: var(--font-mono); font-weight: 700; color: var(--primary-hover); font-size: .95rem; }
+    /* Same two taps as on a search result: take what you came for without
+       opening the form. */
+    .take { flex: 0 0 auto; display: flex; align-items: center; gap: .3rem; }
+    .take .step { width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border-strong); border-radius: 50%; background: var(--card); color: var(--primary-hover);
+      font-size: 1.1rem; line-height: 1; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .take .step:hover:not(:disabled) { background: var(--primary-soft); border-color: var(--primary); }
+    .take .step:disabled { opacity: .3; cursor: default; }
+    .take .qty { min-width: 2.4em; text-align: center; }
+    .current li.editing .take { display: none; }
     .current .pn-line { margin-top: .2rem; }
     .current .tags-line { margin-top: .3rem; }
     .current li.editing .row { display: none; }
@@ -274,12 +284,91 @@
       return '/c/' + encodeURIComponent(selectedContainer.id) + '/' + encodeURIComponent(selectedSlot) + '/photos/' + encodeURIComponent(fn);
     }
 
+    // Taking stock from the row itself. Each tap moves the number at once and
+    // the write follows a beat later, so taking three is three taps and one
+    // write rather than three round trips racing each other.
+    const stock = new Map();
+    const SAVE_AFTER = 500;
+
+    function seedStock(list) {
+      flushPending();               // never let a re-render swallow a pending take
+      stock.clear();
+      list.forEach((it, idx) => stock.set(idx, {
+        item: it, qty: it.qty_estimate == null ? 1 : it.qty_estimate, timer: null
+      }));
+    }
+
+    function flushPending() {
+      for (const [idx, entry] of stock) {
+        if (!entry.timer) continue;
+        clearTimeout(entry.timer);
+        entry.timer = null;
+        saveCount(idx);
+      }
+    }
+
+    function adjust(li, delta) {
+      const idx = +li.dataset.idx;
+      const entry = stock.get(idx);
+      if (!entry) return;
+      const next = Math.max(0, entry.qty + delta);
+      if (next === entry.qty) return;
+      entry.qty = next;
+      paint(li, next);
+      clearTimeout(entry.timer);
+      entry.timer = setTimeout(() => { entry.timer = null; saveCount(idx); }, SAVE_AFTER);
+    }
+
+    function paint(li, qty) {
+      const n = li.querySelector('.n');
+      if (n) n.textContent = qty;
+      const minus = li.querySelector('.minus');
+      if (minus) minus.disabled = qty <= 0;
+    }
+
+    async function saveCount(idx) {
+      const entry = stock.get(idx);
+      if (!entry || !selectedContainer) return;
+      const it = entry.item;
+      const was = it.qty_estimate == null ? 1 : it.qty_estimate;
+      if (entry.qty === was) return;
+      try {
+        const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + idx, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: it.name || '',
+            description: it.description || '',
+            part_number: it.part_number || null,
+            category: it.category || '',
+            qty_estimate: entry.qty,
+            tags: it.tags || []
+          })
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const taken = was - entry.qty;
+        it.qty_estimate = entry.qty;
+        setStatus('ok', (taken > 0 ? 'Took ' + taken : 'Put back ' + -taken) + ' · '
+          + itemName(it) + ' now ×' + entry.qty + '.');
+      } catch (e) {
+        entry.qty = was;              // the drawer is the truth; put the number back
+        const li = currentEl.querySelector('li[data-idx="' + idx + '"]');
+        if (li) paint(li, was);
+        setStatus('error', 'Could not update the count: ' + e.message);
+      }
+    }
+
     function renderCurrent(list) {
       if (!list.length) {
         currentEl.innerHTML = '<li class="empty">Nothing here yet.</li>';
         return;
       }
+      seedStock(list);
       currentEl.innerHTML = list.map((it, idx) => renderItemRow(it, idx)).join('');
+      currentEl.querySelectorAll('.step').forEach(b => b.addEventListener('click', e => {
+        e.stopPropagation();                     // taking stock must not open the form
+        adjust(b.closest('li'), b.classList.contains('minus') ? -1 : 1);
+      }));
       currentEl.querySelectorAll('li').forEach((li, idx) => {
         li.addEventListener('click', ev => {
           if (li.classList.contains('editing')) return;
@@ -443,7 +532,11 @@
             (it.part_number ? '<div class="pn-line pn">' + esc(it.part_number) + '</div>' : '') +
             (tags ? '<div class="tags-line">' + tags + '</div>' : '') +
           '</div>' +
-          '<div class="qty">×' + qty + '</div>' +
+          '<div class="take">' +
+            '<button type="button" class="step minus" title="Take one"' + (qty <= 0 ? ' disabled' : '') + '>&minus;</button>' +
+            '<span class="qty">&times;<span class="n">' + qty + '</span></span>' +
+            '<button type="button" class="step plus" title="Put one back">+</button>' +
+          '</div>' +
         '</div>' +
         '<div class="edit-form">' +
           '<label>Name</label><input class="f-name" type="text" value="' + esc(it.name || '') + '">' +
