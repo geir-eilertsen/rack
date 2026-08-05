@@ -50,25 +50,40 @@ class FindItemsTest {
 
     @Test
     void leavesAQueryThatAlreadyWorksAlone() {
-        index.hits("transistor", hit("A1", 0, 4), hit("A2", 0, 3), hit("A3", 0, 3),
-            hit("A4", 0, 2), hit("A5", 0, 2));
+        index.hits("transistor", hit("A1", 0, 4), hit("A2", 0, 3), hit("A3", 0, 3));
 
         FindItems.Result result = find.smart("transistor");
 
-        assertThat(result.hits()).hasSize(5);
+        assertThat(result.hits()).hasSize(3);
         assertThat(result.expandedTerms()).isEmpty();
         assertThat(expander.calls).isEmpty();
     }
 
     @Test
+    void aPileOfWeakHitsIsNotASearchThatWorked() {
+        // "sugekopp for lodding" against a rack with no desoldering pump: both
+        // words that carry the meaning miss, "for" matches six descriptions, and
+        // counting rows would call that a hit and skip the expansion.
+        index.hits("sugekopp for lodding", hit("D1", 0, 1.2), hit("C1", 0, 1.2),
+            hit("C2", 0, 1.2), hit("C3", 0, 1.2), hit("C4", 0, 1.2), hit("C5", 0, 1.2));
+        index.hits("desoldering pump", hit("A1", 0, 6));
+        expander.returns("desoldering pump");
+
+        FindItems.Result result = find.smart("sugekopp for lodding");
+
+        assertThat(expander.calls).containsExactly("sugekopp for lodding");
+        assertThat(result.hits().get(0).slot()).isEqualTo(new SlotId("A1"));
+    }
+
+    @Test
     void literalMatchesOutrankTheOnesFoundByAWidenedTerm() {
-        index.hits("tape", hit("B2", 0, 3));
+        index.hits("tape", hit("B2", 0, 2.5));
         index.hits("electrical tape", hit("A1", 0, 4));
         expander.returns("electrical tape");
 
         FindItems.Result result = find.smart("tape");
 
-        // The expanded hit scored higher literally (4 > 3) but is discounted to
+        // The expanded hit scored higher literally (4 > 2.5) but is discounted to
         // 2.4, so what the user actually typed still comes first.
         assertThat(result.hits()).extracting(SearchHit::slot)
             .containsExactly(new SlotId("B2"), new SlotId("A1"));
@@ -76,14 +91,14 @@ class FindItemsTest {
 
     @Test
     void oneItemFoundByBothPassesIsOneHit() {
-        index.hits("tape", hit("A1", 0, 3));
+        index.hits("tape", hit("A1", 0, 2.5));
         index.hits("electrical tape", hit("A1", 0, 5));
         expander.returns("electrical tape");
 
         FindItems.Result result = find.smart("tape");
 
         assertThat(result.hits()).hasSize(1);
-        // Kept at the better of the two scores: 5 × 0.6 beats the literal 3.
+        // Kept at the better of the two scores: 5 × 0.6 beats the literal 2.5.
         assertThat(result.hits().get(0).score()).isEqualTo(3.0);
     }
 

@@ -25,8 +25,16 @@ import java.util.Map;
 @Service
 public class FindItems {
 
-    /** Below this many literal hits the query is treated as one that didn't land. */
-    private static final int ENOUGH_HITS = 5;
+    /**
+     * The weight of a name or part-number match — the score of a hit that
+     * actually answers the query.
+     *
+     * <p>The gate is the <em>best</em> score and not the number of rows, because
+     * a row count lies. Searching "sugekopp for lodding" matched six items on the
+     * word "for" alone, all scoring 1.2, and a count-based gate read that as a
+     * search that worked and skipped the expansion the query most needed.
+     */
+    private static final double CONVINCING = 3.0;
 
     /** Expanded terms rank below what the user literally typed. */
     private static final double EXPANSION_WEIGHT = 0.6;
@@ -62,7 +70,7 @@ public class FindItems {
      */
     public Result smart(String query) {
         List<SearchHit> literal = index.searchByKeyword(query);
-        if (query == null || query.isBlank() || literal.size() >= ENOUGH_HITS) {
+        if (query == null || query.isBlank() || landed(literal)) {
             return new Result(query, List.of(), literal);
         }
 
@@ -82,6 +90,11 @@ public class FindItems {
         List<SearchHit> hits = new ArrayList<>(merged.values());
         hits.sort((a, b) -> Double.compare(b.score(), a.score()));
         return new Result(query, terms, hits);
+    }
+
+    /** Hits are sorted best first, so one convincing hit is the whole question. */
+    private static boolean landed(List<SearchHit> hits) {
+        return !hits.isEmpty() && hits.get(0).score() >= CONVINCING;
     }
 
     private List<String> expandedTermsFor(String query) {
