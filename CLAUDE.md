@@ -229,6 +229,8 @@ Each extraction carries an `image_index` back, which `AddPhotoToSlot` maps to th
 
 Every frame is kept in `Slot.photos` whether or not an item references it — the photo is ground truth, and an unreferenced frame is exactly the evidence that the extraction missed something.
 
+**Expanding an item shows every frame of its slot**, the one it was read from first and badged. `Item.sourcePhoto` records which frame the model quoted, not the only frame the thing appears in: a part shot from two angles with its label on a third yields one item naming one photo. Across this rack 31 of 58 frames are named by no item, and almost none of them are spare — they are the label shots and second angles that were merged into items. Showing the slot's whole strip is what makes them reachable, and it is why the heading says *slot* while the badge says *read from this*: we know which frame it was read from and cannot know which others show it.
+
 `FilesystemImageStore` names photos to the second, so a batch collides. Names are suffixed `…-12_1.jpg` on collision, with `_` rather than `-` because `_` sorts *after* `.` — so a listing keeps capture order.
 
 ### The failure mode to design against

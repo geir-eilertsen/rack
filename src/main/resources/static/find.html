@@ -56,6 +56,18 @@
     .edit-actions .btn { flex: 1; }
     .edit-actions .remove { flex: 0 0 auto; background: transparent; border: none; color: var(--error); font-size: .85rem; cursor: pointer; padding: .3rem .5rem; text-decoration: underline; }
     .edit-actions .remove:hover { color: #7a2a20; }
+    /* Every frame of the slot, in the expanded item. A part is often shot from
+       two angles and its label from a third; only one is recorded as the frame
+       it was read from, and the rest are just as much a picture of it. */
+    .shots { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--border); }
+    .shots h4 { margin: 0 0 .45rem; font-size: .7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .strip { display: flex; gap: .45rem; overflow-x: auto; padding-bottom: .2rem; }
+    .strip .frame { position: relative; flex: 0 0 auto; line-height: 0; }
+    .strip img { width: 84px; height: 84px; object-fit: cover; display: block; border: 1px solid var(--border); border-radius: var(--radius-xs); }
+    .strip .frame.source img { border-color: var(--primary); border-width: 2px; }
+    .strip .badge { position: absolute; left: 0; right: 0; bottom: 0; padding: .1rem 0; text-align: center;
+      background: var(--primary); color: #fff; font-size: .6rem; line-height: 1.4; letter-spacing: .03em;
+      border-radius: 0 0 var(--radius-xs) var(--radius-xs); }
     .ai { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--border); }
     .ai h4 { margin: 0 0 .4rem; font-size: .7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
     .ai-input { display: flex; gap: .3rem; }
@@ -429,6 +441,26 @@
       '</li>';
     }
 
+
+    // The slot's frames, the one this item was read from first and marked. We
+    // know which frame it was read from; we do not know which others show it,
+    // so the heading says slot and the badge says which.
+    function photoStrip(photos, source, urlOf) {
+      const list = (photos || []).filter(Boolean);
+      if (!list.length) return '';
+      const ordered = source && list.includes(source)
+        ? [source].concat(list.filter(p => p !== source))
+        : list;
+      return '<div class="shots"><h4>Photos of this slot</h4><div class="strip">' +
+        ordered.map(fn =>
+          '<a class="frame' + (fn === source ? ' source' : '') + '" href="' + urlOf(fn) +
+            '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
+            '<img src="' + urlOf(fn) + '" alt="" loading="lazy">' +
+            (fn === source ? '<span class="badge">read from this</span>' : '') +
+          '</a>').join('') +
+      '</div></div>';
+    }
+
     function photoUrl(container, slot, fn) {
       return '/c/' + encodeURIComponent(container) + '/' + encodeURIComponent(slot) + '/photos/' + encodeURIComponent(fn);
     }
@@ -468,6 +500,7 @@
             '<button class="btn primary save">Save</button>' +
             '<button class="remove" title="Remove this item">Remove</button>' +
           '</div>' +
+          photoStrip(g.photos, it.source_photo, fn => photoUrl(g.container, g.slot, fn)) +
           '<div class="ai">' +
             '<h4>Ask AI about this item</h4>' +
             renderQaLog(it.qa || []) +
