@@ -1,5 +1,10 @@
 /* rack — shared UI kit */
 
+/* Any display rule carrying a class beats the browser's [hidden] { display: none },
+   so .btn.block elements stayed visible when hidden — an empty primary button
+   renders as a thin brown bar. Restore hidden as the last word on visibility. */
+[hidden] { display: none !important; }
+
 :root {
   --bg: #fef8f0;
   --card: #ffffff;
