@@ -9,6 +9,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
+  <script src="/assets/photos.js"></script>
   <style>
     .search { margin-bottom: 1rem; display: flex; gap: .4rem; }
     .search input { flex: 1; min-width: 0; font-size: 1.05rem; padding: .8rem 1rem; }
@@ -394,17 +395,7 @@
       }
     });
 
-    // Matches put.html: 1568px is the longest edge the vision model keeps.
-    async function resize(file, maxDim = 1568, quality = 0.85) {
-      const bitmap = await createImageBitmap(file);
-      const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
-      if (scale >= 1 && file.size < 3_000_000) return file;
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(bitmap.width * scale);
-      canvas.height = Math.round(bitmap.height * scale);
-      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      return new Promise(resolve => canvas.toBlob(b => resolve(new File([b], 'photo.jpg', { type: 'image/jpeg' })), 'image/jpeg', quality));
-    }
+    const resize = (file) => window.rackPhotos.resize(file);
 
     function renderHits(results, query, expanded) {
       const alsoTried = expanded.length
@@ -462,7 +453,7 @@
       const ordered = source && list.includes(source)
         ? [source].concat(list.filter(p => p !== source))
         : list;
-      const heading = own.length ? 'Photos of this item' : 'Photos of this slot';
+      const heading = own.length ? 'Photos of this item' : 'Photos of this drawer';
       return '<div class="shots"><h4>' + heading + '</h4><div class="strip">' +
         ordered.map(fn =>
           '<a class="frame' + (fn === source ? ' source' : '') + '" href="' + urlOf(fn) +
@@ -524,18 +515,18 @@
             '</div>' +
           '</div>' +
           '<details class="merge-panel">' +
-            '<summary>Merge into another item here…</summary>' +
+            '<summary>Merge into another item in this drawer…</summary>' +
             '<div class="merge-body">' +
               '<p class="merge-hint">Adds this row\'s count and photos into the one you pick, and removes this row. The other row\'s wording is kept.</p>' +
               '<div class="merge-targets"></div>' +
             '</div>' +
           '</details>' +
           '<details class="move-panel">' +
-            '<summary>Move to another slot…</summary>' +
+            '<summary>Move to another drawer…</summary>' +
             '<div class="move-body">' +
               '<div class="picker-label">Container</div>' +
               '<div class="containers move-containers"></div>' +
-              '<div class="picker-label">Slot</div>' +
+              '<div class="picker-label">Drawer</div>' +
               '<div class="slots-grid move-slots"></div>' +
               '<button class="btn primary move-btn" disabled>Pick a destination</button>' +
             '</div>' +

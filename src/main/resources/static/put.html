@@ -9,6 +9,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
+  <script src="/assets/photos.js"></script>
   <style>
     .current { list-style: none; padding: 0; margin: .5rem 0 0; }
     .current li { padding: .75rem .9rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: .5rem; background: var(--card); cursor: pointer; transition: background .12s ease, border-color .12s ease; }
@@ -154,14 +155,14 @@
     <h2 id="extractedHeading" hidden>What I see</h2>
     <ul class="items extracted" id="extracted"></ul>
 
-    <h2 id="pickHeading" hidden>Where does it go?</h2>
+    <h2 id="pickHeading" hidden>Which drawer?</h2>
     <ul class="sug-list" id="suggestions"></ul>
 
     <details class="manual" id="manual" open>
-      <summary id="manualSummary">Or pick a slot manually</summary>
+      <summary id="manualSummary">Or pick a drawer manually</summary>
       <div class="picker-label">Container</div>
       <div class="containers" id="containers"></div>
-      <div class="picker-label" id="slotsLabel" hidden>Slot</div>
+      <div class="picker-label" id="slotsLabel" hidden>Drawer</div>
       <div class="slots-legend" id="slotsLegend" hidden><span><span class="swatch empty"></span>empty</span><span><span class="swatch filled"></span>has items</span></div>
       <div class="slots-grid" id="slots"></div>
       <button class="btn primary block" id="fileManual" style="margin-top:.75rem" hidden>File in selected slot</button>
@@ -240,6 +241,23 @@
         }
       }
       refreshUiForSelection();
+      await adoptHandover();
+    }
+
+    // A photograph taken from the front page arrives here rather than being
+    // taken again. It lands in the pending strip exactly as one shot on this
+    // page would, so everything downstream is unchanged.
+    async function adoptHandover() {
+      const files = await window.rackPhotos.takeStash();
+      if (!files.length) return;
+      for (const file of files) {
+        pendingPhotos.push({ file, url: URL.createObjectURL(file) });
+        renderPending();
+        await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+      }
+      refreshUiForSelection();
+      const n = pendingPhotos.length;
+      setStatus('', n + ' photo' + (n === 1 ? '' : 's') + ' ready — pick a drawer below, or let me suggest one.');
     }
 
     // The resync response is the slot itself, so it is passed in as `known` and
@@ -247,13 +265,13 @@
     function refreshUiForSelection(known) {
       const hasSlot = !!(selectedContainer && selectedSlot);
       if (hasSlot) {
-        title.textContent = 'Slot ' + containerName(selectedContainer.id) + ' · ' + selectedSlot;
+        title.textContent = 'Drawer ' + containerName(selectedContainer.id) + ' · ' + selectedSlot;
         slotHeader.hidden = false;
         slotHeader.textContent = containerName(selectedContainer.id) + ' · ' + selectedSlot;
         currentHeading.hidden = false;
         captureHeading.textContent = resyncMode
           ? 'Photograph the whole drawer'
-          : (pendingPhotos.length ? 'Photos of this slot' : 'Add a photo');
+          : (pendingPhotos.length ? 'Photos of this drawer' : 'Add a photo');
         // Keep the manual picker visible while photos are waiting to be filed
         // (so the "File in X.Y" button inside it stays reachable); otherwise
         // hide since the user is just viewing this slot. During a resync it
@@ -384,7 +402,7 @@
       const ordered = source && list.includes(source)
         ? [source].concat(list.filter(p => p !== source))
         : list;
-      const heading = own.length ? 'Photos of this item' : 'Photos of this slot';
+      const heading = own.length ? 'Photos of this item' : 'Photos of this drawer';
       return '<div class="shots"><h4>' + heading + '</h4><div class="strip">' +
         ordered.map(fn =>
           '<a class="frame' + (fn === source ? ' source' : '') + '" href="' + urlOf(fn) +
@@ -755,18 +773,18 @@
             '</div>' +
           '</div>' +
           '<details class="merge-panel">' +
-            '<summary>Merge into another item here…</summary>' +
+            '<summary>Merge into another item in this drawer…</summary>' +
             '<div class="merge-body">' +
               '<p class="merge-hint">Adds this row\'s count and photos into the one you pick, and removes this row. The other row\'s wording is kept.</p>' +
               '<div class="merge-targets"></div>' +
             '</div>' +
           '</details>' +
           '<details class="move-panel">' +
-            '<summary>Move to another slot…</summary>' +
+            '<summary>Move to another drawer…</summary>' +
             '<div class="move-body">' +
               '<div class="picker-label">Container</div>' +
               '<div class="containers move-containers"></div>' +
-              '<div class="picker-label">Slot</div>' +
+              '<div class="picker-label">Drawer</div>' +
               '<div class="slots-grid move-slots"></div>' +
               '<button class="btn primary move-btn" disabled>Pick a destination</button>' +
             '</div>' +
@@ -1191,7 +1209,7 @@
 
     function renderSuggestions(sugs) {
       if (!sugs.length) {
-        suggestionsEl.innerHTML = '<li class="none">No similar slots found. Pick a slot below.</li>';
+        suggestionsEl.innerHTML = '<li class="none">No similar drawers found. Pick one below.</li>';
         return;
       }
       suggestionsEl.innerHTML = sugs.map((s, i) => {
@@ -1326,18 +1344,7 @@
 
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-    // 1568px is the longest edge the vision model keeps; anything larger is
-    // downsampled on arrival, so sending more is upload time for nothing.
-    async function resize(file, maxDim = 1568, quality = 0.85) {
-      const bitmap = await createImageBitmap(file);
-      const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
-      if (scale >= 1 && file.size < 3_000_000) return file;
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(bitmap.width * scale);
-      canvas.height = Math.round(bitmap.height * scale);
-      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      return new Promise(resolve => canvas.toBlob(b => resolve(new File([b], 'photo.jpg', { type: 'image/jpeg' })), 'image/jpeg', quality));
-    }
+    const resize = (file) => window.rackPhotos.resize(file);
   </script>
   <script src="/assets/usage.js" defer></script>
 </body>

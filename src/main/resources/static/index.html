@@ -9,6 +9,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
+  <script src="/assets/photos.js"></script>
 </head>
 <body>
   <div class="container">
@@ -27,11 +28,15 @@
           <p>Search everything you've filed, or photograph the part you can't name.</p>
         </a>
       </li>
+      <!-- A label rather than a link: tapping it opens the camera on that tap.
+           Going to the page first and tapping a camera there is one tap more,
+           and the whole design is tap-shoot-done. -->
       <li>
-        <a class="card" href="/put.html">
+        <label class="card add" id="addCard">
           <h2>Add an item</h2>
-          <p>Take a photo, pick the slot, and it's filed.</p>
-        </a>
+          <p id="addHint">Take a photo, pick the drawer, and it's filed.</p>
+          <input type="file" accept="image/*" capture="environment" multiple id="addPhoto" hidden>
+        </label>
       </li>
       <!-- For when you know where you are going and the QR label is on the other
            side of the room. Opens in place rather than leading somewhere: the
@@ -45,7 +50,7 @@
           <div class="jump-body">
             <div class="picker-label">Container</div>
             <div class="containers" id="jumpContainers"></div>
-            <div class="picker-label" id="jumpSlotsLabel" hidden>Slot</div>
+            <div class="picker-label" id="jumpSlotsLabel" hidden>Drawer</div>
             <div class="slots-legend" id="jumpLegend" hidden><span><span class="swatch empty"></span>empty</span><span><span class="swatch filled"></span>has items</span></div>
             <div class="slots-grid" id="jumpSlots"></div>
           </div>
@@ -64,6 +69,7 @@
     </ul>
   </div>
   <style>
+    .card.add { cursor: pointer; display: block; }
     /* A card that opens rather than leads. The marker goes because the other
        two cards have none, and the heading is what you tap. */
     .jump summary { cursor: pointer; list-style: none; display: block; }
@@ -133,6 +139,30 @@
       }
     })();
 
+    // Start the add on the tap that starts it. A file cannot cross a
+    // navigation, so it is handed over in session storage and picked up by
+    // put.html; if that hand-off fails the page still opens, just empty.
+    (function () {
+      const input = document.getElementById('addPhoto');
+      const hint = document.getElementById('addHint');
+      const original = hint.textContent;
+      input.addEventListener('change', async () => {
+        const files = [...input.files];
+        input.value = '';
+        if (!files.length) return;
+        hint.textContent = files.length === 1 ? 'Preparing photo…' : 'Preparing ' + files.length + ' photos…';
+        // Yield a frame so that lands before the canvas work starts: coming back
+        // from the camera, iOS otherwise holds the repaint until the next touch.
+        await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+        try {
+          await window.rackPhotos.stash(files);
+        } catch (e) {
+          hint.textContent = original;
+        }
+        location.href = '/put.html';
+      });
+    })();
+
     // A different tip each visit. Every one of these is something the app
     // actually does — a tip that overstates it is worse than no tip.
     const TIPS = [
@@ -144,10 +174,10 @@
       "shoot the part and its label in one go \u2014 they are merged into one item, not two.",
       "every word of a search has to match, so fewer words find more.",
       "a search that finds nothing gets widened for you \u2014 \u201cisolating tape\u201d finds the electrical tape.",
-      "an unreferenced photo on a slot is the evidence the extraction missed something. Keep it.",
+      "an unreferenced photo on a drawer is the evidence the extraction missed something. Keep it.",
       "small labels share one sticker \u2014 a 0.4-scale container prints four to a label, ready to trim.",
       "the running total at the foot of the page is what this rack has cost in model calls.",
-      "filing a slot re-dates it, so \u201clast verified\u201d stays worth trusting."
+      "filing a drawer re-dates it, so \u201clast verified\u201d stays worth trusting."
     ];
     const tip = document.getElementById('tip');
     // Don't repeat the one you just read; that reads as broken rather than random.

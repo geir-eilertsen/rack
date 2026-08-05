@@ -68,7 +68,7 @@ Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all s
 ### Domain vocabulary
 
 - **Container** — a physical storage unit (rack of drawers, bin, shelf). Identified by lowercase `ContainerId` ("rack", "kitchen-bin").
-- **Slot** — one location inside a container. Identified by URL-safe `SlotId` ("A1", "3", "top-left"). Uniqueness is *per container*: two containers can both have an "A1".
+- **Slot** — one location inside a container. Identified by URL-safe `SlotId` ("A1", "3", "top-left"). Uniqueness is *per container*: two containers can both have an "A1". **The UI calls it a drawer**, because that is what it is to the person standing in front of it; `Slot` stays the code and URL vocabulary, which keeps it honest for a container that is a bin or a shelf.
 - **Item** — one identified thing inside a slot (a transistor, a bag of screws, ...). Comes from vision extraction.
 - Containers are defined in `application.yml` under `rack.containers` and materialised at boot by `ContainerRegistry` (see `application/RackConfiguration.java`). Layout kinds: `grid` (cols × rows → A1..) and `linear` (N → 1..N with optional prefix).
 
@@ -238,6 +238,12 @@ One request, not two: the server already widened per item, and there is nothing 
 The name is searched at all now — before, only the part number and tags were, so the best label on the item was the one thing the lookup ignored.
 
 **A name or part number anchors a slot; a tag only corroborates one.** A tag is a single generic word, so "every word must match" can't discipline it: photographing a roll of tape scored the resistor drawer 66 on the tag `tape` alone, because twenty-two resistors come on tape reels. A tag can raise a slot the name already found and can't put one in the list by itself, so an item with neither name nor part number — barely an identification — suggests nothing rather than guessing from its tags.
+
+### Starting an add on the tap that starts it
+
+The **Add an item** card on the hub is a `<label>` around a file input, not a link: tapping it opens the camera on that tap, where going to the page first and tapping a camera there costs one tap more. A file cannot cross a navigation, so `assets/photos.js` resizes the batch, hands it over in `sessionStorage` and `put.html` picks it up into the pending strip exactly as if it had been shot there. The stash is taken once, so a reload cannot re-add photographs already filed; if the hand-off fails the page still opens, just empty.
+
+That file is also where `resize()` now lives — the same 1568px helper had been copied into two pages.
 
 ### Filing a slot as a batch of photos
 
