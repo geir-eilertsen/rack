@@ -75,25 +75,13 @@ public class SpringAiPartExtractor implements PartExtractor {
             .call()
             .content();
 
-        String json = stripCodeFences(reply);
+        String json = SpringAi.stripCodeFences(reply);
         try {
             List<ExtractedItem> extracted = mapper.readValue(json, new TypeReference<>() {});
             return extracted.stream().map(e -> e.toExtraction(images.size())).toList();
         } catch (IOException e) {
             throw new IllegalStateException("Model returned non-JSON reply: " + reply, e);
         }
-    }
-
-    private static String stripCodeFences(String s) {
-        String t = s.strip();
-        if (t.startsWith("```")) {
-            int nl = t.indexOf('\n');
-            t = nl < 0 ? "" : t.substring(nl + 1);
-            if (t.endsWith("```")) {
-                t = t.substring(0, t.length() - 3);
-            }
-        }
-        return t.strip();
     }
 
     private record ExtractedItem(

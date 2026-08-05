@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -210,6 +211,11 @@ class ContainerMaintenanceTest {
         @Override
         public List<SearchHit> searchBySimilarity(float[] queryVector, int topK) {
             return List.of();
+        }
+
+        @Override
+        public Set<String> vocabulary() {
+            return Set.of();
         }
     }
 }

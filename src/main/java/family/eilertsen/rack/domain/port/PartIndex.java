@@ -8,6 +8,7 @@ import family.eilertsen.rack.domain.model.SlotId;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface PartIndex {
     Optional<Slot> get(ContainerId container, SlotId slot);
@@ -19,4 +20,10 @@ public interface PartIndex {
     List<SearchHit> searchByKeyword(String query);
 
     List<SearchHit> searchBySimilarity(float[] queryVector, int topK);
+
+    /**
+     * Every distinct short label in the index — item names, categories and tags.
+     * The words this rack actually uses, for grounding a {@link QueryExpander}.
+     */
+    Set<String> vocabulary();
 }

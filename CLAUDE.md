@@ -93,9 +93,22 @@ data/
 - No schema migrations — add a field, tolerate its absence (`spring.jackson.deserialization.fail-on-unknown-properties` off implicitly via Spring Boot defaults; nullable fields on records get null).
 - Container-scoped IDs mean `data/rack/A1.json` and `data/bin/A1.json` are two different slots and don't collide.
 
-### Semantic search without a vector DB
+### Search: keyword first, widened only when it fails
 
-Each item stores its embedding as a float array inside its JSON. Queries brute-force cosine similarity across ~1,200 vectors. At 1536 dimensions that's under two million multiply-adds — well under a millisecond in Java. Vector DBs are for millions of vectors, not thousands. Keyword ("BC547") and semantic ("small black thing with eight legs") matching run over the same in-memory collection.
+The problem search has to solve is that **you don't know what the extractor called it**. Ask for "isolating tape" and the drawer says "electrical tape"; substring matching finds nothing and the rack looks empty.
+
+Two passes, both over the same in-memory collection:
+
+1. **Keyword** (`JsonFilePartIndex.searchByKeyword`) — the query is split on whitespace and scored word by word, so "black electrical tape" finds "Electrical tape / one black roll" even though no field contains that phrase. Per term: part number or `name` +3, `description` +2, category or a tag +1. Multi-word queries then get ×1.5 when *every* word matched and ×0.6 when only some did, plus +3 if the words appear in the order typed. Splitting on whitespace only keeps `TO-220` one term.
+2. **Expansion** (`QueryExpander` → `SpringAiQueryExpander`) — one small model call turns the query into related terms, then each is searched and merged in at 0.6 weight, deduped per item, keeping the best score. Literal hits therefore stay on top.
+
+**Expansion is grounded, gated, and cached.** The prompt is handed `PartIndex.vocabulary()` — every distinct item name, category and tag — so the model bridges to words this rack actually uses instead of guessing generic synonyms. `FindItems` only calls it when the keyword pass returned fewer than 5 hits, so queries that already work ("BC547") cost nothing, and results are cached per normalised query.
+
+**Two requests, not one.** `GET /search?q=` is the literal pass and fires on every keystroke; `&smart=true` follows 400ms after typing settles and is the only one that can reach the model. Typing stays instant and the widened set replaces the results when it finds more — `find.html` then names the terms it also searched for, so a surprising hit is explainable rather than magic.
+
+The expansion model is separate from the vision model (`rack.search.expansion-model`, default `claude-haiku-4-5`): synonyms are a small fast job sitting in front of a search box. If the call fails for any reason — no API key, rate limit, non-JSON reply — the expander logs and returns nothing, and search degrades to the keyword pass rather than erroring.
+
+`PartIndex.searchBySimilarity` and `Item.embedding` are unimplemented leftovers from a planned vector search — nothing populates or reads them (see #29).
 
 ### Optional Git history layer
 
@@ -105,6 +118,7 @@ Committing after each write gives history, per-drawer undo, and free multi-site 
 
 - `/` → index page (hub)
 - `/identify.html`, `POST /identify` → identify a part from a photo, no persistence
+- `/find.html`, `GET /search?q=` → search; `&smart=true` widens a query that came up short (see Search above). Returns `{query, expanded_terms, hits}`
 - `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state. The photo endpoint (and `POST /suggest`) take **repeated `photo` parts** — one part is just a batch of one.
 - `/containers.html`, `POST /c` (register), `PATCH /c/{container}` (name + label scale), `DELETE /c/{container}` → maintain containers; also hosts registration and the label flow below
 - `GET /labels/{container}` (preview), `POST /labels/{container}` (mark + archive), `GET /labels/{container}/status` → QR label sheets

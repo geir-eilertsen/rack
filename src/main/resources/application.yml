@@ -29,6 +29,12 @@ spring:
 rack:
   data-dir: ${RACK_DATA_DIR:./data}
   public-base-url: ${RACK_PUBLIC_BASE_URL:}
+  search:
+    # Bridging "isolating tape" to "electrical tape" is a synonym lookup, not a
+    # reasoning job, and it sits in front of a search box — so the cheapest,
+    # fastest model, not the one that reads the photos.
+    expansion-model: ${RACK_EXPANSION_MODEL:claude-haiku-4-5}
+    expansion-max-tokens: 300
 
 server:
   port: 8080

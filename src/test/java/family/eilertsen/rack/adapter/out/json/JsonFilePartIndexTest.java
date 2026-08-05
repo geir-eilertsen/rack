@@ -76,6 +76,66 @@ class JsonFilePartIndexTest {
     }
 
     @Test
+    void aMultiWordQueryMatchesWordsScatteredAcrossTheItem() throws IOException {
+        // No field contains "black electrical tape" as a phrase, so a plain
+        // substring search finds nothing at all.
+        writeSlot("A1", """
+            {"id":"A1","items":[{"name":"Electrical tape","description":"one black roll, half used","category":"other","qty_estimate":1,"confidence":0.9,"tags":[]}],"photos":[],"last_verified":null,"printed_at":null}
+            """);
+
+        List<SearchHit> hits = load().searchByKeyword("black electrical tape");
+
+        assertThat(hits).hasSize(1);
+        assertThat(hits.get(0).slot()).isEqualTo(new SlotId("A1"));
+    }
+
+    @Test
+    void matchingEveryWordOutranksMatchingOne() throws IOException {
+        writeSlot("A1", """
+            {"id":"A1","items":[{"name":"Electrical tape","description":"black roll","category":"other","qty_estimate":1,"confidence":0.9,"tags":[]}],"photos":[],"last_verified":null,"printed_at":null}
+            """);
+        writeSlot("A2", """
+            {"id":"A2","items":[{"name":"Masking tape","description":"beige roll","category":"other","qty_estimate":1,"confidence":0.9,"tags":[]}],"photos":[],"last_verified":null,"printed_at":null}
+            """);
+
+        List<SearchHit> hits = load().searchByKeyword("electrical tape");
+
+        assertThat(hits).hasSize(2);
+        assertThat(hits.get(0).slot()).isEqualTo(new SlotId("A1"));
+        assertThat(hits.get(1).slot()).isEqualTo(new SlotId("A2"));
+    }
+
+    @Test
+    void aHyphenatedPartNumberStaysOneTerm() throws IOException {
+        writeSlot("A1", """
+            {"id":"A1","items":[{"name":"BC547 transistor","description":"loose pile","part_number":"TO-220","category":"transistor","qty_estimate":30,"confidence":0.9,"tags":[]}],"photos":[],"last_verified":null,"printed_at":null}
+            """);
+
+        List<SearchHit> hits = load().searchByKeyword("TO-220");
+
+        assertThat(hits).hasSize(1);
+        // Scored as a single term, so no partial-phrase discount applies.
+        assertThat(hits.get(0).score()).isEqualTo(3.0);
+    }
+
+    @Test
+    void theVocabularyIsTheWordsTheRackActuallyUses() throws IOException {
+        writeSlot("A1", """
+            {"id":"A1","items":[{"name":"Electrical tape","description":"one black roll of PVC insulating tape","category":"other","qty_estimate":1,"confidence":0.9,"tags":["tape","pvc"]}],"photos":[],"last_verified":null,"printed_at":null}
+            """);
+        // Catalogued before the name/description split — its description stands in.
+        writeSlot("A2", """
+            {"id":"A2","items":[{"description":"Solder lugs - small metal ring terminals","category":"connector","qty_estimate":20,"confidence":0.8,"tags":[]}],"photos":[],"last_verified":null,"printed_at":null}
+            """);
+
+        assertThat(load().vocabulary())
+            .contains("Electrical tape", "other", "tape", "pvc", "connector")
+            .anyMatch(word -> word.startsWith("Solder lugs"))
+            // Long descriptions would swamp the list; only the short labels belong.
+            .doesNotContain("one black roll of PVC insulating tape");
+    }
+
+    @Test
     void savedItemsKeepTheirNameAcrossAReload() throws IOException {
         JsonFilePartIndex index = load();
         Item item = new Item("M4 hex bolts", "bag of about fifty, DIN 933", null, "fastener",

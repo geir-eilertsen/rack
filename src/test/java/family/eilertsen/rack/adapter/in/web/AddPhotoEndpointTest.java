@@ -30,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -170,6 +171,11 @@ class AddPhotoEndpointTest {
         @Override
         public List<SearchHit> searchBySimilarity(float[] queryVector, int topK) {
             return List.of();
+        }
+
+        @Override
+        public Set<String> vocabulary() {
+            return Set.of();
         }
     }
 }

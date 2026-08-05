@@ -1,24 +1,30 @@
 package family.eilertsen.rack.adapter.in.web;
 
-import family.eilertsen.rack.domain.model.SearchHit;
-import family.eilertsen.rack.domain.port.PartIndex;
+import family.eilertsen.rack.application.FindItems;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 @RestController
 public class SearchController {
 
-    private final PartIndex index;
+    private final FindItems find;
 
-    public SearchController(PartIndex index) {
-        this.index = index;
+    public SearchController(FindItems find) {
+        this.find = find;
     }
 
+    /**
+     * {@code smart=false} (the default) is the literal pass — instant, no model
+     * call, safe to fire on every keystroke. The page follows up with
+     * {@code smart=true} once typing settles, and that one widens the query when
+     * the literal pass came up short.
+     */
     @GetMapping("/search")
-    public List<SearchHit> search(@RequestParam String q) {
-        return index.searchByKeyword(q);
+    public FindItems.Result search(
+        @RequestParam String q,
+        @RequestParam(defaultValue = "false") boolean smart
+    ) {
+        return smart ? find.smart(q) : find.literal(q);
     }
 }

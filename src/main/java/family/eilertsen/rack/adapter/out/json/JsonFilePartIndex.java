@@ -18,10 +18,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
@@ -100,7 +102,8 @@ public class JsonFilePartIndex implements PartIndex {
     @Override
     public List<SearchHit> searchByKeyword(String query) {
         if (query == null || query.isBlank()) return List.of();
-        String q = query.toLowerCase(Locale.ROOT);
+        String phrase = query.toLowerCase(Locale.ROOT).strip();
+        List<String> terms = terms(phrase);
         List<SearchHit> hits = new ArrayList<>();
         for (Map.Entry<ContainerId, Map<SlotId, Slot>> e : byContainer.entrySet()) {
             ContainerId cid = e.getKey();
@@ -108,7 +111,7 @@ public class JsonFilePartIndex implements PartIndex {
                 List<Item> items = slot.items();
                 for (int i = 0; i < items.size(); i++) {
                     Item item = items.get(i);
-                    double score = matchScore(item, q);
+                    double score = matchScore(item, terms, phrase);
                     if (score > 0) {
                         hits.add(new SearchHit(cid, slot.id(), i, item, score, slot.lastVerified(), slot.photos()));
                     }
@@ -119,14 +122,51 @@ public class JsonFilePartIndex implements PartIndex {
         return hits;
     }
 
-    private static double matchScore(Item item, String q) {
+    /**
+     * A multi-word query is scored word by word — "black electrical tape" has to
+     * find the item described as "electrical tape, black roll", which no single
+     * substring match ever would. Split on whitespace only, so a part number like
+     * "TO-220" stays one term.
+     */
+    private static List<String> terms(String phrase) {
+        List<String> terms = new ArrayList<>();
+        for (String term : phrase.split("\\s+")) {
+            if (term.length() >= 2 && !terms.contains(term)) terms.add(term);
+        }
+        // Everything was a single character ("5 v"): fall back to the raw phrase
+        // rather than matching nothing.
+        return terms.isEmpty() ? List.of(phrase) : terms;
+    }
+
+    private static double matchScore(Item item, List<String> terms, String phrase) {
         double score = 0;
-        if (contains(item.partNumber(), q)) score += 3;
-        if (contains(item.name(), q)) score += 3;
-        if (contains(item.description(), q)) score += 2;
-        if (contains(item.category(), q)) score += 1;
+        int matched = 0;
+        for (String term : terms) {
+            double termScore = termScore(item, term);
+            if (termScore > 0) {
+                score += termScore;
+                matched++;
+            }
+        }
+        if (matched == 0) return 0;
+        if (terms.size() > 1) {
+            // Every word accounted for is a much better hit than a stray one;
+            // a partial match still shows, but below the items that matched fully.
+            score *= matched == terms.size() ? 1.5 : 0.6;
+            // The words in the order the user typed them beats them scattered.
+            if (contains(item.name(), phrase) || contains(item.description(), phrase)) score += 3;
+        }
+        return score;
+    }
+
+    private static double termScore(Item item, String term) {
+        double score = 0;
+        if (contains(item.partNumber(), term)) score += 3;
+        if (contains(item.name(), term)) score += 3;
+        if (contains(item.description(), term)) score += 2;
+        if (contains(item.category(), term)) score += 1;
         if (item.tags() != null) {
-            for (String tag : item.tags()) if (contains(tag, q)) { score += 1; break; }
+            for (String tag : item.tags()) if (contains(tag, term)) { score += 1; break; }
         }
         return score;
     }
@@ -138,5 +178,33 @@ public class JsonFilePartIndex implements PartIndex {
     @Override
     public List<SearchHit> searchBySimilarity(float[] queryVector, int topK) {
         return List.of();
+    }
+
+    @Override
+    public Set<String> vocabulary() {
+        Set<String> words = new LinkedHashSet<>();
+        for (Map<SlotId, Slot> slots : byContainer.values()) {
+            for (Slot slot : slots.values()) {
+                for (Item item : slot.items()) {
+                    add(words, label(item));
+                    add(words, item.category());
+                    if (item.tags() != null) for (String tag : item.tags()) add(words, tag);
+                }
+            }
+        }
+        return words;
+    }
+
+    /** Items catalogued before the name/description split have only a description — clip it. */
+    private static String label(Item item) {
+        if (item.name() != null && !item.name().isBlank()) return item.name();
+        String description = item.description();
+        if (description == null) return null;
+        String d = description.strip();
+        return d.length() <= 60 ? d : d.substring(0, 60);
+    }
+
+    private static void add(Set<String> words, String word) {
+        if (word != null && !word.isBlank()) words.add(word.strip());
     }
 }
