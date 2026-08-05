@@ -79,7 +79,10 @@ class SuggestSlotTest {
     }
 
     @Test
-    void aSlotSeveralTermsAgreeOnOutranksOneOnlyATagFound() {
+    void aSlotOnlyAGenericTagFoundIsNotSuggested() {
+        // Slot 4 is the resistor drawer: twenty-two of them come on tape reels,
+        // so the one-word tag "tape" matches it and nothing else does. A tag is a
+        // single word, so requiring every word to match can't discipline it.
         extractor.returns(item("Electrical tape", "3M-1712", List.of("tape")));
         index.hits("electrical tape", hit("1", 9));
         index.hits("3m-1712", hit("1", 3));
@@ -88,7 +91,28 @@ class SuggestSlotTest {
         SuggestSlot.Result result = suggest.execute(List.of(new byte[]{1}));
 
         assertThat(result.suggestions()).extracting(SuggestSlot.Suggestion::slot)
-            .containsExactly(new SlotId("1"), new SlotId("4"));
+            .containsExactly(new SlotId("1"));
+    }
+
+    @Test
+    void aTagStillRaisesASlotTheNameAlreadyFound() {
+        extractor.returns(item("Electrical tape", null, List.of("tape")));
+        index.hits("electrical tape", hit("1", 9));
+        index.hits("tape", hit("1", 6));
+
+        SuggestSlot.Result result = suggest.execute(List.of(new byte[]{1}));
+
+        assertThat(result.suggestions().get(0).score()).isEqualTo(15.0);
+    }
+
+    @Test
+    void anItemTooVagueToAnchorSuggestsNothing() {
+        // No name and no part number is barely an identification at all, and a
+        // slot picked from its tags alone is exactly the noise being removed.
+        extractor.returns(item(null, null, List.of("tape")));
+        index.hits("tape", hit("4", 2));
+
+        assertThat(suggest.execute(List.of(new byte[]{1})).suggestions()).isEmpty();
     }
 
     @Test

@@ -183,6 +183,8 @@ Printed part numbers on ICs / modules / connectors, text on bags / reels / manuf
 
 The name is searched at all now — before, only the part number and tags were, so the best label on the item was the one thing the lookup ignored.
 
+**A name or part number anchors a slot; a tag only corroborates one.** A tag is a single generic word, so "every word must match" can't discipline it: photographing a roll of tape scored the resistor drawer 66 on the tag `tape` alone, because twenty-two resistors come on tape reels. A tag can raise a slot the name already found and can't put one in the list by itself, so an item with neither name nor part number — barely an identification — suggests nothing rather than guessing from its tags.
+
 ### Filing a slot as a batch of photos
 
 That rule needs more than one frame per slot, so `put.html` collects photos into a pending strip — each tap of the camera appends a thumbnail, `×` drops one, and one **File N photos** action sends them all. Nothing is uploaded until then.
