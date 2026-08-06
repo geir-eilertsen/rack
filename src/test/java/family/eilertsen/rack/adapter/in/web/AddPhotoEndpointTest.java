@@ -111,7 +111,7 @@ class AddPhotoEndpointTest {
     }
 
     private static Item item(String description) {
-        return new Item(description, description, null, null, 1, 0.9, List.of(), null, List.of(), null, null);
+        return new Item(description, description, null, null, 1, 0.9, List.of(), List.of(), null, null);
     }
 
     private static final class FakeImages implements ImageStore {
@@ -180,10 +180,6 @@ class AddPhotoEndpointTest {
             return List.of();
         }
 
-        @Override
-        public List<SearchHit> searchBySimilarity(float[] queryVector, int topK) {
-            return List.of();
-        }
 
         @Override
         public void forget(ContainerId container) {

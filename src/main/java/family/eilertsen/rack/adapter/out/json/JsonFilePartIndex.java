@@ -238,10 +238,6 @@ public class JsonFilePartIndex implements PartIndex {
         return s != null && s.toLowerCase(Locale.ROOT).contains(q);
     }
 
-    @Override
-    public List<SearchHit> searchBySimilarity(float[] queryVector, int topK) {
-        return List.of();
-    }
 
     @Override
     public Set<String> vocabulary() {

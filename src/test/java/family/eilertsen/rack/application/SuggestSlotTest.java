@@ -129,11 +129,11 @@ class SuggestSlotTest {
     }
 
     private static Item item(String name, String partNumber, List<String> tags) {
-        return new Item(name, "a roll of something", partNumber, "other", 1, 0.9, tags, null, List.of(), null, null);
+        return new Item(name, "a roll of something", partNumber, "other", 1, 0.9, tags, List.of(), null, null);
     }
 
     private static SearchHit hit(String slot, double score) {
-        Item stored = new Item("Electrical tape", "black roll", null, "other", 1, 0.9, List.of(), null, List.of(), null, null);
+        Item stored = new Item("Electrical tape", "black roll", null, "other", 1, 0.9, List.of(), List.of(), null, null);
         return new SearchHit(LAB, new SlotId(slot), 0, stored, score, null);
     }
 
@@ -193,10 +193,6 @@ class SuggestSlotTest {
             return List.of();
         }
 
-        @Override
-        public List<SearchHit> searchBySimilarity(float[] queryVector, int topK) {
-            return List.of();
-        }
 
         @Override
         public void forget(ContainerId container) {

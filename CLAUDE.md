@@ -157,7 +157,15 @@ Two passes, both over the same in-memory collection:
 
 The expansion model is separate from the vision model (`rack.search.expansion-model`, default `claude-haiku-4-5`): synonyms are a small fast job sitting in front of a search box. If the call fails for any reason — no API key, rate limit, non-JSON reply — the expander logs and returns nothing, and search degrades to the keyword pass rather than erroring.
 
-`PartIndex.searchBySimilarity` and `Item.embedding` are unimplemented leftovers from a planned vector search — nothing populates or reads them (see #29).
+**Vector search was considered and dropped** (#29, closed). `PartIndex.searchBySimilarity` and `Item.embedding` are gone rather than implemented. Three reasons, in order of weight:
+
+1. **The corpus fits.** The whole index is ~7,400 tokens — see *Asking about a project*. Retrieval solves a corpus that does not fit in the window; this one fits a hundred times over.
+2. **Retrieval's failure mode is the one this app cannot have.** "What am I missing" answered over a retriever that drops an item tells you to buy something you already own, invisibly. Cosine similarity also has no equivalent of the all-words rule, so it would reinstate exactly the noise "the resistors shouldn't show up for isolating tape" was about, and an embedding hit is unexplainable where the expander can name the terms it also searched.
+3. **The expander is already the semantic layer, and better grounded.** It is handed `vocabulary()` — the words *this rack* uses — where embeddings only know a general semantic space and have no idea the drawer says "electrical tape".
+
+A fourth, practical: Anthropic serves no embeddings endpoint, so it would mean a second provider for a 152-item index, plus an embedding that must be recomputed on every edit — a staleness invariant, which is drift, which is the thing the whole design exists to prevent.
+
+Old slot files still carry a dead `"embedding": null` on each item. Inert, per the no-migrations rule, and `JsonFilePartIndexTest` pins that it loads.
 
 ### Optional Git history layer
 

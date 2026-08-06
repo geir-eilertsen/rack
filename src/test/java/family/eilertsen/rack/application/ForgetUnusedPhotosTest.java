@@ -78,7 +78,7 @@ class ForgetUnusedPhotosTest {
         // Items catalogued before seen_in existed have a source and nothing else.
         images.holds("older.jpg");
         Item old = new Item("bolts", "from before", null, "fastener", 5, 0.9,
-            List.of(), null, List.of(), "older.jpg", null);
+            List.of(), List.of(), "older.jpg", null);
         index.put(RACK, new Slot(A1, List.of(old), null, null));
 
         assertThat(sweep.sweep()).isEmpty();
@@ -86,7 +86,7 @@ class ForgetUnusedPhotosTest {
 
     private static Item shownIn(String... frames) {
         return new Item("bolts", "in a bag", null, "fastener", 5, 0.9,
-            List.of(), null, List.of(), frames[0], List.of(frames));
+            List.of(), List.of(), frames[0], List.of(frames));
     }
 
     @Test
@@ -168,10 +168,6 @@ class ForgetUnusedPhotosTest {
             return List.of();
         }
 
-        @Override
-        public List<SearchHit> searchBySimilarity(float[] queryVector, int topK) {
-            return List.of();
-        }
 
         @Override
         public Set<String> vocabulary() {

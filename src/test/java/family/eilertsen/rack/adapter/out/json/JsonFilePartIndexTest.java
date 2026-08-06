@@ -49,13 +49,15 @@ class JsonFilePartIndexTest {
     }
 
     @Test
-    void readsSlotJsonWrittenWhileTheSlotStillKeptItsOwnPhotoList() throws IOException {
-        // Every slot on disk was written with a "photos" key. Items own their
-        // photographs now, so the key is dead — and reading past it is what makes
-        // dropping a field as cheap as adding one. Failing here would not be one
-        // missing list; it would be the whole drawer refusing to load.
+    void readsSlotJsonCarryingFieldsThatHaveSinceBeenDropped() throws IOException {
+        // Two dead keys, both still on disk in every file that has not been
+        // rewritten since: "photos" from when a slot kept its own list, and
+        // "embedding" from a vector search that was never built. Reading past
+        // them is what makes dropping a field as cheap as adding one — and
+        // failing here would not be one missing value, it would be the whole
+        // drawer refusing to load.
         writeSlot("C3", """
-            {"id":"C3","items":[{"name":"Electrical tape","description":"one black roll","category":"other","qty_estimate":1,"confidence":0.9,"tags":["tape"],"source_photo":"2026-08-04-1712.jpg","seen_in":["2026-08-04-1712.jpg"]}],"photos":["2026-08-04-1712.jpg","orphan.jpg"],"last_verified":null,"printed_at":null}
+            {"id":"C3","items":[{"name":"Electrical tape","description":"one black roll","category":"other","qty_estimate":1,"confidence":0.9,"tags":["tape"],"embedding":null,"source_photo":"2026-08-04-1712.jpg","seen_in":["2026-08-04-1712.jpg"]}],"photos":["2026-08-04-1712.jpg","orphan.jpg"],"last_verified":null,"printed_at":null}
             """);
 
         Slot slot = load().get(RACK, new SlotId("C3")).orElseThrow();
@@ -256,7 +258,7 @@ class JsonFilePartIndexTest {
         // photograph be listed by a drawer and shown by nobody.
         JsonFilePartIndex index = load();
         Item item = new Item("M4 hex bolts", "bag of fifty", null, "fastener", 50, 0.9,
-            List.of(), null, List.of(), "a.jpg", List.of("a.jpg", "b.jpg"));
+            List.of(), List.of(), "a.jpg", List.of("a.jpg", "b.jpg"));
         index.save(RACK, new Slot(new SlotId("B4"), List.of(item), null, null));
 
         String written = Files.readString(dataDir.resolve("rack").resolve("B4.json"), StandardCharsets.UTF_8);
@@ -272,7 +274,7 @@ class JsonFilePartIndexTest {
     void savedItemsKeepTheirNameAcrossAReload() throws IOException {
         JsonFilePartIndex index = load();
         Item item = new Item("M4 hex bolts", "bag of about fifty, DIN 933", null, "fastener",
-            50, 0.9, List.of("M4"), null, List.of(), null, null);
+            50, 0.9, List.of("M4"), List.of(), null, null);
         index.save(RACK, new Slot(new SlotId("B2"), List.of(item), null, null));
 
         Item reloaded = load().get(RACK, new SlotId("B2")).orElseThrow().items().get(0);

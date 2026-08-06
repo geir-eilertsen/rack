@@ -187,8 +187,7 @@ public class ResyncSlot {
     /** Everything but the quantity and the frames survives — that is the whole point. */
     private static Item refile(Item item, Integer qty, List<String> frames) {
         return new Item(item.name(), item.description(), item.partNumber(), item.category(),
-            qty == null ? item.qtyEstimate() : qty, item.confidence(), item.tags(),
-            item.embedding(), item.qa(),
+            qty == null ? item.qtyEstimate() : qty, item.confidence(), item.tags(), item.qa(),
             frames.isEmpty() ? null : frames.get(0),
             frames.isEmpty() ? null : frames);
     }

@@ -58,7 +58,7 @@ public class MergeItems {
         Item merged = new Item(
             keep.name(), keep.description(), keep.partNumber(), keep.category(),
             qty(keep) + qty(drop),
-            keep.confidence(), keep.tags(), keep.embedding(), keep.qa(),
+            keep.confidence(), keep.tags(), keep.qa(),
             keep.sourcePhoto() != null ? keep.sourcePhoto() : drop.sourcePhoto(),
             framesOf(keep, drop));
 

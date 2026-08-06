@@ -76,7 +76,6 @@ public class AskAboutItem {
             current.qtyEstimate(),
             current.confidence(),
             current.tags(),
-            current.embedding(),
             List.copyOf(qa),
             current.sourcePhoto(),
             current.seenIn()

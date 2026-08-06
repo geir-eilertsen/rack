@@ -75,7 +75,7 @@ public class RemovePhoto {
         String source = wasSource ? (remaining == null ? null : remaining.get(0)) : item.sourcePhoto();
 
         return new Item(item.name(), item.description(), item.partNumber(), item.category(),
-            item.qtyEstimate(), item.confidence(), item.tags(), item.embedding(), item.qa(),
+            item.qtyEstimate(), item.confidence(), item.tags(), item.qa(),
             source, remaining);
     }
 }

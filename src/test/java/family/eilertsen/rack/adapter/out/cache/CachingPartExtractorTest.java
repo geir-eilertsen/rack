@@ -91,7 +91,7 @@ class CachingPartExtractorTest {
         public List<Extraction> extract(List<byte[]> images) {
             calls++;
             return List.of(new Extraction(
-                new Item("thing", "a thing", null, "other", 1, 0.9, List.of(), null, List.of(), null, null), 0));
+                new Item("thing", "a thing", null, "other", 1, 0.9, List.of(), List.of(), null, null), 0));
         }
     }
 }

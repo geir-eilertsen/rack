@@ -54,7 +54,6 @@ public class MoveItem {
             original.qtyEstimate(),
             original.confidence(),
             original.tags(),
-            original.embedding(),
             original.qa(),
             original.sourcePhoto(),
             original.seenIn()

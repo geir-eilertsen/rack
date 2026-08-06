@@ -21,7 +21,6 @@ public record Item(
     Integer qtyEstimate,
     double confidence,
     List<String> tags,
-    float[] embedding,
     List<QA> qa,
     String sourcePhoto,
     List<String> seenIn

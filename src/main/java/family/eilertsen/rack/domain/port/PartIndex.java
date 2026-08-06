@@ -30,8 +30,6 @@ public interface PartIndex {
 
     List<SearchHit> searchByKeyword(String query);
 
-    List<SearchHit> searchBySimilarity(float[] queryVector, int topK);
-
     /**
      * Every distinct short label in the index — item names, categories and tags.
      * The words this rack actually uses, for grounding a {@link QueryExpander}.
