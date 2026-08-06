@@ -241,6 +241,8 @@ public class ContainerController {
         }
     }
 
+    public record ItemLink(String url, String title) {}
+
     /** The row that survives; the one in the path is the one folded into it. */
     public record MergeRequest(int into) {}
 
@@ -259,12 +261,26 @@ public class ContainerController {
             file.getBytes(), file.getOriginalFilename(), file.getContentType(), title);
     }
 
-    @DeleteMapping("/{container}/{slot}/items/{index}/documents/{filename}")
+    /** Records where to look. Nothing is fetched — rack cannot reach the web. */
+    @PostMapping("/{container}/{slot}/items/{index}/links")
+    public Slot addItemLink(@PathVariable String container,
+                            @PathVariable String slot,
+                            @PathVariable int index,
+                            @RequestBody ItemLink body) {
+        return documents.linkOnItem(new ContainerId(container), new SlotId(slot), index,
+            body.url(), body.title());
+    }
+
+    /**
+     * {@code ref} is the stored filename for a file and the address for a link.
+     * A query parameter because an address has slashes in it.
+     */
+    @DeleteMapping("/{container}/{slot}/items/{index}/documents")
     public Slot removeItemDocument(@PathVariable String container,
                                    @PathVariable String slot,
                                    @PathVariable int index,
-                                   @PathVariable String filename) {
-        return documents.detachFromItem(new ContainerId(container), new SlotId(slot), index, filename);
+                                   @RequestParam String ref) {
+        return documents.detachFromItem(new ContainerId(container), new SlotId(slot), index, ref);
     }
 
     /**

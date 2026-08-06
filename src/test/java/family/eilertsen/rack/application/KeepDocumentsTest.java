@@ -1,6 +1,7 @@
 package family.eilertsen.rack.application;
 
 import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.Document;
 import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.Project;
 import family.eilertsen.rack.domain.model.ProjectId;
@@ -163,6 +164,86 @@ class KeepDocumentsTest {
 
         assertThat(after.items().get(0).documents()).isEmpty();
         assertThat(store.all()).doesNotContain(filename);
+    }
+
+    @Test
+    void notesALinkAgainstAnItemAndNamesItAfterTheHost() {
+        // A bookmark, not a copy: rack cannot fetch anything, so this records the
+        // address of a page somebody else keeps.
+        index.save(RACK, slotWith(item("BC547 transistor")));
+
+        Slot saved = keep.linkOnItem(RACK, A1, 0, "https://www.onsemi.com/pdf/BC547.pdf", null);
+
+        Document link = saved.items().get(0).documents().get(0);
+        assertThat(link.isLink()).isTrue();
+        assertThat(link.url()).isEqualTo("https://www.onsemi.com/pdf/BC547.pdf");
+        assertThat(link.title()).isEqualTo("onsemi.com");
+        assertThat(link.filename()).isNull();
+    }
+
+    @Test
+    void refusesAnAddressThatIsNotTheWeb() {
+        // These go straight into an href, and a javascript: address in one runs
+        // when it is clicked. Escaping the text does not help — the browser reads
+        // the scheme, not the markup.
+        index.save(RACK, slotWith(item("BC547 transistor")));
+
+        for (String bad : new String[] {
+                "javascript:alert(1)", "data:text/html,<script>alert(1)</script>",
+                "file:///etc/passwd", "onsemi.com/BC547.pdf", " javascript:alert(1)"}) {
+            assertThatThrownBy(() -> keep.linkOnItem(RACK, A1, 0, bad, null))
+                .as(bad)
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThat(index.get(RACK, A1).orElseThrow().items().get(0).documents()).isEmpty();
+    }
+
+    @Test
+    void aLinkOwnsNoFileSoRemovingItDeletesNothing() {
+        index.save(RACK, slotWith(item("BC547 transistor")));
+        keep.attachToItem(RACK, A1, 0, bytes("pdf"), "kept.pdf", "application/pdf", null);
+        keep.linkOnItem(RACK, A1, 0, "https://example.com/a.pdf", null);
+
+        Slot after = keep.detachFromItem(RACK, A1, 0, "https://example.com/a.pdf");
+
+        assertThat(after.items().get(0).documents()).singleElement()
+            .extracting(Document::filename).isEqualTo("kept.pdf");
+        // The stored file is untouched, and the sweep does not want it either.
+        assertThat(store.all()).containsExactly("kept.pdf");
+        assertThat(sweep.sweep()).isEmpty();
+    }
+
+    @Test
+    void theSameAddressIsNotNotedTwice() {
+        index.save(RACK, slotWith(item("BC547 transistor")));
+        keep.linkOnItem(RACK, A1, 0, "https://example.com/a.pdf", null);
+        Slot again = keep.linkOnItem(RACK, A1, 0, "https://example.com/a.pdf", "another name");
+
+        assertThat(again.items().get(0).documents()).hasSize(1);
+    }
+
+    @Test
+    void aProjectCanHoldALinkToo() {
+        Project p = newProject("Quad 606");
+
+        p = keep.linkOnProject(p.id(), "https://www.hifiengine.com/manual/quad/606.shtml",
+            "Service manual (hifiengine)");
+
+        assertThat(p.documents()).singleElement().satisfies(d -> {
+            assertThat(d.isLink()).isTrue();
+            assertThat(d.title()).isEqualTo("Service manual (hifiengine)");
+        });
+        assertThat(p.log()).last().extracting(n -> n.text())
+            .isEqualTo("Noted a link: Service manual (hifiengine)");
+    }
+
+    @Test
+    void aDocumentIsAFileOrALinkAndNotBothOrNeither() {
+        assertThatThrownBy(() -> new Document("a.pdf", "t", "application/pdf", 1,
+            Instant.now(), "https://example.com"))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Document(null, "t", null, 0, Instant.now(), null))
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

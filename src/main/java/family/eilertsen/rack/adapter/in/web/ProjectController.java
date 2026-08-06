@@ -100,15 +100,26 @@ public class ProjectController {
             file.getOriginalFilename(), file.getContentType(), title);
     }
 
-    @PatchMapping("/{id}/documents/{filename}")
-    public Project retitleDocument(@PathVariable String id, @PathVariable String filename,
-                                   @RequestBody Title body) {
-        return docs.retitle(new ProjectId(id), filename, body.title());
+    /** Records where to look. Nothing is fetched — rack cannot reach the web. */
+    @PostMapping("/{id}/links")
+    public Project addLink(@PathVariable String id, @RequestBody Link body) {
+        return docs.linkOnProject(new ProjectId(id), body.url(), body.title());
     }
 
-    @DeleteMapping("/{id}/documents/{filename}")
-    public Project removeDocument(@PathVariable String id, @PathVariable String filename) {
-        return docs.detach(new ProjectId(id), filename);
+    /**
+     * {@code ref} is the stored filename for a file and the address for a link.
+     * A query parameter rather than a path variable because an address has
+     * slashes in it and a path variable cannot carry them.
+     */
+    @PatchMapping("/{id}/documents")
+    public Project retitleDocument(@PathVariable String id, @RequestParam String ref,
+                                   @RequestBody Title body) {
+        return docs.retitle(new ProjectId(id), ref, body.title());
+    }
+
+    @DeleteMapping("/{id}/documents")
+    public Project removeDocument(@PathVariable String id, @RequestParam String ref) {
+        return docs.detach(new ProjectId(id), ref);
     }
 
     @PatchMapping("/{id}/steps/{index}")
@@ -154,6 +165,8 @@ public class ProjectController {
     public record Note(String text) {}
 
     public record Title(String title) {}
+
+    public record Link(String url, String title) {}
 
     public record SettleRequest(Boolean finish) {}
 

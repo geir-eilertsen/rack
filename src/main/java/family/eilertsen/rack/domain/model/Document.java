@@ -23,25 +23,65 @@ import java.time.Instant;
  * "download the service manual", and the point of keeping it is that step one
  * never has to happen twice.
  *
+ * <p><strong>A link is a bookmark, not a copy.</strong> rack cannot fetch
+ * anything, so a link is the address of a page somebody else keeps: when it goes,
+ * it goes, and no sweep or backup here will bring it back. Worth having for the
+ * manufacturer's page that is always the newest revision, and worth knowing about
+ * before it is the only record of a part.
+ *
  * <p>An item's datasheet is the clearest case for keeping one at all: the part
  * number on a chip is three millimetres wide and the pinout is not on it, so the
  * PDF is the difference between a drawer that tells you what is in it and one
  * that tells you what you can do with it.
  */
 public record Document(
+    /** The stored file, or null when this is a link. */
     String filename,
     /** What it is, in the user's words. Defaults to the name of the file uploaded. */
     String title,
     String contentType,
     long size,
-    Instant addedAt
+    Instant addedAt,
+    /** Somewhere else, or null when this is a stored file. */
+    String url
 ) {
     public Document {
-        if (filename == null || filename.isBlank()) throw new IllegalArgumentException("filename is required");
-        if (title == null || title.isBlank()) title = filename;
+        boolean hasFile = filename != null && !filename.isBlank();
+        boolean hasUrl = url != null && !url.isBlank();
+        if (hasFile == hasUrl) {
+            throw new IllegalArgumentException("a document is either a stored file or a link, not both or neither");
+        }
+        if (hasUrl) {
+            url = url.strip();
+            requireWebAddress(url);
+        }
+        if (title == null || title.isBlank()) title = hasFile ? filename : url;
+    }
+
+    /**
+     * Only {@code http} and {@code https}.
+     *
+     * <p>These are rendered straight into an {@code href}, and a
+     * {@code javascript:} address in one runs when it is clicked. Escaping the
+     * text does not help — the browser reads the scheme, not the markup. So the
+     * scheme is checked here, where every path that stores a link has to pass.
+     */
+    private static void requireWebAddress(String url) {
+        String lower = url.toLowerCase(java.util.Locale.ROOT);
+        if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
+            throw new IllegalArgumentException(
+                "A link must start with http:// or https://; got: " + url);
+        }
+        if (url.chars().anyMatch(c -> c < 0x20 || c == 0x7f)) {
+            throw new IllegalArgumentException("A link cannot contain control characters");
+        }
+    }
+
+    public boolean isLink() {
+        return url != null && !url.isBlank();
     }
 
     public Document retitled(String newTitle) {
-        return new Document(filename, newTitle, contentType, size, addedAt);
+        return new Document(filename, newTitle, contentType, size, addedAt, url);
     }
 }

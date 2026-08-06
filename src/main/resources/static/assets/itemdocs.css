@@ -17,3 +17,13 @@
 .itemdocs .dadd { display: inline-flex; cursor: pointer; padding: .3rem .6rem; font-size: .82rem; }
 .itemdocs .dstatus { margin-left: .5rem; font-size: .82rem; color: var(--muted); }
 .itemdocs .dstatus.err { color: var(--error); }
+
+.itemdocs .dlnk { flex: 0 0 auto; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em;
+  font-weight: 700; padding: .1rem .35rem; border-radius: 999px;
+  background: var(--primary-soft); color: var(--primary-hover); }
+.itemdocs .dlink { padding: .3rem .6rem; font-size: .82rem; margin-left: .35rem; }
+.itemdocs .dlinkform { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .5rem; }
+.itemdocs .dlinkform input { flex: 1 1 10rem; min-width: 0; font-family: inherit; font-size: .85rem;
+  padding: .35rem .5rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); color: inherit; }
+.itemdocs .dlinkform .btn { flex: 0 0 auto; padding: .35rem .7rem; font-size: .82rem; }

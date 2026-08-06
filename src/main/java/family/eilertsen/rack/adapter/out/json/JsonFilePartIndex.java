@@ -304,7 +304,8 @@ public class JsonFilePartIndex implements PartIndex {
             for (Slot slot : slots.values()) {
                 if (slot.items() == null) continue;
                 for (Item item : slot.items()) {
-                    for (Document d : item.documents()) used.add(d.filename());
+                    // A link owns no file, so it is not a file in use.
+                    for (Document d : item.documents()) if (!d.isLink()) used.add(d.filename());
                 }
             }
         }

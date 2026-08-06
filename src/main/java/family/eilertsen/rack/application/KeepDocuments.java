@@ -65,28 +65,72 @@ public class KeepDocuments {
         String stored = documents.store(bytes, originalFilename, contentType);
         Document doc = new Document(stored,
             title == null || title.isBlank() ? cleanTitle(originalFilename) : title.strip(),
-            contentType, bytes.length, Instant.now());
+            contentType, bytes.length, Instant.now(), null);
 
         List<Document> kept = new ArrayList<>(item.documents());
         kept.add(doc);
         return saveItem(container, slot, itemIndex, withDocuments(item, List.copyOf(kept)));
     }
 
-    public Slot detachFromItem(ContainerId container, SlotId slotId, int itemIndex, String filename) {
+    /**
+     * Notes an address on an item. Nothing is fetched or copied — see
+     * {@link Document} — so this only records where to look.
+     */
+    public Slot linkOnItem(ContainerId container, SlotId slotId, int itemIndex, String url, String title) {
         Slot slot = requireSlot(container, slotId);
         Item item = requireItem(slot, itemIndex);
-        if (item.documents().stream().noneMatch(d -> d.filename().equals(filename))) {
-            throw new NoSuchElementException("This item has no document " + filename);
-        }
+        Document link = new Document(null,
+            title == null || title.isBlank() ? titleFor(url) : title.strip(),
+            null, 0, Instant.now(), url);
+        if (item.documents().stream().anyMatch(d -> link.url().equals(d.url()))) return slot;
 
         List<Document> kept = new ArrayList<>(item.documents());
-        kept.removeIf(d -> d.filename().equals(filename));
+        kept.add(link);
+        return saveItem(container, slot, itemIndex, withDocuments(item, List.copyOf(kept)));
+    }
+
+    public Project linkOnProject(ProjectId id, String url, String title) {
+        Project project = require(id);
+        Document link = new Document(null,
+            title == null || title.isBlank() ? titleFor(url) : title.strip(),
+            null, 0, Instant.now(), url);
+        if (project.documents().stream().anyMatch(d -> link.url().equals(d.url()))) return project;
+
+        List<Document> kept = new ArrayList<>(project.documents());
+        kept.add(link);
+        return saved(project, List.copyOf(kept), ProjectNote.app("Noted a link: " + link.title()));
+    }
+
+    /** The host, which is what tells you whose page it is at a glance. */
+    private static String titleFor(String url) {
+        try {
+            String host = java.net.URI.create(url.strip()).getHost();
+            return host == null || host.isBlank() ? url.strip() : host.replaceFirst("^www\\.", "");
+        } catch (RuntimeException e) {
+            return url.strip();
+        }
+    }
+
+    /** {@code ref} is the stored filename for a file, or the address for a link. */
+    public Slot detachFromItem(ContainerId container, SlotId slotId, int itemIndex, String ref) {
+        Slot slot = requireSlot(container, slotId);
+        Item item = requireItem(slot, itemIndex);
+        Document going = item.documents().stream().filter(d -> refers(d, ref)).findFirst()
+            .orElseThrow(() -> new NoSuchElementException("This item has no document " + ref));
+
+        List<Document> kept = new ArrayList<>(item.documents());
+        kept.removeIf(d -> refers(d, ref));
         Slot saved = saveItem(container, slot, itemIndex, withDocuments(item, List.copyOf(kept)));
 
         // After the write, and against everything: the same datasheet may be on
-        // another item, or kept by a project.
-        if (!inUse().contains(filename)) documents.delete(filename);
+        // another item, or kept by a project. A link owns no file to remove.
+        if (!going.isLink() && !inUse().contains(going.filename())) documents.delete(going.filename());
         return saved;
+    }
+
+    /** A document is named by its file if it has one, and by its address if not. */
+    private static boolean refers(Document d, String ref) {
+        return ref != null && ref.equals(d.isLink() ? d.url() : d.filename());
     }
 
     private Slot requireSlot(ContainerId container, SlotId slotId) {
@@ -124,40 +168,41 @@ public class KeepDocuments {
         String stored = documents.store(bytes, originalFilename, contentType);
         Document doc = new Document(stored,
             title == null || title.isBlank() ? cleanTitle(originalFilename) : title.strip(),
-            contentType, bytes.length, Instant.now());
+            contentType, bytes.length, Instant.now(), null);
 
         List<Document> kept = new ArrayList<>(project.documents());
         kept.add(doc);
         return saved(project, List.copyOf(kept), ProjectNote.app("Kept a document: " + doc.title()));
     }
 
-    public Project detach(ProjectId id, String filename) {
+    /** {@code ref} is the stored filename for a file, or the address for a link. */
+    public Project detach(ProjectId id, String ref) {
         Project project = require(id);
         Document going = project.documents().stream()
-            .filter(d -> d.filename().equals(filename)).findFirst()
-            .orElseThrow(() -> new NoSuchElementException("This project has no document " + filename));
+            .filter(d -> refers(d, ref)).findFirst()
+            .orElseThrow(() -> new NoSuchElementException("This project has no document " + ref));
 
         List<Document> kept = new ArrayList<>(project.documents());
-        kept.removeIf(d -> d.filename().equals(filename));
+        kept.removeIf(d -> refers(d, ref));
         Project updated = saved(project, List.copyOf(kept),
             ProjectNote.app("Removed a document: " + going.title()));
 
-        // After the write, and against every project: the same manual may be kept
-        // by another job on the same machine.
-        if (!inUse().contains(filename)) documents.delete(filename);
+        // After the write, and against everything: the same manual may be kept by
+        // another job on the same machine. A link owns no file to remove.
+        if (!going.isLink() && !inUse().contains(going.filename())) documents.delete(going.filename());
         return updated;
     }
 
-    public Project retitle(ProjectId id, String filename, String title) {
+    public Project retitle(ProjectId id, String ref, String title) {
         Project project = require(id);
         if (title == null || title.isBlank()) throw new IllegalArgumentException("a title is required");
         List<Document> kept = new ArrayList<>();
         boolean found = false;
         for (Document d : project.documents()) {
-            if (d.filename().equals(filename)) { kept.add(d.retitled(title.strip())); found = true; }
+            if (refers(d, ref)) { kept.add(d.retitled(title.strip())); found = true; }
             else kept.add(d);
         }
-        if (!found) throw new NoSuchElementException("This project has no document " + filename);
+        if (!found) throw new NoSuchElementException("This project has no document " + ref);
         return saved(project, List.copyOf(kept), null);
     }
 
@@ -168,7 +213,7 @@ public class KeepDocuments {
     public Set<String> inUse() {
         Set<String> used = new HashSet<>();
         for (Project p : projects.all()) {
-            for (Document d : p.documents()) used.add(d.filename());
+            for (Document d : p.documents()) if (!d.isLink()) used.add(d.filename());
         }
         // And every item's, because a project finishing says nothing about the
         // datasheet still sitting on the chip in B7.
@@ -188,7 +233,7 @@ public class KeepDocuments {
         Set<String> stillUsed = inUse();
         List<String> gone = new ArrayList<>();
         for (Document d : orphaned == null ? List.<Document>of() : orphaned) {
-            if (stillUsed.contains(d.filename())) continue;
+            if (d.isLink() || stillUsed.contains(d.filename())) continue;
             documents.delete(d.filename());
             gone.add(d.filename());
             log.info("Deleting document nothing references: {}", d.filename());

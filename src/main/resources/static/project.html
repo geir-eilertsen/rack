@@ -125,6 +125,15 @@
       font-size: 1.1rem; line-height: 1; cursor: pointer; padding: .2rem .35rem; }
     .docadd { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: .5rem 0 0; }
     .docadd .pick { display: inline-flex; }
+    .docform { display: flex; gap: .4rem; flex-wrap: wrap; margin: .5rem 0 0; }
+    .docform input { flex: 1 1 12rem; min-width: 0; font-size: .9rem; padding: .45rem .6rem;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--bg); color: inherit; font-family: inherit; }
+    .docform .btn { flex: 0 0 auto; }
+    .docs .dlnk { flex: 0 0 auto; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em;
+      font-weight: 700; padding: .1rem .35rem; border-radius: 999px;
+      background: var(--primary-soft); color: var(--primary-hover); }
+    .docs .dm { overflow-wrap: anywhere; }
     /* Searches, not links to a document. The app cannot reach the internet and
        neither can the model, so anything claiming to be the manual's address
        would be a guess. */
@@ -323,19 +332,36 @@
           + '<label class="btn pick">Add a document'
           + '<input type="file" id="docFile" hidden accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,image/*,application/pdf">'
           + '</label>'
+          + '<button class="btn" type="button" id="docLinkBtn">Add a link</button>'
           + '<span class="status" id="docStatus"></span>'
+        + '</div>'
+        + '<div class="docform" id="docLinkForm" hidden>'
+          + '<input id="docUrl" type="url" inputmode="url" placeholder="https://…" aria-label="Address">'
+          + '<input id="docTitle" type="text" placeholder="What it is (optional)" aria-label="Title">'
+          + '<button class="btn primary" type="button" id="docLinkGo">Add</button>'
         + '</div>'
         + lookBlock(p.name);
     }
 
+    /**
+     * A stored file opens from rack; a link goes wherever it points, which rack
+     * has never seen. Marked as such, because one of them still works when the
+     * other end of the internet does not.
+     */
     function docRow(d) {
+      const isLink = !!d.url;
+      const href = isLink ? d.url : '/documents/' + encodeURIComponent(d.filename);
+      const ref = isLink ? d.url : d.filename;
       return '<li><span class="dt">'
-        + '<a href="/documents/' + encodeURIComponent(d.filename) + '" target="_blank" rel="noopener">'
+        + '<a href="' + esc(href) + '" target="_blank"'
+        + (isLink ? ' rel="noopener noreferrer"' : ' rel="noopener"') + '>'
         + esc(d.title) + '</a>'
-        + '<span class="dm">' + size(d.size) + ' · kept ' + rackProject.when(d.added_at, '').trim() + '</span>'
+        + '<span class="dm">' + (isLink ? esc(d.url) : size(d.size))
+        + ' · kept ' + rackProject.when(d.added_at, '').trim() + '</span>'
         + '</span>'
-        + '<button class="drop" type="button" title="Remove this document" data-doc="'
-        + esc(d.filename) + '">×</button></li>';
+        + (isLink ? '<span class="dlnk">link</span>' : '')
+        + '<button class="drop" type="button" title="Remove" data-doc="'
+        + esc(ref) + '">×</button></li>';
     }
 
     function size(bytes) {
@@ -521,9 +547,32 @@
       const docFile = document.getElementById('docFile');
       if (docFile) docFile.addEventListener('change', () => upload(docFile));
       document.querySelectorAll('[data-doc]').forEach(b => b.addEventListener('click', () => {
-        if (confirm('Remove this document? The file goes unless another project keeps it too.')) {
-          send('/documents/' + encodeURIComponent(b.dataset.doc), 'DELETE');
+        if (confirm('Remove this? A stored file goes unless another project keeps it too.')) {
+          send('/documents?ref=' + encodeURIComponent(b.dataset.doc), 'DELETE');
         }
+      }));
+
+      const linkForm = document.getElementById('docLinkForm');
+      const linkUrl = document.getElementById('docUrl');
+      document.getElementById('docLinkBtn').addEventListener('click', () => {
+        linkForm.hidden = !linkForm.hidden;
+        if (!linkForm.hidden) linkUrl.focus();
+      });
+      const addLink = async () => {
+        const url = linkUrl.value.trim();
+        if (!url) { linkUrl.focus(); return; }
+        const st = document.getElementById('docStatus');
+        st.className = 'status';
+        st.textContent = 'Noting it…';
+        // Nothing is fetched — rack cannot reach the web, so this records where
+        // to look and no more.
+        const ok = await send('/links', 'POST',
+          { url, title: document.getElementById('docTitle').value.trim() });
+        if (!ok) st.textContent = '';
+      };
+      document.getElementById('docLinkGo').addEventListener('click', addLink);
+      linkForm.querySelectorAll('input').forEach(inp => inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); addLink(); }
       }));
     }
 
