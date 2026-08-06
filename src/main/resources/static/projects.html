@@ -23,6 +23,8 @@
     .pcard .next b { color: var(--primary-hover); }
     .newbox { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
     .newbox input { flex: 1; min-width: 12rem; font-size: 1rem; padding: .7rem .9rem; }
+    .alt { margin: .6rem 0 1.5rem; font-size: .9rem; color: var(--muted); }
+    .alt a { color: var(--primary-hover); font-weight: 600; }
   </style>
 </head>
 <body>
@@ -37,12 +39,17 @@
 
     <h1>Projects</h1>
     <p class="callout">A job of work, from finding out what it needs to putting the lid back on.
-      Ask about a project to start one with its parts and steps already filled in — or name one here and fill it in as you go.</p>
+      Name one and its page will work out the parts and the steps for you.</p>
 
     <div class="newbox">
       <input id="newName" placeholder="Name a project — e.g. Quad 606 recap" aria-label="New project name">
       <button class="btn primary" id="newBtn">Start it</button>
     </div>
+    <!-- The other way in, for when the job is easier to describe than to name.
+         Not on the front page any more: it is help with a project, so it lives
+         beside them rather than beside finding a part. -->
+    <p class="alt"><a href="/ask.html">Or start from a question</a> — describe the job and
+      keep the answer as a project.</p>
     <div class="status" id="status"></div>
 
     <ul class="plist" id="list"></ul>
