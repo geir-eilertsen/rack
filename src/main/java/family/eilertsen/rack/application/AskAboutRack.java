@@ -85,7 +85,7 @@ public class AskAboutRack {
            {"part": "what is needed",
             "why": "what it is for in this job",
             "status": "have" | "partial" | "missing",
-            "found": [{"container": "id", "slot": "id", "item": "exact name from the list", "note": "optional"}],
+            "found": [{"container": "the part before the slash", "slot": "the part after it", "item": "exact name from the list", "note": "optional"}],
             "note": "caveat, substitution, or what to buy"}]}
         """;
 
@@ -126,7 +126,8 @@ public class AskAboutRack {
         }
 
         String prompt = "Everything in storage, one item per line, as "
-            + "container/slot | name | description | part number | category | quantity | tags:\n\n"
+            + "container/slot (a container id and a slot id, split on the slash) | name | "
+            + "description | part number | category | quantity | tags:\n\n"
             + String.join("\n", inventory.lines())
             + "\n\nQuestion: " + question.strip();
 
@@ -163,19 +164,70 @@ public class AskAboutRack {
         List<Need> checked = new ArrayList<>();
         for (Need need : checklist) {
             if (need == null || need.part() == null) continue;
-            List<Found> real = new ArrayList<>();
-            for (Found found : need.found() == null ? List.<Found>of() : need.found()) {
-                if (found == null || found.item() == null) continue;
-                List<String> names = held.get(key(found.container(), found.slot()));
-                if (names != null && names.contains(normalise(found.item()))) real.add(found);
-                else log.warn("Dropping a claim the index does not support: {}/{} \"{}\"",
-                    found.container(), found.slot(), found.item());
-            }
+            List<Found> real = keepReal(need.found(), held);
             // A "have" whose every citation was invented is a miss, not a have.
             String status = real.isEmpty() && !"missing".equals(need.status()) ? "missing" : need.status();
             checked.add(new Need(need.part(), need.why(), status, List.copyOf(real), need.note()));
         }
         return List.copyOf(checked);
+    }
+
+    /**
+     * The citations the index agrees with, and only those.
+     *
+     * <p>Shared with {@link PlanPurchases}, because a work plan that says "use
+     * your Dow Corning 340 from lab/2" is the same kind of claim as a checklist
+     * saying you have it, and has to survive the same question.
+     */
+    static List<Found> keepReal(List<Found> found, Map<String, List<String>> held) {
+        List<Found> real = new ArrayList<>();
+        for (Found f : found == null ? List.<Found>of() : found) {
+            if (f == null || f.item() == null) continue;
+            Found placed = locate(f, held);
+            if (placed != null) real.add(placed);
+            else log.warn("Dropping a claim the index does not support: {}/{} \"{}\"",
+                f.container(), f.slot(), f.item());
+        }
+        return List.copyOf(real);
+    }
+
+    /**
+     * The drawer this citation actually means, or null if no drawer holds the item.
+     *
+     * <p>Every line of the listing begins "lab/10 | …", so a model asked for a
+     * container and a slot separately will sometimes hand back the token it read:
+     * {@code {"container": "lab/10", "slot": "lab/10"}}. The first purchase plan
+     * lost 62 of about 100 tool references that way — every one of them a real
+     * item in a real drawer, rejected over punctuation.
+     *
+     * <p>So the pair is resolved rather than demanded, and the standard is
+     * unchanged: whichever reading is tried, that drawer has to hold that item.
+     * A citation is repaired into the form the links need, or it is dropped.
+     */
+    private static Found locate(Found f, Map<String, List<String>> held) {
+        String item = normalise(f.item());
+        for (String[] pair : readings(f)) {
+            List<String> names = held.get(key(pair[0], pair[1]));
+            if (names != null && names.contains(item)) {
+                return new Found(pair[0], pair[1], f.item(), f.note());
+            }
+        }
+        return null;
+    }
+
+    /** The pair as given, then either field read as a whole "container/slot". */
+    private static List<String[]> readings(Found f) {
+        List<String[]> readings = new ArrayList<>();
+        readings.add(new String[] {f.container(), f.slot()});
+        for (String combined : new String[] {f.container(), f.slot()}) {
+            if (combined == null) continue;
+            int cut = combined.indexOf('/');
+            if (cut > 0 && cut < combined.length() - 1) {
+                readings.add(new String[] {
+                    combined.substring(0, cut).strip(), combined.substring(cut + 1).strip()});
+            }
+        }
+        return readings;
     }
 
     /** One flat listing of the whole rack, plus what it holds for checking against. */

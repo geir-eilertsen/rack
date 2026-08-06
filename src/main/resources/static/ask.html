@@ -55,6 +55,51 @@
     .found .what { flex: 1; min-width: 0; }
     .counts { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0 0 1rem; font-size: .9rem; }
     .counts b { font-variant-numeric: tabular-nums; }
+
+    /* The shopping run and the job, once you know what is missing. */
+    .plan-bar { margin: 1.25rem 0; display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+    .section-head { font-size: 1.15rem; font-weight: 700; margin: 1.75rem 0 .75rem; }
+    .supplier { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
+      box-shadow: var(--shadow); margin-bottom: .75rem; overflow: hidden; }
+    .supplier > .top { padding: .85rem 1rem; border-bottom: 1px solid var(--border); }
+    .supplier .who { display: flex; gap: .5rem; align-items: baseline; }
+    .supplier .who .nm { font-weight: 700; font-size: 1.02rem; flex: 1; min-width: 0; }
+    .reach { flex: 0 0 auto; font-size: .68rem; letter-spacing: .04em; text-transform: uppercase;
+      font-weight: 700; padding: .2rem .5rem; border-radius: 999px; background: var(--primary-soft);
+      color: var(--primary-hover); white-space: nowrap; }
+    .reach.international { background: var(--border); color: var(--muted); }
+    .supplier .why, .supplier .ordering { margin: .35rem 0 0; font-size: .88rem; color: var(--muted); }
+    .lines { list-style: none; padding: 0; margin: 0; }
+    .lines li { padding: .6rem 1rem; border-top: 1px solid var(--border); display: flex; gap: .6rem; align-items: baseline; }
+    .lines li:first-child { border-top: none; }
+    .lines .qty { flex: 0 0 auto; font-family: var(--font-mono); font-weight: 700; color: var(--primary-hover);
+      min-width: 2.5rem; font-variant-numeric: tabular-nums; }
+    .lines .body { flex: 1; min-width: 0; }
+    .lines .what { font-weight: 600; }
+    .lines .search { font-family: var(--font-mono); font-size: .82rem; color: var(--muted); }
+    .lines .code { font-family: var(--font-mono); font-size: .82rem; color: var(--success); }
+    .lines .lnote { display: block; font-size: .85rem; color: var(--muted); margin-top: .15rem; }
+    .supplier .foot { padding: .6rem 1rem; border-top: 1px solid var(--border); background: var(--primary-soft); }
+
+    .steps { list-style: none; counter-reset: step; padding: 0; margin: 0; }
+    .steps li { counter-increment: step; padding: .85rem 1rem .85rem 3rem; position: relative;
+      border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
+      box-shadow: var(--shadow); margin-bottom: .6rem; }
+    .steps li::before { content: counter(step); position: absolute; left: 1rem; top: .85rem;
+      width: 1.4rem; height: 1.4rem; border-radius: 50%; background: var(--primary); color: #fff;
+      font-size: .78rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .steps .title { font-weight: 700; }
+    .steps .detail { margin: .3rem 0 0; font-size: .92rem; }
+    .steps .uses { list-style: none; padding: 0; margin: .5rem 0 0; font-size: .85rem; }
+    .steps .uses li { all: unset; display: block; margin-top: .2rem; }
+    .steps .uses a { color: var(--primary-hover); font-family: var(--font-mono); font-weight: 700; text-decoration: none; }
+    .steps .uses a:hover { text-decoration: underline; }
+    /* Hazards go above the steps, because reading them afterwards is no use. */
+    .cautions { padding: .9rem 1rem; border: 1px solid var(--error); border-left-width: 3px;
+      border-radius: var(--radius); background: var(--error-soft); margin-bottom: .9rem; }
+    .cautions h3 { margin: 0 0 .4rem; font-size: .95rem; color: var(--error); }
+    .cautions ul { margin: 0; padding-left: 1.2rem; font-size: .9rem; }
+    .cautions li { margin-bottom: .25rem; }
   </style>
 </head>
 <body>
@@ -83,6 +128,7 @@
     <div class="examples" id="examples"></div>
 
     <div id="out"></div>
+    <div id="planOut"></div>
   </div>
 
   <script src="/assets/usage.js"></script>
@@ -91,6 +137,10 @@
     const go = document.getElementById('go');
     const status = document.getElementById('status');
     const out = document.getElementById('out');
+    const planOut = document.getElementById('planOut');
+    // What the checklist could not find, kept so the plan can be asked for
+    // without retyping the project or paying for the question a second time.
+    let lastAsk = null;
 
     const EXAMPLES = [
       'I am restoring a Quad 606 amplifier. Do I have all the parts?',
@@ -122,6 +172,8 @@
       // everything, which is the thing that makes the answer worth trusting.
       setStatus('', 'Reading every item…');
       out.innerHTML = '';
+      planOut.innerHTML = '';
+      lastAsk = null;
       try {
         const res = await fetch('/ask', {
           method: 'POST',
@@ -159,7 +211,123 @@
         + (list.length
             ? '<ul class="needs">' + list.map(need).join('') + '</ul>'
             : '<p class="empty">Nothing to check against that.</p>');
+
+      // Only offer the shopping run when there is something to buy. Finding out
+      // you already have everything is a complete answer, and should not come
+      // with a button that spends money to say so.
+      const toBuy = list.filter(x => x.status !== 'have');
+      if (!toBuy.length) return;
+      lastAsk = { project: a.question, needed: toBuy.map(shoppingLine) };
+      out.insertAdjacentHTML('beforeend',
+        '<div class="plan-bar"><button class="btn primary" id="planBtn">Plan the order for '
+        + toBuy.length + (toBuy.length === 1 ? ' part' : ' parts') + '</button>'
+        + '<span class="status" id="planStatus"></span></div>');
+      document.getElementById('planBtn').addEventListener('click', plan);
     }
+
+    /** The part plus the caveat, since a substitution changes what to order. */
+    function shoppingLine(x) {
+      return x.part + (x.note ? ' — ' + x.note : '');
+    }
+
+    async function plan() {
+      if (!lastAsk) return;
+      const btn = document.getElementById('planBtn');
+      const st = document.getElementById('planStatus');
+      btn.disabled = true;
+      st.className = 'status';
+      st.textContent = 'Grouping by supplier and writing up the job…';
+      planOut.innerHTML = '';
+      try {
+        const res = await fetch('/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(lastAsk)
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        renderPlan(await res.json());
+        st.textContent = '';
+        if (window.rackUsage) rackUsage.refresh();
+        planOut.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (e) {
+        st.className = 'status error';
+        st.textContent = 'Could not plan that: ' + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function renderPlan(p) {
+      const suppliers = p.suppliers || [];
+      const steps = p.steps || [];
+      const cautions = p.cautions || [];
+      planOut.innerHTML =
+        (suppliers.length
+          ? '<div class="section-head">What to buy, and where</div>'
+            + suppliers.map(supplier).join('')
+          : '')
+        + (cautions.length
+          ? '<div class="section-head">How to do it</div>'
+            + '<div class="cautions"><h3>Before you start</h3><ul>'
+            + cautions.map(c => '<li>' + esc(c) + '</li>').join('') + '</ul></div>'
+          : (steps.length ? '<div class="section-head">How to do it</div>' : ''))
+        + (steps.length ? '<ul class="steps">' + steps.map(step).join('') + '</ul>' : '');
+    }
+
+    function supplier(s) {
+      const reach = ['local', 'national', 'international'].includes(s.reach) ? s.reach : 'national';
+      const lines = s.items || [];
+      // Pasteable, because the next thing you do with a list is put it somewhere.
+      const plain = lines.map(l => (l.qty ? l.qty + '× ' : '') + l.part
+        + (l.code ? '  [' + l.code + ']' : '') + (l.search ? '  (' + l.search + ')' : '')).join('\n');
+      return '<div class="supplier">'
+        + '<div class="top"><div class="who"><span class="nm">' + esc(s.name || '') + '</span>'
+          + '<span class="reach ' + reach + '">' + reach + '</span></div>'
+          + (s.why ? '<p class="why">' + esc(s.why) + '</p>' : '') + '</div>'
+        + '<ul class="lines">' + lines.map(l =>
+            '<li><span class="qty">' + esc(l.qty || '') + '</span><span class="body">'
+            + '<span class="what">' + esc(l.part || '') + '</span>'
+            + (l.code ? ' <span class="code">' + esc(l.code) + '</span>' : '')
+            + (l.search ? '<br><span class="search">search: ' + esc(l.search) + '</span>' : '')
+            + (l.note ? '<span class="lnote">' + esc(l.note) + '</span>' : '')
+            + '</span></li>').join('') + '</ul>'
+        + '<div class="foot">'
+          + (s.ordering ? '<p class="ordering">' + esc(s.ordering) + '</p>' : '')
+          + '<button class="btn" type="button" data-copy="' + esc(plain) + '">Copy this list</button>'
+        + '</div></div>';
+    }
+
+    function step(s) {
+      const uses = s.uses || [];
+      return '<li><span class="title">' + esc(s.title || '') + '</span>'
+        + (s.detail ? '<p class="detail">' + esc(s.detail) + '</p>' : '')
+        + (uses.length
+            ? '<ul class="uses">' + uses.map(u =>
+                '<li>Uses <a href="/put.html?c=' + encodeURIComponent(u.container)
+                + '&s=' + encodeURIComponent(u.slot) + '">' + esc(u.container) + ' · ' + esc(u.slot)
+                + '</a> — ' + esc(u.item || '') + '</li>').join('') + '</ul>'
+            : '')
+        + '</li>';
+    }
+
+    // One listener for every copy button, present and future.
+    document.addEventListener('click', async e => {
+      const btn = e.target.closest('[data-copy]');
+      if (!btn) return;
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copy);
+        const was = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = was; }, 1400);
+      } catch (err) {
+        // Clipboard refused (no permission, or not a secure context). Showing the
+        // text is the fallback that always works.
+        const pre = document.createElement('pre');
+        pre.textContent = btn.dataset.copy;
+        pre.style.cssText = 'white-space:pre-wrap;font-size:.85rem;margin:.5rem 0 0';
+        btn.replaceWith(pre);
+      }
+    });
 
     function need(x) {
       const s = ['have', 'partial', 'missing'].includes(x.status) ? x.status : 'missing';

@@ -175,7 +175,7 @@ Committing after each write gives history, per-drawer undo, and free multi-site 
 
 - `/` → index page (hub)
 - `/identify.html`, `POST /identify` → identify a part from a photo, no persistence
-- `/ask.html`, `POST /ask` → one question about the whole rack (project checklist); the entire index goes in the prompt
+- `/ask.html`, `POST /ask` → one question about the whole rack (project checklist); the entire index goes in the prompt. `POST /plan` turns the gaps into per-supplier shopping lists plus steps for the job
 - `/find.html`, `GET /search?q=` → search; `&smart=true` widens a query that came up short (see Search above). `POST /search/photo` searches by photo instead of by typing. All three return `{query, expanded_terms, hits}`
 - `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state. The photo endpoint (and `POST /suggest`) take **repeated `photo` parts** — one part is just a batch of one.
 - `/containers.html`, `POST /c` (register), `PATCH /c/{container}` (name + label scale), `DELETE /c/{container}` → maintain containers; also hosts registration and the label flow below
@@ -215,6 +215,18 @@ The consequence: **printed labels and consumed stickers are different numbers**,
 **The model brings what a job needs; the rack brings what is in the drawers.** Those are different kinds of knowledge and the prompt separates them — component values and quantities for a Quad 606 recap are the model's to know, and only the index can say what is on the shelf. So every claim of possession must cite a container and slot, and `AskAboutRack.verify` drops any citation naming an item that drawer does not hold, matching case- and whitespace-insensitively because the model echoes a label rather than a key. A `have` whose every citation was invented is rewritten to `missing` — the one failure this cannot have is sending someone to a drawer for a part that was never in it.
 
 Each line carries how long ago its drawer was last checked, so an answer leaning on a stale reading can say so. Drift is the failure the whole app is built against, and an answer that hides it is worse than no answer.
+
+### The shopping run, and how to do the job
+
+`POST /plan` (`PlanPurchases`) takes what the checklist could not find and returns one list per supplier plus numbered steps for the work. Separate from `/ask` because finding out you already have everything is a complete answer and should not pay for a plan nobody wanted; `ask.html` only offers the button when something is actually missing.
+
+**Which supplier is read off the rack, not guessed.** Descriptions carry where things came from — `Farnell 876-7670` on the Panasonic capacitor, `Clas Ohlson 32-7965` on a mains splitter, Biltema on the crimp terminals — so the inventory itself says where this person shops and for what kind of part. Same move search makes with `vocabulary()`. A hardcoded supplier list would be stale within the year and wrong for whoever runs this next. `rack.shopping.region` (default `Norway`) only says who can deliver here.
+
+**No prices, no totals, no stock claims, no invented order codes.** A model knows none of them, and a confident wrong price is worse than no price — you would carry it to the till instead of looking it up. An order code is the one field that gets pasted straight into a supplier's search box, so `PlanPurchases.vouched` keeps one only when some item's own text already carries it, which makes it a fact about a thing on the shelf. Under four characters is dropped regardless: a listing of 152 items contains every short string, so a match would vouch for anything. Everything else is a search term.
+
+**Citations are resolved, not demanded.** Every listing line begins `lab/10 | …`, so a model asked for a container and a slot separately sometimes hands back the token it read: `{"container": "lab/10", "slot": "lab/10"}`. The first real plan lost **62 of about 100** tool references that way — every one a real item in a real drawer, rejected over punctuation. `AskAboutRack.locate` now tries the pair as given, then either field split on its slash, and repairs the citation into the form the drawer links need. The standard is unchanged: whichever reading is tried, that drawer must hold that item. Fixing it took kept references from 43 to 58, all 58 verifiable against `data/`.
+
+**It takes about two minutes.** ~8k output tokens of supplier lists and twenty steps, at ~5–10¢. A deliberate button press with a status line, not something that fires as you type.
 
 ### Resyncing a drawer
 

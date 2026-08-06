@@ -138,6 +138,55 @@ class AskAboutRackTest {
     }
 
     @Test
+    void repairsACitationThatPutTheWholeLocationInBothFields() {
+        // Every listing line begins "rack/A1 | ...", so a model asked for the two
+        // separately sometimes hands back the token it read. The first purchase
+        // plan lost 62 of about 100 tool references this way — every one a real
+        // item in a real drawer, rejected over punctuation.
+        index.put(RACK, slot("A1", item("Wiha PH2 screwdriver", "insulated", 1)));
+        Map<String, List<String>> held = AskAboutRack.inventory(registry, index).held();
+
+        List<AskAboutRack.Need> checked = AskAboutRack.verify(List.of(
+            need("A PH2 screwdriver", "have",
+                new AskAboutRack.Found("rack/A1", "rack/A1", "Wiha PH2 screwdriver", null))), held);
+
+        assertThat(checked.get(0).status()).isEqualTo("have");
+        // Repaired into the form the drawer links need, not merely tolerated.
+        AskAboutRack.Found f = checked.get(0).found().get(0);
+        assertThat(f.container()).isEqualTo("rack");
+        assertThat(f.slot()).isEqualTo("A1");
+    }
+
+    @Test
+    void repairsACitationThatCombinedOnlyTheSlotField() {
+        index.put(LAB, slot("2", item("Heat sink compound", "Dow Corning 340", 1)));
+        Map<String, List<String>> held = AskAboutRack.inventory(registry, index).held();
+
+        List<AskAboutRack.Need> checked = AskAboutRack.verify(List.of(
+            need("Thermal compound", "have",
+                new AskAboutRack.Found("lab", "lab/2", "Heat sink compound", null))), held);
+
+        AskAboutRack.Found f = checked.get(0).found().get(0);
+        assertThat(f.container()).isEqualTo("lab");
+        assertThat(f.slot()).isEqualTo("2");
+    }
+
+    @Test
+    void repairingTheFormatDoesNotLowerTheStandard() {
+        // Forgiving about punctuation, unmoved about substance: whichever way the
+        // pair is read, that drawer still has to hold that item.
+        index.put(RACK, slot("A1", item("Wiha PH2 screwdriver", "insulated", 1)));
+        Map<String, List<String>> held = AskAboutRack.inventory(registry, index).held();
+
+        List<AskAboutRack.Need> checked = AskAboutRack.verify(List.of(
+            need("A torque wrench", "have",
+                new AskAboutRack.Found("rack/A1", "rack/A1", "Bahco torque wrench", null))), held);
+
+        assertThat(checked.get(0).found()).isEmpty();
+        assertThat(checked.get(0).status()).isEqualTo("missing");
+    }
+
+    @Test
     void aMissingPartKeepsItsStatusAndNeedsNoCitation() {
         List<AskAboutRack.Need> checked = AskAboutRack.verify(
             List.of(need("Mains transformer", "missing")), Map.of());

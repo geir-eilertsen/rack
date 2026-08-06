@@ -37,6 +37,10 @@ spring:
           max-tokens: 4096
 
 rack:
+  shopping:
+    # Only used to prefer suppliers that can actually deliver here. Which shops
+    # is read off the inventory's own descriptions, never hardcoded.
+    region: ${RACK_SHOPPING_REGION:Norway}
   data-dir: ${RACK_DATA_DIR:./data}
   public-base-url: ${RACK_PUBLIC_BASE_URL:}
   ai:
@@ -60,6 +64,9 @@ rack:
     # A question about the whole rack answers with a checklist rather than a
     # paragraph, and a restoration has a lot of lines in it.
     rack-question-max-tokens: 4096
+    # A list per supplier plus the steps for the job is a long answer, and being
+    # cut off mid-list is worse than the tokens are worth.
+    plan-max-tokens: 8192
 
     # Bridging "isolating tape" to "electrical tape" is a synonym lookup against
     # a list of words we hand it, not a reasoning job, and it sits in front of a
