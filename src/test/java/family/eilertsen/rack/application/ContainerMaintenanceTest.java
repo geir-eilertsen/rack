@@ -106,12 +106,27 @@ class ContainerMaintenanceTest {
     }
 
     @Test
-    void refusesToDeleteWhenASlotHoldsAPhotoButNoExtractedItems() {
+    void deletesAContainerWhoseSlotsHoldOnlyAPhotograph() {
+        // This used to refuse, on the grounds that dropping the registration
+        // would orphan a file that still meant something. Photographs live in
+        // one folder for the whole rack now, so the file is not under the
+        // container and data/<container>/ is left on disk regardless — nothing
+        // is orphaned. Refusing only trapped a drawer that had been emptied of
+        // items but still listed a frame, with nothing on screen to remove.
         index.put(BIN, new Slot(new SlotId("b1"), List.of(), null, List.of("2026-08-04-1712.jpg"), null));
+
+        delete.execute(BIN);
+
+        assertThat(registry.get(BIN)).isEmpty();
+    }
+
+    @Test
+    void stillRefusesWhenASlotHoldsAnItemAndAPhotograph() {
+        index.put(BIN, new Slot(new SlotId("b1"), List.of(item("BC547")), null, List.of("f.jpg"), null));
 
         assertThatThrownBy(() -> delete.execute(BIN))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("items or photos")
+            .hasMessageContaining("still holds items")
             .hasMessageContaining("b1");
 
         assertThat(registry.get(BIN)).isPresent();

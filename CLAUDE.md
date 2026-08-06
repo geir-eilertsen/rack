@@ -203,7 +203,7 @@ Gone items are removed rather than zeroed, and the old photos are deleted — af
 `/containers.html` lists every container with its slot/item/label counts and is the single place to register, print labels, rename, rescale, or delete one. There is no separate register page.
 
 - **Name and label scale are editable; the slot layout is not.** Reshaping a container would orphan slots that hold items, so `UpdateContainer` only ever rewrites those two fields.
-- **Delete refuses while any slot holds items *or photos*** (`409`, naming the occupied slots in layout order). A photo counts as content even when nothing was extracted from it — the photo is ground truth and the items are only an index over it, so deleting would orphan a file that still means something. A printed label is not content. `DeleteContainer` checks `PartIndex.all(container)` rather than the current layout, so an item parked in an off-layout slot still blocks it, and the UI disables the button rather than offering a delete the server will refuse.
+- **Delete refuses while any slot holds items** (`409`, naming the occupied slots in layout order). An item is the claim that something physically exists in there, and hiding that claim is what this refuses to do. A photograph is not such a claim: it used to block deletion too, on the grounds that dropping the registration would orphan a file that still meant something, and that stopped being true when photographs moved to one folder for the whole rack. A printed label is not content either. `DeleteContainer` checks `PartIndex.all(container)` rather than the current layout, so an item parked in an off-layout slot still blocks it, and the UI disables the button rather than offering a delete the server will refuse.
 - Deleting drops the registration only — `data/<container>/` is left on disk, so re-registering the same id picks its slot state (and `printedAt`) back up.
 - `server.error.include-message: always` is set so those refusal messages actually reach the browser.
 
@@ -262,6 +262,10 @@ That rule needs more than one frame per slot, so `put.html` collects photos into
 Each extraction carries an `image_index` back, which `AddPhotoToSlot` maps to the stored filename so `Item.sourcePhoto` points at the frame that actually shows that item. A missing or out-of-range index falls back to the first photo (the model omits it often enough to be worth pinning).
 
 Every frame is kept in `Slot.photos` whether or not an item references it — the photo is ground truth, and an unreferenced frame is exactly the evidence that the extraction missed something.
+
+**A drawer's own frames are shown whenever it has any**, not only inside an expanded item, each with an × to drop it. They used to appear only within an item, so a drawer emptied of items but still listing a frame read "Nothing here yet" — invisible, unremovable, and enough to block its container from being deleted. Keeping a photograph is a decision, so there has to be a way to decide otherwise.
+
+**A photograph nothing points at is deleted.** `ForgetUnusedPhotos` sweeps at boot and every path that can orphan one cleans up after itself, so the rule holds by construction rather than by each of them remembering. "Nothing" means no slot's photo list *and* no item's frames — a frame no item names is kept on purpose, since that is the evidence the extraction missed something.
 
 **Expanding an item shows its frames**, the one it was read from first and badged. `Item.sourcePhoto` records which frame the model quoted, not the only frame the thing appears in: a part shot from two angles with its label on a third yields one item naming one photo. Across this rack 31 of 58 frames are named by no item, and almost none of them are spare — they are the label shots and second angles that were merged into items. Showing the slot's whole strip is what makes them reachable.
 

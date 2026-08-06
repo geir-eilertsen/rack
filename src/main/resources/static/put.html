@@ -86,6 +86,12 @@
     #resyncBar { margin-top: .75rem; }
     /* Filing appends, so topping a drawer up leaves the thing in two rows.
        Joining them is a person's call, made here rather than guessed at. */
+    #frames { margin-bottom: .5rem; }
+    #frames .frame { position: relative; flex: 0 0 auto; line-height: 0; }
+    #frames .drop { position: absolute; top: -7px; right: -7px; width: 23px; height: 23px; padding: 0;
+      display: flex; align-items: center; justify-content: center; border: 1px solid var(--border);
+      border-radius: 50%; background: var(--card); color: var(--error); font-size: .95rem; line-height: 1; cursor: pointer; }
+    #frames .drop:hover:not(:disabled) { background: var(--error); border-color: var(--error); color: #fff; }
     .merge-panel { margin-top: .6rem; }
     .merge-panel summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--primary-hover); padding: .3rem 0; }
     .merge-body { padding: .4rem 0 .2rem; }
@@ -130,6 +136,9 @@
 
     <h2 id="currentHeading" hidden>What's already here</h2>
     <ul class="current" id="current"></ul>
+
+    <h2 id="framesHeading" hidden>Photos of this drawer</h2>
+    <div id="frames" class="strip"></div>
 
     <div id="resyncBar" hidden>
       <button type="button" class="btn block" id="resyncBtn">Resync this drawer</button>
@@ -178,6 +187,8 @@
     const slotHeader = document.getElementById('slotHeader');
     const currentHeading = document.getElementById('currentHeading');
     const currentEl = document.getElementById('current');
+    const framesHeading = document.getElementById('framesHeading');
+    const framesEl = document.getElementById('frames');
     const resyncBar = document.getElementById('resyncBar');
     const resyncBtn = document.getElementById('resyncBtn');
     const resyncHint = document.getElementById('resyncHint');
@@ -446,6 +457,43 @@
       return '/photos/' + encodeURIComponent(fn);
     }
 
+    // A drawer's frames used to be visible only inside an expanded item, so a
+    // drawer emptied of items but still holding a photograph showed "Nothing
+    // here yet" — and that is exactly when a frame matters most, because an
+    // unreferenced one is the evidence the extraction missed something.
+    function renderFrames() {
+      const frames = (slotPhotos || []).filter(Boolean);
+      framesHeading.hidden = !frames.length;
+      if (!frames.length) { framesEl.innerHTML = ''; return; }
+      framesEl.innerHTML = frames.map(fn =>
+        '<span class="frame">' +
+          '<a href="' + photoUrl(fn) + '" target="_blank" rel="noopener">' +
+            '<img src="' + photoUrl(fn) + '" alt="" loading="lazy">' +
+          '</a>' +
+          '<button type="button" class="drop" title="Remove this photo" data-fn="' + esc(fn) + '">×</button>' +
+        '</span>').join('');
+      framesEl.querySelectorAll('.drop').forEach(b =>
+        b.addEventListener('click', () => dropFrame(b.dataset.fn, b)));
+    }
+
+    async function dropFrame(filename, btn) {
+      // Keeping a photograph is a decision, so there has to be a way to decide
+      // otherwise — without one, a drawer holding only a frame could not be
+      // emptied and its container could not be deleted.
+      btn.disabled = true;
+      try {
+        const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot
+          + '/photos/' + encodeURIComponent(filename), { method: 'DELETE' });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const slot = await res.json();
+        renderCurrent(slot.items || [], slot.photos || []);
+        setStatus('ok', 'Photo removed.');
+      } catch (e) {
+        btn.disabled = false;
+        setStatus('error', 'Could not remove the photo: ' + e.message);
+      }
+    }
+
     // Taking stock from the row itself. Each tap moves the number at once and
     // the write follows a beat later, so taking three is three taps and one
     // write rather than three round trips racing each other.
@@ -533,6 +581,7 @@
     // heat shrink may genuinely be two bags, and the app cannot tell.
     function renderCurrent(list, photos) {
       if (photos) slotPhotos = photos;
+      renderFrames();
       slotItemCount = list.length;
       updateResyncBar();
       // A proposal addresses items by their position in this list, so editing,

@@ -14,7 +14,7 @@ import java.util.NoSuchElementException;
 /**
  * Drops a container's registration. Refuses while any of its slots still holds items, so the index can never
  * lose track of something that physically exists. Files under {@code data/<container>/} are left on disk —
- * re-registering the same id picks the slot state back up.
+ * re-registering the same id picks the slot state back up, photo list included.
  */
 @Service
 public class DeleteContainer {
@@ -57,21 +57,27 @@ public class DeleteContainer {
     }
 
     /**
-     * A photo counts as content even when nothing was extracted from it — the photo is the ground truth and the
-     * items are only an index over it, so dropping the registration would orphan a file that still means something.
-     * A printed label is not content: an empty slot that happens to have been labelled stays deletable.
+     * Items are the claim that something physically exists in there, and hiding that claim is what this refuses
+     * to do. A photograph is not such a claim.
+     *
+     * <p>It used to be, on the grounds that dropping the registration would orphan a file that still meant
+     * something. That stopped being true when photographs moved to one folder for the whole rack: the file is
+     * not under the container, {@code data/<container>/} is left on disk regardless, and re-registering the same
+     * id picks the slot state and its photo list back up. So nothing is orphaned and nothing is lost — while a
+     * drawer emptied of items but still listing one frame could not be deleted at all, with nothing on screen to
+     * remove and no way to remove it.
+     *
+     * <p>A printed label is not content either: an empty slot that happens to have been labelled stays deletable.
      */
     private static boolean holdsContent(Slot s) {
-        boolean hasItems = s.items() != null && !s.items().isEmpty();
-        boolean hasPhotos = s.photos() != null && !s.photos().isEmpty();
-        return hasItems || hasPhotos;
+        return s.items() != null && !s.items().isEmpty();
     }
 
     private static String describe(Container c, List<String> occupied) {
         String listed = String.join(", ", occupied.subList(0, Math.min(MAX_LISTED, occupied.size())));
         String more = occupied.size() > MAX_LISTED ? ", and " + (occupied.size() - MAX_LISTED) + " more" : "";
         String slots = occupied.size() == 1 ? "slot" : "slots";
-        return "\"" + c.name() + "\" still holds items or photos in " + occupied.size() + " " + slots
+        return "\"" + c.name() + "\" still holds items in " + occupied.size() + " " + slots
             + " (" + listed + more + "). Move or remove them first.";
     }
 }

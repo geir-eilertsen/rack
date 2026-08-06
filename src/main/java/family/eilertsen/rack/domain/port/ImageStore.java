@@ -1,5 +1,7 @@
 package family.eilertsen.rack.domain.port;
 
+import java.util.List;
+
 /**
  * Photographs, kept in one place rather than under the slot they were taken of.
  *
@@ -17,6 +19,9 @@ public interface ImageStore {
     String store(byte[] image, String contentType);
 
     byte[] read(String filename);
+
+    /** Every photograph held, so the ones nothing points at any more can be found. */
+    List<String> all();
 
     /** Deleting a file that is already gone is not an error. */
     void delete(String filename);

@@ -63,7 +63,7 @@ class AddPhotoEndpointTest {
         AddPhotoToSlot addPhoto = new AddPhotoToSlot(images, extractor, new FakeIndex());
         ContainerController controller = new ContainerController(
             new ContainerRegistry(store), new FakeIndex(), addPhoto,
-            null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null);
         // Match the app's snake_case output so the assertions below are the
         // wire contract the browser sees, not a MockMvc default.
         ObjectMapper mapper = new ObjectMapper()
@@ -117,6 +117,11 @@ class AddPhotoEndpointTest {
             String marker = new String(image, StandardCharsets.UTF_8);
             stored.add(marker);
             return marker + ".jpg";
+        }
+
+        @Override
+        public List<String> all() {
+            return List.copyOf(stored);
         }
 
         @Override

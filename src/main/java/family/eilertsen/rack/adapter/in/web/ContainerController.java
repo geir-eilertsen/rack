@@ -8,6 +8,7 @@ import family.eilertsen.rack.application.EditItem;
 import family.eilertsen.rack.application.MergeItems;
 import family.eilertsen.rack.application.MoveItem;
 import family.eilertsen.rack.application.RegisterContainer;
+import family.eilertsen.rack.application.RemovePhoto;
 import family.eilertsen.rack.application.RemoveItem;
 import family.eilertsen.rack.application.UpdateContainer;
 import family.eilertsen.rack.domain.model.Container;
@@ -48,13 +49,14 @@ public class ContainerController {
     private final EditItem editItem;
     private final MoveItem moveItem;
     private final MergeItems mergeItems;
+    private final RemovePhoto removePhoto;
     private final AskAboutItem askAboutItem;
 
     public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto,
                                 RegisterContainer registerContainer, UpdateContainer updateContainer,
                                 DeleteContainer deleteContainer, RemoveItem removeItem,
                                 EditItem editItem, MoveItem moveItem, MergeItems mergeItems,
-                                AskAboutItem askAboutItem) {
+                                RemovePhoto removePhoto, AskAboutItem askAboutItem) {
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
@@ -65,6 +67,7 @@ public class ContainerController {
         this.editItem = editItem;
         this.moveItem = moveItem;
         this.mergeItems = mergeItems;
+        this.removePhoto = removePhoto;
         this.askAboutItem = askAboutItem;
     }
 
@@ -236,6 +239,26 @@ public class ContainerController {
 
     /** The row that survives; the one in the path is the one folded into it. */
     public record MergeRequest(int into) {}
+
+    /**
+     * Drops one photograph from a drawer. Removing an item leaves its frames —
+     * an unreferenced frame is evidence the extraction missed something — so
+     * saying a photograph is finished with has to be its own act.
+     */
+    @DeleteMapping("/{container}/{slot}/photos/{filename}")
+    public Slot removePhoto(@PathVariable String container,
+                             @PathVariable String slot,
+                             @PathVariable String filename) {
+        ContainerId cid = new ContainerId(container);
+        requireContainerExists(cid);
+        try {
+            return removePhoto.execute(cid, new SlotId(slot), filename);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        } catch (java.util.NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+        }
+    }
 
     @PostMapping("/{container}/{slot}/items/{index}/ask")
     public Slot askItem(@PathVariable String container,

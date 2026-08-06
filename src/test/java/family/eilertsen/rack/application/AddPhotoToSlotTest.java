@@ -159,6 +159,11 @@ class AddPhotoToSlotTest {
         }
 
         @Override
+        public List<String> all() {
+            return List.copyOf(stored);
+        }
+
+        @Override
         public byte[] read(String filename) {
             return new byte[0];
         }

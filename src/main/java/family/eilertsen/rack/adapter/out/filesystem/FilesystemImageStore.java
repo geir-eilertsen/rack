@@ -10,6 +10,8 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.List;
+import java.util.stream.Stream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -55,6 +57,20 @@ public class FilesystemImageStore implements ImageStore {
     public byte[] read(String filename) {
         try {
             return Files.readAllBytes(resolve(filename));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    @Override
+    public List<String> all() {
+        if (!Files.isDirectory(photoDir)) return List.of();
+        try (Stream<Path> files = Files.list(photoDir)) {
+            return files.filter(Files::isRegularFile)
+                .map(p -> p.getFileName().toString())
+                .filter(name -> !name.endsWith(".tmp"))
+                .sorted()
+                .toList();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
