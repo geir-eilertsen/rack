@@ -136,10 +136,12 @@ public class AskAboutRack {
 
         Reply reply;
         try {
-            reply = mapper.readValue(strip(raw), Reply.class);
+            reply = mapper.readValue(json(raw), Reply.class);
         } catch (Exception e) {
-            // A malformed reply is one unusable answer, not a broken rack.
-            log.warn("Could not read the answer about the rack: {}", e.toString());
+            // A malformed reply is one unusable answer, not a broken rack — but it
+            // is unreadable without seeing what came back, so log the head of it.
+            log.warn("Could not read the answer about the rack: {} — reply began: {}",
+                e.toString(), head(raw));
             throw new IllegalStateException("The model's answer could not be read. Try asking again.", e);
         }
 
@@ -212,15 +214,25 @@ public class AskAboutRack {
         return " | last checked: " + days + (days == 1 ? " day ago" : " days ago");
     }
 
-    /** Models sometimes fence JSON however firmly they are asked not to. */
-    static String strip(String raw) {
+    /**
+     * The outermost JSON object in whatever came back.
+     *
+     * <p>Asked for JSON and nothing else, this call still opened with "I'll go
+     * through what a Quad 606 restoration needs…" and buried the object below it.
+     * Tightening the instruction is a guess about the next reply; taking the
+     * object out of the text is not. This also covers the markdown fence models
+     * add however firmly asked not to, and any sign-off after the closing brace.
+     */
+    static String json(String raw) {
         String s = raw == null ? "" : raw.strip();
-        if (s.startsWith("```")) {
-            int nl = s.indexOf('\n');
-            if (nl > 0) s = s.substring(nl + 1);
-            if (s.endsWith("```")) s = s.substring(0, s.length() - 3);
-        }
-        return s.strip();
+        int open = s.indexOf('{');
+        int close = s.lastIndexOf('}');
+        return open >= 0 && close > open ? s.substring(open, close + 1) : s;
+    }
+
+    private static String head(String raw) {
+        String s = raw == null ? "" : raw.strip().replaceAll("\\s+", " ");
+        return s.length() <= 200 ? s : s.substring(0, 200) + "…";
     }
 
     static String key(String container, String slot) {

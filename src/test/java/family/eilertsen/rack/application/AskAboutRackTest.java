@@ -176,9 +176,22 @@ class AskAboutRackTest {
     }
 
     @Test
-    void readsAnAnswerTheModelFencedAnyway() {
-        assertThat(AskAboutRack.strip("```json\n{\"summary\":\"ok\"}\n```")).isEqualTo("{\"summary\":\"ok\"}");
-        assertThat(AskAboutRack.strip("{\"summary\":\"ok\"}")).isEqualTo("{\"summary\":\"ok\"}");
+    void takesTheObjectOutOfWhateverTheModelWrappedItIn() {
+        // Asked for JSON and nothing else, the first real call to this opened with
+        // "I'll go through what a Quad 606 restoration needs" and put the object
+        // below it. Tightening the instruction is a guess about the next reply.
+        String want = "{\"summary\":\"ok\"}";
+        assertThat(AskAboutRack.json(want)).isEqualTo(want);
+        assertThat(AskAboutRack.json("```json\n" + want + "\n```")).isEqualTo(want);
+        assertThat(AskAboutRack.json("I'll go through what it needs.\n\n" + want)).isEqualTo(want);
+        assertThat(AskAboutRack.json(want + "\n\nHope that helps!")).isEqualTo(want);
+        assertThat(AskAboutRack.json("Sure:\n```\n" + want + "\n```\nAnything else?")).isEqualTo(want);
+    }
+
+    @Test
+    void aNestedObjectKeepsItsBracesWhenTheWrapperIsStripped() {
+        String want = "{\"summary\":\"ok\",\"checklist\":[{\"part\":\"cap\",\"found\":[{\"slot\":\"A1\"}]}]}";
+        assertThat(AskAboutRack.json("Here you go:\n" + want)).isEqualTo(want);
     }
 
     private static AskAboutRack.Need need(String part, String status, AskAboutRack.Found... found) {
