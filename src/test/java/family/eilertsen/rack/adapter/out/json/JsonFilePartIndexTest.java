@@ -1,5 +1,6 @@
 package family.eilertsen.rack.adapter.out.json;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.module.SimpleModule;
@@ -42,6 +43,27 @@ class JsonFilePartIndexTest {
         mapper = new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
         mapper.findAndRegisterModules();
         mapper.registerModule(ids);
+        // And its tolerance for keys it does not know, which is what lets a field
+        // be dropped without rewriting every file on disk.
+        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    }
+
+    @Test
+    void readsSlotJsonWrittenWhileTheSlotStillKeptItsOwnPhotoList() throws IOException {
+        // Every slot on disk was written with a "photos" key. Items own their
+        // photographs now, so the key is dead — and reading past it is what makes
+        // dropping a field as cheap as adding one. Failing here would not be one
+        // missing list; it would be the whole drawer refusing to load.
+        writeSlot("C3", """
+            {"id":"C3","items":[{"name":"Electrical tape","description":"one black roll","category":"other","qty_estimate":1,"confidence":0.9,"tags":["tape"],"source_photo":"2026-08-04-1712.jpg","seen_in":["2026-08-04-1712.jpg"]}],"photos":["2026-08-04-1712.jpg","orphan.jpg"],"last_verified":null,"printed_at":null}
+            """);
+
+        Slot slot = load().get(RACK, new SlotId("C3")).orElseThrow();
+
+        assertThat(slot.items()).hasSize(1);
+        // And the drawer's frames are now what its items say they are — the key on
+        // disk named a second file that no item did, and it does not come back.
+        assertThat(slot.frames()).containsExactly("2026-08-04-1712.jpg");
     }
 
     @Test
@@ -145,11 +167,31 @@ class JsonFilePartIndexTest {
     }
 
     @Test
+    void aSlotWritesNoPhotoListOfItsOwn() throws IOException {
+        // Slot.frames() answers which pictures show a drawer, but it is derived
+        // from the items rather than a component of the record — deliberately, so
+        // it is never written. Two copies of the same fact on disk is what let a
+        // photograph be listed by a drawer and shown by nobody.
+        JsonFilePartIndex index = load();
+        Item item = new Item("M4 hex bolts", "bag of fifty", null, "fastener", 50, 0.9,
+            List.of(), null, List.of(), "a.jpg", List.of("a.jpg", "b.jpg"));
+        index.save(RACK, new Slot(new SlotId("B4"), List.of(item), null, null));
+
+        String written = Files.readString(dataDir.resolve("rack").resolve("B4.json"), StandardCharsets.UTF_8);
+
+        assertThat(written).doesNotContain("\"photos\"").doesNotContain("\"frames\"");
+        // The frames are on disk exactly once, on the item that they show.
+        assertThat(written).contains("\"seen_in\"").contains("b.jpg");
+        assertThat(load().get(RACK, new SlotId("B4")).orElseThrow().frames())
+            .containsExactly("a.jpg", "b.jpg");
+    }
+
+    @Test
     void savedItemsKeepTheirNameAcrossAReload() throws IOException {
         JsonFilePartIndex index = load();
         Item item = new Item("M4 hex bolts", "bag of about fifty, DIN 933", null, "fastener",
             50, 0.9, List.of("M4"), null, List.of(), null, null);
-        index.save(RACK, new Slot(new SlotId("B2"), List.of(item), null, List.of(), null));
+        index.save(RACK, new Slot(new SlotId("B2"), List.of(item), null, null));
 
         Item reloaded = load().get(RACK, new SlotId("B2")).orElseThrow().items().get(0);
 

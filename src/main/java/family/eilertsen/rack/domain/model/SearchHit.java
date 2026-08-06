@@ -1,7 +1,6 @@
 package family.eilertsen.rack.domain.model;
 
 import java.time.Instant;
-import java.util.List;
 
 public record SearchHit(
     ContainerId container,
@@ -9,6 +8,5 @@ public record SearchHit(
     int index,
     Item item,
     double score,
-    Instant lastVerified,
-    List<String> photos
+    Instant lastVerified
 ) {}

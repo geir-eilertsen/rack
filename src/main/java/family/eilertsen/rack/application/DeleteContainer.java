@@ -12,9 +12,13 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 /**
- * Drops a container's registration. Refuses while any of its slots still holds items, so the index can never
- * lose track of something that physically exists. Files under {@code data/<container>/} are left on disk —
- * re-registering the same id picks the slot state back up, photo list included.
+ * Drops a container's registration and its slot state. Refuses while any of its slots still holds items, so the
+ * index can never lose track of something that physically exists.
+ *
+ * <p>The slot state used to be left on disk so re-registering the same id picked it back up. What that actually
+ * left was a folder indistinguishable from a live container, and photo references nothing could reach — keeping
+ * frames alive for something that no longer existed. Archived label sheets stay: they are the record of what was
+ * physically printed, and that outlives a registration.
  */
 @Service
 public class DeleteContainer {
@@ -23,10 +27,12 @@ public class DeleteContainer {
 
     private final ContainerRegistry registry;
     private final PartIndex index;
+    private final ForgetUnusedPhotos unusedPhotos;
 
-    public DeleteContainer(ContainerRegistry registry, PartIndex index) {
+    public DeleteContainer(ContainerRegistry registry, PartIndex index, ForgetUnusedPhotos unusedPhotos) {
         this.registry = registry;
         this.index = index;
+        this.unusedPhotos = unusedPhotos;
     }
 
     public Container execute(ContainerId id) {
@@ -53,6 +59,11 @@ public class DeleteContainer {
         }
 
         registry.remove(id);
+        // Its slot state goes too. Leaving it behind meant a folder that looks
+        // like a live container, and photo references nothing could reach still
+        // keeping frames alive for something that no longer exists.
+        index.forget(id);
+        unusedPhotos.sweep();
         return c;
     }
 
@@ -63,7 +74,7 @@ public class DeleteContainer {
      * <p>It used to be, on the grounds that dropping the registration would orphan a file that still meant
      * something. That stopped being true when photographs moved to one folder for the whole rack: the file is
      * not under the container, {@code data/<container>/} is left on disk regardless, and re-registering the same
-     * id picks the slot state and its photo list back up. So nothing is orphaned and nothing is lost — while a
+     * id picks the slot state, and the items' photographs with it, back up. So nothing is orphaned and nothing is lost — while a
      * drawer emptied of items but still listing one frame could not be deleted at all, with nothing on screen to
      * remove and no way to remove it.
      *

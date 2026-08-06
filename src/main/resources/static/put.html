@@ -317,7 +317,7 @@
         // anywhere would add what is already recorded a second time.
         manual.hidden = resyncMode || !pendingPhotos.length;
         if (!pendingPhotos.length) manual.open = false;
-        if (known) renderCurrent(known.items || [], known.photos || []);
+        if (known) renderCurrent(known.items || []);
         else loadCurrent();
       } else {
         title.textContent = 'Add an item';
@@ -421,26 +421,26 @@
         const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const slot = await res.json();
-        renderCurrent(slot.items || [], slot.photos || []);
+        renderCurrent(slot.items || []);
       } catch (e) {
         currentEl.innerHTML = '<li class="empty">Failed to load: ' + esc(e.message) + '</li>';
       }
     }
 
 
-    // An item filed since the extractor was asked for every frame knows which
-    // ones show it, and those are what you want. Older items only ever recorded
-    // the one frame they were read from, so they fall back to the slot's own —
-    // which is what they showed before, honestly labelled.
-    function photoStrip(item, slotPhotos, urlOf, container) {
+    // An item's own frames, and only those. There used to be a fallback to the
+    // drawer's photo list for items filed before the extractor was asked which
+    // frames showed what — the drawer no longer keeps a list of its own, because
+    // an item is the thing a photograph is of.
+    function photoStrip(item, urlOf) {
       const source = item.source_photo;
       const own = (item.seen_in || []).filter(Boolean);
-      const list = own.length ? own : (slotPhotos || []).filter(Boolean);
+      const list = source && !own.includes(source) ? [source].concat(own) : own;
       if (!list.length) return '';
       const ordered = source && list.includes(source)
         ? [source].concat(list.filter(p => p !== source))
         : list;
-      const heading = own.length ? 'Photos of this item' : 'Photos of this ' + slotWord(container);
+      const heading = 'Photos of this item';
       return '<div class="shots"><h4>' + heading + '</h4><div class="strip">' +
         ordered.map(fn =>
           '<a class="frame' + (fn === source ? ' source' : '') + '" href="' + urlOf(fn) +
@@ -457,10 +457,10 @@
       return '/photos/' + encodeURIComponent(fn);
     }
 
-    // A drawer's frames used to be visible only inside an expanded item, so a
-    // drawer emptied of items but still holding a photograph showed "Nothing
-    // here yet" — and that is exactly when a frame matters most, because an
-    // unreferenced one is the evidence the extraction missed something.
+    // Every photograph of the drawer in one place: the union of what its items
+    // name, source frames first. Worth showing next to the per-item strips
+    // because this is the only place a single photograph can be dropped, and
+    // because it makes plain when two items were read from the same shot.
     function renderFrames() {
       const frames = (slotPhotos || []).filter(Boolean);
       framesHeading.hidden = !frames.length;
@@ -486,7 +486,7 @@
           + '/photos/' + encodeURIComponent(filename), { method: 'DELETE' });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const slot = await res.json();
-        renderCurrent(slot.items || [], slot.photos || []);
+        renderCurrent(slot.items || []);
         setStatus('ok', 'Photo removed.');
       } catch (e) {
         btn.disabled = false;
@@ -576,11 +576,24 @@
 
     let slotPhotos = [];
 
+    // The drawer's photographs, asked of its items rather than kept alongside
+    // them. Two lists of the same thing is how a photograph ended up listed by a
+    // drawer and shown by nobody.
+    function framesOf(items) {
+      const seen = [];
+      for (const it of items || []) {
+        for (const fn of [it.source_photo].concat(it.seen_in || [])) {
+          if (fn && !seen.includes(fn)) seen.push(fn);
+        }
+      }
+      return seen;
+    }
+
     // Filing appends, so ten more of something already in the drawer lands as a
     // second row. Joining them is offered rather than done: two bags of black
     // heat shrink may genuinely be two bags, and the app cannot tell.
-    function renderCurrent(list, photos) {
-      if (photos) slotPhotos = photos;
+    function renderCurrent(list) {
+      slotPhotos = framesOf(list);
       renderFrames();
       slotItemCount = list.length;
       updateResyncBar();
@@ -654,7 +667,7 @@
         });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const slot = await res.json();
-        renderCurrent(slot.items || [], slot.photos || []);
+        renderCurrent(slot.items || []);
         // Removing a row shifts everything after it, so the survivor is only
         // where it was if it came first.
         const survivor = into < from ? into : into - 1;
@@ -848,7 +861,7 @@
             '<button class="btn primary save">Save</button>' +
             '<button class="remove" title="Remove this item">Remove</button>' +
           '</div>' +
-          photoStrip(it, slotPhotos, photoUrl, selectedContainer) +
+          photoStrip(it, photoUrl) +
           '<div class="ai">' +
             '<h4>Ask AI about this item</h4>' +
             renderQaLog(it.qa || []) +
@@ -959,7 +972,7 @@
         });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const slot = await res.json();
-        renderCurrent(slot.items || [], slot.photos || []);
+        renderCurrent(slot.items || []);
       } catch (e) {
         setStatus('error', 'Save failed: ' + e.message);
       }
@@ -971,7 +984,7 @@
         const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + idx, { method: 'DELETE' });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const slot = await res.json();
-        renderCurrent(slot.items || [], slot.photos || []);
+        renderCurrent(slot.items || []);
       } catch (e) {
         setStatus('error', 'Remove failed: ' + e.message);
       }
@@ -1166,7 +1179,7 @@
     function paintEffect() {
       const d = decisions();
       const held = (resyncProposal.matched || []).length + (resyncProposal.gone || []).length;
-      const photos = slotPhotos.length;
+      const photos = slotPhotos.length;   // what the drawer's items name today
       document.getElementById('resyncEffect').textContent =
         d.keep.length + ' kept, ' + (held - d.keep.length) + ' removed, ' + d.add.length + ' added'
         + (photos
@@ -1417,9 +1430,17 @@
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const data = await res.json();
         const items = (data.extracted || []).length;
+        const dropped = data.discarded || 0;
         if (window.rackUsage) rackUsage.refresh();
-        setStatus('ok', '✓ Filed ' + items + ' item' + (items === 1 ? '' : 's') + ' from '
-          + count + ' photo' + (count === 1 ? '' : 's') + ' into ' + containerName(containerId) + ' · ' + slotId + '.');
+        // Say when a frame was not kept. Photographs hang off items, so one that
+        // nothing was read from has nothing to hang off — and the only way to act
+        // on that is to know it happened and shoot it again.
+        setStatus(dropped ? 'warn' : 'ok',
+          '✓ Filed ' + items + ' item' + (items === 1 ? '' : 's') + ' from '
+          + count + ' photo' + (count === 1 ? '' : 's') + ' into ' + containerName(containerId) + ' · ' + slotId + '.'
+          + (dropped ? ' ' + dropped + ' photo' + (dropped === 1 ? '' : 's')
+              + ' showed nothing I could name, so ' + (dropped === 1 ? 'it was' : 'they were')
+              + ' not kept — shoot the labels closer if that is wrong.' : ''));
         clearPending();
         suggestionsEl.innerHTML = '';
         pickHeading.hidden = true;

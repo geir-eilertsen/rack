@@ -87,7 +87,7 @@ public class ResyncSlot {
         requireBatch(photos);
 
         Slot existing = index.get(container, slotId)
-            .orElse(new Slot(slotId, List.of(), null, List.of(), null));
+            .orElse(new Slot(slotId, List.of(), null, null));
         List<Item> held = existing.items() == null ? List.of() : existing.items();
 
         // Check every index before a single byte is stored: a stale decision must
@@ -110,8 +110,8 @@ public class ResyncSlot {
             // No frame means the photos did not show this and someone kept it
             // anyway. Pointing it at a frame that does not show it would be a
             // small lie, and its old frames are about to be deleted — so it
-            // keeps none, and the expanded view falls back to the slot's strip
-            // under the heading that admits as much.
+            // keeps none and shows no strip, which is the honest rendering of an
+            // item nobody has a current picture of.
             items.add(refile(held.get(keep.index()), keep.qty(), frames(keep.frames(), filenames)));
         }
         for (Add add : decisions.add()) {
@@ -120,21 +120,27 @@ public class ResyncSlot {
             items.add(refile(add.item(), null, orFirst(frames(add.frames(), filenames), filenames)));
         }
 
+        // Which frames the drawer had before, asked of the items that are about
+        // to be replaced. Anything the new state does not name again is on its
+        // way out — including frames of this very batch that nothing was read
+        // from, which is why the sweep runs over old and new alike.
+        List<String> before = existing.frames();
+
         Slot updated = new Slot(existing.id(), List.copyOf(items), Instant.now(),
-            List.copyOf(filenames), existing.printedAt());
+            existing.printedAt());
         index.save(container, updated);
 
         // Only once the new state is recorded. A crash between the two leaves an
-        // orphan file, which is nothing; the other order leaves the index naming
-        // a photo that no longer exists, which is a broken drawer.
+        // orphan file, which the boot sweep collects; the other order leaves an
+        // item naming a photo that no longer exists, which is a broken drawer.
         // One folder for the whole rack means a frame this drawer is done with may
-        // still be the only picture some other drawer's item has — eighteen frames
-        // here are referenced by more than one item. So ask the index what is
-        // still spoken for before removing anything.
+        // still be the only picture some other drawer's item has, so ask the index
+        // what is still spoken for before removing anything.
         Set<String> stillInUse = index.photosInUse();
-        List<String> before = existing.photos() == null ? List.of() : existing.photos();
-        for (String old : before) {
-            if (!filenames.contains(old) && !stillInUse.contains(old)) images.delete(old);
+        List<String> candidates = new ArrayList<>(before);
+        for (String f : filenames) if (!candidates.contains(f)) candidates.add(f);
+        for (String old : candidates) {
+            if (!stillInUse.contains(old)) images.delete(old);
         }
 
         return updated;

@@ -287,7 +287,6 @@
       const c = containerOf(containerId);
       return isDivided(c) ? containerName(containerId) + ' · ' + slot : containerName(containerId);
     }
-    function slotWord(c) { return (c && c.slot_label) || 'slot'; }
     function isDivided(c) { return !!(c && (c.slots || []).length > 1); }
 
     function containerName(id) {
@@ -434,7 +433,7 @@
       for (const h of results) {
         const key = h.container + '/' + h.slot;
         if (!groups.has(key)) {
-          groups.set(key, { container: h.container, slot: h.slot, lastVerified: h.last_verified, photos: h.photos || [], hits: [], topScore: 0 });
+          groups.set(key, { container: h.container, slot: h.slot, lastVerified: h.last_verified, hits: [], topScore: 0 });
         }
         const g = groups.get(key);
         g.hits.push(h);
@@ -455,19 +454,19 @@
     }
 
 
-    // An item filed since the extractor was asked for every frame knows which
-    // ones show it, and those are what you want. Older items only ever recorded
-    // the one frame they were read from, so they fall back to the slot's own —
-    // which is what they showed before, honestly labelled.
-    function photoStrip(item, slotPhotos, urlOf, container) {
+    // An item's own frames, and only those. A search result used to carry its
+    // drawer's photo list as a fallback; the drawer keeps no list now, because a
+    // photograph is of an item, and an item that has moved has to take its
+    // pictures along.
+    function photoStrip(item, urlOf) {
       const source = item.source_photo;
       const own = (item.seen_in || []).filter(Boolean);
-      const list = own.length ? own : (slotPhotos || []).filter(Boolean);
+      const list = source && !own.includes(source) ? [source].concat(own) : own;
       if (!list.length) return '';
       const ordered = source && list.includes(source)
         ? [source].concat(list.filter(p => p !== source))
         : list;
-      const heading = own.length ? 'Photos of this item' : 'Photos of this ' + slotWord(container);
+      const heading = 'Photos of this item';
       return '<div class="shots"><h4>' + heading + '</h4><div class="strip">' +
         ordered.map(fn =>
           '<a class="frame' + (fn === source ? ' source' : '') + '" href="' + urlOf(fn) +
@@ -519,7 +518,7 @@
             '<button class="btn primary save">Save</button>' +
             '<button class="remove" title="Remove this item">Remove</button>' +
           '</div>' +
-          photoStrip(it, g.photos, photoUrl, containerOf(g.container)) +
+          photoStrip(it, photoUrl) +
           '<div class="ai">' +
             '<h4>Ask AI about this item</h4>' +
             renderQaLog(it.qa || []) +

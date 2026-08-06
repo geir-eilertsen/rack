@@ -231,13 +231,15 @@ class ResyncSlotTest {
         // After a resync the photos are the evidence for what is in the drawer
         // now. An old frame left behind is evidence for a state that has gone,
         // and the photo is meant to be ground truth.
-        index.save(RACK, new Slot(A1, List.of(item("solder wick", "Chemtronics", null, 3)),
-            Instant.EPOCH, List.of("old-1.jpg", "old-2.jpg"), Instant.EPOCH));
+        index.save(RACK, new Slot(A1,
+            List.of(shotIn(item("solder wick", "Chemtronics", null, 3), "old-1.jpg", "old-2.jpg")),
+            Instant.EPOCH, Instant.EPOCH));
 
         Slot saved = resync.apply(RACK, A1, batch("front", "side"),
-            new ResyncSlot.Decisions(List.of(new ResyncSlot.Keep(0, null, List.of(0))), List.of()));
+            new ResyncSlot.Decisions(
+                List.of(new ResyncSlot.Keep(0, null, List.of(0, 1))), List.of()));
 
-        assertThat(saved.photos()).containsExactly("front.jpg", "side.jpg");
+        assertThat(saved.frames()).containsExactly("front.jpg", "side.jpg");
         assertThat(images.deleted).containsExactly("old-1.jpg", "old-2.jpg");
         assertThat(saved.lastVerified()).isAfter(Instant.EPOCH);
         // A label already printed is still stuck to the drawer.
@@ -275,8 +277,16 @@ class ResyncSlotTest {
         assertThat(extractor.calls).isEmpty();
     }
 
+    /** Every item here was read from the drawer's one earlier frame. */
     private void holds(Item... items) {
-        index.save(RACK, new Slot(A1, List.of(items), Instant.EPOCH, List.of("old-1.jpg"), Instant.EPOCH));
+        List<Item> shown = new ArrayList<>();
+        for (Item i : items) shown.add(shotIn(i, "old-1.jpg"));
+        index.save(RACK, new Slot(A1, List.copyOf(shown), Instant.EPOCH, Instant.EPOCH));
+    }
+
+    private static Item shotIn(Item i, String... frames) {
+        return new Item(i.name(), i.description(), i.partNumber(), i.category(), i.qtyEstimate(),
+            i.confidence(), i.tags(), i.embedding(), i.qa(), frames[0], List.of(frames));
     }
 
     private static List<byte[]> batch(String... markers) {
@@ -362,8 +372,17 @@ class ResyncSlotTest {
         }
 
         @Override
+        public void forget(ContainerId container) {
+            slots.remove(container);
+        }
+
+        @Override
         public Set<String> photosInUse() {
-            return Set.of();
+            Set<String> used = new java.util.LinkedHashSet<>();
+            for (Map<SlotId, Slot> byId : slots.values()) {
+                for (Slot s : byId.values()) used.addAll(s.frames());
+            }
+            return used;
         }
 
         @Override
@@ -392,8 +411,7 @@ class ResyncSlotTest {
         // Overruling a "gone" verdict says the thing is in the drawer, not that
         // it is in these photos. Its old frames are about to be deleted, so
         // pinning it to a new one that does not show it would put a lie where
-        // the evidence used to be. It keeps none, and the expanded view falls
-        // back to the slot's strip.
+        // the evidence used to be. It keeps none and shows no strip.
         holds(item("Ferrite beads", "in a tiny bag at the back", null, 40));
         extractor.returns();
 
@@ -404,7 +422,11 @@ class ResyncSlotTest {
         assertThat(kept.name()).isEqualTo("Ferrite beads");
         assertThat(kept.sourcePhoto()).isNull();
         assertThat(kept.seenIn()).isNull();
-        assertThat(after.photos()).containsExactly("front.jpg");
+        // And with nothing in the drawer naming the frame that was just shot,
+        // the frame does not survive either. A photograph of a drawer whose one
+        // item is admittedly not in it is a photograph of nothing anyone has.
+        assertThat(after.frames()).isEmpty();
+        assertThat(images.deleted).contains("front.jpg");
     }
 
     @Test

@@ -128,7 +128,7 @@ class MergeItemsTest {
     }
 
     private void holds(Item... items) {
-        index.save(RACK, new Slot(A4, List.of(items), Instant.EPOCH, List.of("one.jpg", "two.jpg"), null));
+        index.save(RACK, new Slot(A4, List.of(items), Instant.EPOCH, null));
     }
 
     private static Item battery(String name, int qty, String frame) {
@@ -165,8 +165,17 @@ class MergeItemsTest {
         }
 
         @Override
+        public void forget(ContainerId container) {
+            slots.remove(container);
+        }
+
+        @Override
         public Set<String> photosInUse() {
-            return Set.of();
+            Set<String> used = new java.util.LinkedHashSet<>();
+            for (Map<SlotId, Slot> byId : slots.values()) {
+                for (Slot s : byId.values()) used.addAll(s.frames());
+            }
+            return used;
         }
 
         @Override

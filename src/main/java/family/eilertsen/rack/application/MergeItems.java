@@ -69,7 +69,7 @@ public class MergeItems {
         }
 
         Slot saved = new Slot(existing.id(), List.copyOf(updated), Instant.now(),
-            existing.photos(), existing.printedAt());
+            existing.printedAt());
         index.save(container, saved);
         return saved;
     }

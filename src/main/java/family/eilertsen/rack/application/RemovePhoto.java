@@ -15,14 +15,12 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 
 /**
- * Drops one photograph from a drawer.
+ * Drops one photograph from a drawer: takes it off every item here that names
+ * it, then deletes the file if that was the last thing pointing at it.
  *
- * <p>Removing an item deliberately leaves its frames behind: an unreferenced
- * frame is the evidence that the extraction missed something, so it outlives
- * what was read from it. That was the whole story until a drawer emptied of
- * items still counted as occupied and could not be deleted, with nothing on
- * screen to remove and no way to remove it. Keeping a photograph has to be a
- * decision, which means there has to be a way to decide otherwise.
+ * <p>Since items own photographs, removing an item already takes its frames with
+ * it. This is for the narrower case of a picture that is simply no good — out of
+ * focus, or of the wrong shelf — on an item worth keeping.
  */
 @Service
 public class RemovePhoto {
@@ -40,23 +38,19 @@ public class RemovePhoto {
             .orElseThrow(() -> new NoSuchElementException(
                 "Slot has no state: " + container.value() + "/" + slotId.value()));
 
-        List<String> photos = existing.photos() == null ? List.of() : existing.photos();
-        if (!photos.contains(filename)) {
+        if (!existing.frames().contains(filename)) {
             throw new NoSuchElementException("No such photo on this slot: " + filename);
         }
 
-        List<String> kept = new ArrayList<>(photos);
-        kept.remove(filename);
-
-        // An item may have been read from the frame being dropped. Leaving it
-        // pointing at a photograph that no longer exists would render as a hole.
+        // An item was read from the frame being dropped. Leaving it pointing at a
+        // photograph that no longer exists would render as a hole.
         List<Item> items = new ArrayList<>();
         for (Item item : existing.items() == null ? List.<Item>of() : existing.items()) {
             items.add(forget(item, filename));
         }
 
         Slot updated = new Slot(existing.id(), List.copyOf(items), Instant.now(),
-            List.copyOf(kept), existing.printedAt());
+            existing.printedAt());
         index.save(container, updated);
 
         // Photographs live in one folder for the whole rack, so the file only

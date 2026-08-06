@@ -60,9 +60,13 @@ class AddPhotoEndpointTest {
             public void saveAll(List<Container> containers) {
             }
         };
-        AddPhotoToSlot addPhoto = new AddPhotoToSlot(images, extractor, new FakeIndex());
+        // One index, shared: filing asks it which frames ended up spoken for, so
+        // giving the service and the controller separate ones would have the
+        // service report every frame as unclaimed.
+        FakeIndex index = new FakeIndex();
+        AddPhotoToSlot addPhoto = new AddPhotoToSlot(images, extractor, index);
         ContainerController controller = new ContainerController(
-            new ContainerRegistry(store), new FakeIndex(), addPhoto,
+            new ContainerRegistry(store), index, addPhoto,
             null, null, null, null, null, null, null, null, null);
         // Match the app's snake_case output so the assertions below are the
         // wire contract the browser sees, not a MockMvc default.
@@ -75,7 +79,7 @@ class AddPhotoEndpointTest {
 
     @Test
     void repeatedPhotoPartsAreFiledAsOneBatch() throws Exception {
-        extractor.returns(new Extraction(item("bag of M4 bolts"), 1));
+        extractor.returns(new Extraction(item("bag of M4 bolts"), List.of(0, 1, 2)));
 
         mvc.perform(multipart("/c/rack/A1/photo")
                 .file(part("front"))
@@ -83,9 +87,10 @@ class AddPhotoEndpointTest {
                 .file(part("side")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.photo_filenames.length()").value(3))
+            .andExpect(jsonPath("$.discarded").value(0))
             .andExpect(jsonPath("$.extracted.length()").value(1));
 
-        assertThat(images.stored).containsExactly("front", "label", "side");
+        assertThat(images.stored).containsExactly("front.jpg", "label.jpg", "side.jpg");
         assertThat(extractor.calls).hasSize(1);
         assertThat(extractor.calls.get(0)).containsExactly("front", "label", "side");
     }
@@ -110,13 +115,14 @@ class AddPhotoEndpointTest {
     }
 
     private static final class FakeImages implements ImageStore {
+        /** Filenames, so that a delete shows up here too. */
         private final List<String> stored = new ArrayList<>();
 
         @Override
         public String store(byte[] image, String contentType) {
-            String marker = new String(image, StandardCharsets.UTF_8);
-            stored.add(marker);
-            return marker + ".jpg";
+            String name = new String(image, StandardCharsets.UTF_8) + ".jpg";
+            stored.add(name);
+            return name;
         }
 
         @Override
@@ -180,8 +186,17 @@ class AddPhotoEndpointTest {
         }
 
         @Override
+        public void forget(ContainerId container) {
+            slots.remove(container);
+        }
+
+        @Override
         public Set<String> photosInUse() {
-            return Set.of();
+            Set<String> used = new java.util.LinkedHashSet<>();
+            for (Map<SlotId, Slot> byId : slots.values()) {
+                for (Slot s : byId.values()) used.addAll(s.frames());
+            }
+            return used;
         }
 
         @Override

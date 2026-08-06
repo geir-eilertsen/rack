@@ -139,7 +139,7 @@ public class FindItems {
 
     private static SearchHit plus(SearchHit hit, double score) {
         return new SearchHit(hit.container(), hit.slot(), hit.index(), hit.item(),
-            hit.score() + score, hit.lastVerified(), hit.photos());
+            hit.score() + score, hit.lastVerified());
     }
 
     private static boolean notBlank(String s) {
@@ -162,7 +162,7 @@ public class FindItems {
 
     private static SearchHit weigh(SearchHit hit, double weight) {
         return new SearchHit(hit.container(), hit.slot(), hit.index(), hit.item(),
-            hit.score() * weight, hit.lastVerified(), hit.photos());
+            hit.score() * weight, hit.lastVerified());
     }
 
     /** One item is one hit however many terms found it. */

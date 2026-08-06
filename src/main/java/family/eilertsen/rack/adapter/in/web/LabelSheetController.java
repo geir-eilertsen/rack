@@ -175,8 +175,8 @@ public class LabelSheetController {
 
     private void markPrinted(Container c, List<SlotId> slots, Instant now) {
         for (SlotId sid : slots) {
-            Slot existing = index.get(c.id(), sid).orElse(new Slot(sid, List.of(), null, List.of(), null));
-            Slot marked = new Slot(existing.id(), existing.items(), existing.lastVerified(), existing.photos(), now);
+            Slot existing = index.get(c.id(), sid).orElse(new Slot(sid, List.of(), null, null));
+            Slot marked = new Slot(existing.id(), existing.items(), existing.lastVerified(), now);
             index.save(c.id(), marked);
         }
     }

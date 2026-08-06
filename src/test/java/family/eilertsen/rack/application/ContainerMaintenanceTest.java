@@ -41,7 +41,7 @@ class ContainerMaintenanceTest {
         index = new FakeIndex();
         registry = new ContainerRegistry(store);
         update = new UpdateContainer(registry);
-        delete = new DeleteContainer(registry, index);
+        delete = new DeleteContainer(registry, index, new ForgetUnusedPhotos(index, new NoImages()));
     }
 
     @Test
@@ -98,7 +98,7 @@ class ContainerMaintenanceTest {
 
     @Test
     void deletesAContainerWhoseSlotsWereOnlyLabelled() {
-        index.put(BIN, new Slot(new SlotId("b1"), List.of(), null, List.of(), Instant.now()));
+        index.put(BIN, new Slot(new SlotId("b1"), List.of(), null, Instant.now()));
 
         delete.execute(BIN);
 
@@ -106,23 +106,28 @@ class ContainerMaintenanceTest {
     }
 
     @Test
-    void deletesAContainerWhoseSlotsHoldOnlyAPhotograph() {
-        // This used to refuse, on the grounds that dropping the registration
-        // would orphan a file that still meant something. Photographs live in
-        // one folder for the whole rack now, so the file is not under the
-        // container and data/<container>/ is left on disk regardless — nothing
-        // is orphaned. Refusing only trapped a drawer that had been emptied of
-        // items but still listed a frame, with nothing on screen to remove.
-        index.put(BIN, new Slot(new SlotId("b1"), List.of(), null, List.of("2026-08-04-1712.jpg"), null));
+    void aSlotEmptiedOfItemsHasNoPhotographsLeftToTrapIt() {
+        // This container used to be undeletable. A slot kept its own list of
+        // photographs, so emptying it of items left the list behind, that list
+        // counted as content, and there was nothing on screen to remove. Items
+        // own their photographs now, which makes the state that trapped it
+        // unrepresentable rather than merely allowed.
+        Item photographed = new Item("BC547", "on a reel", null, null, null, 0.9,
+            List.of(), null, List.of(), "2026-08-04-1712.jpg", List.of("2026-08-04-1712.jpg"));
+        index.put(BIN, new Slot(new SlotId("b1"), List.of(photographed), null, null));
+        assertThat(index.get(BIN, new SlotId("b1")).orElseThrow().frames())
+            .containsExactly("2026-08-04-1712.jpg");
 
+        index.put(BIN, new Slot(new SlotId("b1"), List.of(), null, null));
+
+        assertThat(index.get(BIN, new SlotId("b1")).orElseThrow().frames()).isEmpty();
         delete.execute(BIN);
-
         assertThat(registry.get(BIN)).isEmpty();
     }
 
     @Test
-    void stillRefusesWhenASlotHoldsAnItemAndAPhotograph() {
-        index.put(BIN, new Slot(new SlotId("b1"), List.of(item("BC547")), null, List.of("f.jpg"), null));
+    void stillRefusesWhenASlotHoldsAnItem() {
+        index.put(BIN, new Slot(new SlotId("b1"), List.of(item("BC547")), null, null));
 
         assertThatThrownBy(() -> delete.execute(BIN))
             .isInstanceOf(IllegalStateException.class)
@@ -134,8 +139,8 @@ class ContainerMaintenanceTest {
 
     @Test
     void refusesToDeleteAContainerHoldingItems() {
-        index.put(BIN, new Slot(new SlotId("b3"), List.of(item("BC547")), null, List.of(), null));
-        index.put(BIN, new Slot(new SlotId("b1"), List.of(item("M4 bolt")), null, List.of(), null));
+        index.put(BIN, new Slot(new SlotId("b3"), List.of(item("BC547")), null, null));
+        index.put(BIN, new Slot(new SlotId("b1"), List.of(item("M4 bolt")), null, null));
 
         assertThatThrownBy(() -> delete.execute(BIN))
             .isInstanceOf(IllegalStateException.class)
@@ -150,10 +155,11 @@ class ContainerMaintenanceTest {
     void listsOccupiedSlotsInLayoutOrderNotAlphabetically() {
         ContainerId shelf = new ContainerId("shelf");
         store.saveAll(List.of(new Container(shelf, "Shelf", ContainerLayout.linear(12, ""), 1.0f, "drawer")));
-        DeleteContainer deleteShelf = new DeleteContainer(new ContainerRegistry(store), index);
-        index.put(shelf, new Slot(new SlotId("11"), List.of(item("a")), null, List.of(), null));
-        index.put(shelf, new Slot(new SlotId("2"), List.of(item("b")), null, List.of(), null));
-        index.put(shelf, new Slot(new SlotId("1"), List.of(item("c")), null, List.of(), null));
+        DeleteContainer deleteShelf = new DeleteContainer(new ContainerRegistry(store), index,
+            new ForgetUnusedPhotos(index, new NoImages()));
+        index.put(shelf, new Slot(new SlotId("11"), List.of(item("a")), null, null));
+        index.put(shelf, new Slot(new SlotId("2"), List.of(item("b")), null, null));
+        index.put(shelf, new Slot(new SlotId("1"), List.of(item("c")), null, null));
 
         assertThatThrownBy(() -> deleteShelf.execute(shelf))
             .hasMessageContaining("(1, 2, 11)");
@@ -161,7 +167,7 @@ class ContainerMaintenanceTest {
 
     @Test
     void refusesToDeleteWhenAnItemSitsInASlotOutsideTheLayout() {
-        index.put(BIN, new Slot(new SlotId("b9"), List.of(item("stray")), null, List.of(), null));
+        index.put(BIN, new Slot(new SlotId("b9"), List.of(item("stray")), null, null));
 
         assertThatThrownBy(() -> delete.execute(BIN))
             .isInstanceOf(IllegalStateException.class)
@@ -229,6 +235,11 @@ class ContainerMaintenanceTest {
         }
 
         @Override
+        public void forget(ContainerId container) {
+            slots.remove(container);
+        }
+
+        @Override
         public Set<String> photosInUse() {
             return Set.of();
         }
@@ -238,4 +249,38 @@ class ContainerMaintenanceTest {
             return Set.of();
         }
     }
+    @Test
+    void deletingAContainerTakesItsSlotStateWithIt() {
+        // Leaving it behind left a folder indistinguishable from a live
+        // container, and photo references nothing could reach — keeping frames
+        // alive for something that no longer existed.
+        index.put(BIN, new Slot(new SlotId("b1"), List.of(), null, Instant.now()));
+
+        delete.execute(BIN);
+
+        assertThat(index.all(BIN)).isEmpty();
+    }
+
+    /** The sweep needs a store; nothing here is about photographs on disk. */
+    private static final class NoImages implements family.eilertsen.rack.domain.port.ImageStore {
+        @Override
+        public String store(byte[] image, String contentType) {
+            return "x.jpg";
+        }
+
+        @Override
+        public List<String> all() {
+            return List.of();
+        }
+
+        @Override
+        public byte[] read(String filename) {
+            return new byte[0];
+        }
+
+        @Override
+        public void delete(String filename) {
+        }
+    }
+
 }

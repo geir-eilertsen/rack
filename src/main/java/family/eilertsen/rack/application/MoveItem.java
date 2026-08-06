@@ -64,14 +64,14 @@ public class MoveItem {
 
         List<Item> srcItems = new ArrayList<>(src.items());
         srcItems.remove(itemIndex);
-        Slot newSrc = new Slot(src.id(), List.copyOf(srcItems), now, src.photos(), src.printedAt());
+        Slot newSrc = new Slot(src.id(), List.copyOf(srcItems), now, src.printedAt());
         index.save(srcContainer, newSrc);
 
         Slot dstSlotState = index.get(dstContainer, dstSlot)
-            .orElse(new Slot(dstSlot, List.of(), null, List.of(), null));
+            .orElse(new Slot(dstSlot, List.of(), null, null));
         List<Item> dstItems = new ArrayList<>(dstSlotState.items());
         dstItems.add(moved);
-        Slot newDst = new Slot(dstSlotState.id(), List.copyOf(dstItems), now, dstSlotState.photos(), dstSlotState.printedAt());
+        Slot newDst = new Slot(dstSlotState.id(), List.copyOf(dstItems), now, dstSlotState.printedAt());
         index.save(dstContainer, newDst);
 
         return newDst;

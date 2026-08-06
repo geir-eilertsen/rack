@@ -253,12 +253,15 @@
             '<span class="num">' + items + '</span> item' + (items === 1 ? '' : 's') + ' · ' +
             '<span class="num">' + printed + '</span> labelled';
 
-          // A photo counts as content even with nothing extracted from it, matching what the server will allow.
-          const occupied = slots.filter(s => s.item_count > 0 || s.photo_count > 0).length;
+          // Items are what a container holds; a photograph hangs off one, so
+          // emptying the items empties the pictures with them. This used to also
+          // count photos, because a slot could list one that no item named —
+          // which made a visibly empty container refuse to be deleted.
+          const occupied = slots.filter(s => s.item_count > 0).length;
           const del = q('.c-delete');
           del.disabled = occupied > 0;
           q('.c-delete-note').textContent = occupied > 0
-            ? 'Holds items or photos in ' + occupied + (occupied === 1 ? ' slot' : ' slots') + '. Empty or move them first.'
+            ? 'Holds items in ' + occupied + (occupied === 1 ? ' slot' : ' slots') + '. Empty or move them first.'
             : 'Every slot is empty. Label sheets already on disk are kept.';
         } catch (e) {
           stats.textContent = 'Could not load slot counts: ' + e.message;

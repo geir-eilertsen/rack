@@ -48,7 +48,7 @@ public class EditItem {
         List<Item> newItems = new ArrayList<>(existing.items());
         newItems.set(itemIndex, updated);
         Slot saved = new Slot(existing.id(), List.copyOf(newItems), Instant.now(),
-            existing.photos(), existing.printedAt());
+            existing.printedAt());
         index.save(container, saved);
         return saved;
     }

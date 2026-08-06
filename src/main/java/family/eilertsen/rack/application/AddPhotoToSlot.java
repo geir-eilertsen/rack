@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class AddPhotoToSlot {
@@ -28,9 +29,14 @@ public class AddPhotoToSlot {
     }
 
     /**
-     * Files a batch of photos of one slot. Every photo is kept — the photo is
-     * ground truth — but the batch is extracted in a single call so a part shot
-     * from two angles is indexed once rather than twice.
+     * Files a batch of photos of one slot. The batch is extracted in a single
+     * call so a part shot from two angles is indexed once rather than twice.
+     *
+     * <p>A frame the extraction attributed nothing to is dropped again. Items own
+     * photographs, so such a frame has no owner — and the model was looking
+     * straight at it when it found nothing there, which makes discarding it a
+     * reading of the picture rather than a guess about it. Re-shoot beats keeping
+     * a frame nothing on screen explains.
      */
     public Result execute(ContainerId container, SlotId slot, List<Photo> photos) {
         if (photos == null || photos.isEmpty()) {
@@ -46,17 +52,25 @@ public class AddPhotoToSlot {
             .map(e -> stampSource(e.item(), framesOf(e, filenames)))
             .toList();
 
-        Slot existing = index.get(container, slot).orElse(new Slot(slot, List.of(), null, List.of(), null));
+        Slot existing = index.get(container, slot).orElse(new Slot(slot, List.of(), null, null));
 
         List<Item> mergedItems = new ArrayList<>(existing.items());
         mergedItems.addAll(extracted);
-        List<String> mergedPhotos = new ArrayList<>(existing.photos());
-        mergedPhotos.addAll(filenames);
 
-        Slot updated = new Slot(slot, List.copyOf(mergedItems), Instant.now(), List.copyOf(mergedPhotos), existing.printedAt());
+        Slot updated = new Slot(slot, List.copyOf(mergedItems), Instant.now(), existing.printedAt());
         index.save(container, updated);
 
-        return new Result(filenames, extracted);
+        // After the write, and against the whole index: one of these frames may
+        // already belong to an item somewhere else if the same picture was filed
+        // twice, and the batch that just landed is the least of what it shows.
+        List<String> spoken = new ArrayList<>();
+        Set<String> inUse = index.photosInUse();
+        for (String filename : filenames) {
+            if (inUse.contains(filename)) spoken.add(filename);
+            else images.delete(filename);
+        }
+
+        return new Result(List.copyOf(spoken), extracted, filenames.size() - spoken.size());
     }
 
     /** Source stays the first frame, so the thumbnail is unchanged. */
@@ -75,5 +89,10 @@ public class AddPhotoToSlot {
 
     public record Photo(byte[] bytes, String contentType) {}
 
-    public record Result(List<String> photoFilenames, List<Item> extracted) {}
+    /**
+     * {@code discarded} is how many frames of the batch nothing was read from and
+     * so were not kept. Reported rather than merely done: a frame going quiet is
+     * the one case where the user needs to know to shoot it again.
+     */
+    public record Result(List<String> photoFilenames, List<Item> extracted, int discarded) {}
 }

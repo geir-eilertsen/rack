@@ -100,6 +100,27 @@ public class JsonFilePartIndex implements PartIndex {
     }
 
     @Override
+    public synchronized void forget(ContainerId container) {
+        byContainer.remove(container);
+        Path dir = dataDir.resolve(container.value());
+        if (!Files.isDirectory(dir)) return;
+        try (Stream<Path> files = Files.list(dir)) {
+            for (Path p : files.filter(p -> p.getFileName().toString().endsWith(".json")).toList()) {
+                Files.deleteIfExists(p);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed clearing " + dir, e);
+        }
+        // Only if nothing else is in there. Archived label sheets are the record
+        // of what was physically printed, and that outlives the registration.
+        try (Stream<Path> left = Files.list(dir)) {
+            if (left.findAny().isEmpty()) Files.deleteIfExists(dir);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed tidying " + dir, e);
+        }
+    }
+
+    @Override
     public List<SearchHit> searchByKeyword(String query) {
         if (query == null || query.isBlank()) return List.of();
         String phrase = query.toLowerCase(Locale.ROOT).strip();
@@ -113,7 +134,7 @@ public class JsonFilePartIndex implements PartIndex {
                     Item item = items.get(i);
                     double score = matchScore(item, terms, phrase);
                     if (score > 0) {
-                        hits.add(new SearchHit(cid, slot.id(), i, item, score, slot.lastVerified(), slot.photos()));
+                        hits.add(new SearchHit(cid, slot.id(), i, item, score, slot.lastVerified()));
                     }
                 }
             }
@@ -198,18 +219,17 @@ public class JsonFilePartIndex implements PartIndex {
         return words;
     }
 
+    /**
+     * One question, one place to ask it: a photograph is in use when an item
+     * names it. Items are the physical things, so a picture nothing points at is
+     * a picture of nothing anybody has.
+     */
     @Override
     public Set<String> photosInUse() {
         Set<String> used = new LinkedHashSet<>();
         for (Map<SlotId, Slot> slots : byContainer.values()) {
             for (Slot slot : slots.values()) {
-                if (slot.photos() != null) used.addAll(slot.photos());
-                for (Item item : slot.items()) {
-                    // Both, because an item that has moved carries its frames
-                    // without its old drawer's photo list following it.
-                    if (item.sourcePhoto() != null) used.add(item.sourcePhoto());
-                    if (item.seenIn() != null) used.addAll(item.seenIn());
-                }
+                used.addAll(slot.frames());
             }
         }
         return used;

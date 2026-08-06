@@ -137,7 +137,7 @@ class FindItemsTest {
 
     private static SearchHit hit(String slot, int itemIndex, double score) {
         Item item = new Item("tape", "a roll of tape", null, "other", 1, 0.9, List.of(), null, List.of(), null, null);
-        return new SearchHit(RACK, new SlotId(slot), itemIndex, item, score, null, List.of());
+        return new SearchHit(RACK, new SlotId(slot), itemIndex, item, score, null);
     }
 
     private static final class FakeExpander implements QueryExpander {
@@ -184,6 +184,11 @@ class FindItemsTest {
         @Override
         public List<SearchHit> searchBySimilarity(float[] queryVector, int topK) {
             return List.of();
+        }
+
+        @Override
+        public void forget(ContainerId container) {
+            byQuery.clear();
         }
 
         @Override

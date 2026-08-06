@@ -128,7 +128,7 @@ public class ContainerController {
                 return new SlotSummary(
                     sid.value(),
                     s.items() == null ? 0 : s.items().size(),
-                    s.photos() == null ? 0 : s.photos().size(),
+                    s.frames().size(),
                     s.printedAt() != null,
                     s.lastVerified()
                 );
@@ -143,7 +143,7 @@ public class ContainerController {
         ContainerId cid = new ContainerId(container);
         SlotId sid = new SlotId(slot);
         requireContainerExists(cid);
-        return index.get(cid, sid).orElse(new Slot(sid, List.of(), null, List.of(), null));
+        return index.get(cid, sid).orElse(new Slot(sid, List.of(), null, null));
     }
 
     /** Repeated {@code photo} parts file a whole batch at once; a single part is just a batch of one. */
@@ -241,9 +241,10 @@ public class ContainerController {
     public record MergeRequest(int into) {}
 
     /**
-     * Drops one photograph from a drawer. Removing an item leaves its frames —
-     * an unreferenced frame is evidence the extraction missed something — so
-     * saying a photograph is finished with has to be its own act.
+     * Drops one photograph from a drawer: off every item here that names it, and
+     * off the disk if nothing else did. Emptying a drawer of items already takes
+     * its pictures with them, so this is for the narrower case of a shot that is
+     * simply no good on an item worth keeping.
      */
     @DeleteMapping("/{container}/{slot}/photos/{filename}")
     public Slot removePhoto(@PathVariable String container,

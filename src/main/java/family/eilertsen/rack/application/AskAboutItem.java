@@ -85,7 +85,7 @@ public class AskAboutItem {
         List<Item> newItems = new ArrayList<>(existing.items());
         newItems.set(itemIndex, updated);
         Slot saved = new Slot(existing.id(), List.copyOf(newItems), existing.lastVerified(),
-            existing.photos(), existing.printedAt());
+            existing.printedAt());
         index.save(container, saved);
         return saved;
     }

@@ -34,7 +34,7 @@ public class RemoveItem {
         newItems.remove(itemIndex);
 
         Slot updated = new Slot(existing.id(), List.copyOf(newItems), Instant.now(),
-            existing.photos(), existing.printedAt());
+            existing.printedAt());
         index.save(container, updated);
         return updated;
     }

@@ -61,7 +61,7 @@ Small-parts inventory system. Photograph the contents of a slot in a physical st
 
 Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all swappable:
 
-- `ImageStore` — persists slot photos to disk
+- `ImageStore` — persists photographs to one flat folder for the whole rack
 - `PartExtractor` — one vision-model call that turns a batch of photos into `List<Extraction>` (Spring AI)
 - `PartIndex` — read/write of slot state; search
 
@@ -72,6 +72,7 @@ Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all s
 
 **A container with a single slot has no subdivisions at all**, and the UI stops mentioning them: no grid to pick from, no word for a part it has not got, and the title is just the container's name. Selecting it selects the one place. That is the plastic box — the box *is* the location, and asking which compartment would be asking about something that does not exist.
 - **Item** — one identified thing inside a slot (a transistor, a bag of screws, ...). Comes from vision extraction.
+- **Photograph** — a picture of an item. **Items own photographs; slots do not.** `Item.sourcePhoto` is the frame it was read from and `Item.seenIn` is every frame showing it; a slot has no photo list of its own. The containment runs one way — container holds slots, slot holds items, item holds photographs — and everything else is derived from it.
 - Containers are defined in `application.yml` under `rack.containers` and materialised at boot by `ContainerRegistry` (see `application/RackConfiguration.java`). Layout kinds: `grid` (cols × rows → A1..) and `linear` (N → 1..N with optional prefix).
 
 ### Package layout (enforced)
@@ -108,16 +109,22 @@ data/
   photos/                # every photograph, for the whole rack
     2026-08-04-1712.jpg
   <container>/
-    <slot>.json          # slot state (items, photos list, last_verified, printed_at)
+    <slot>.json          # slot state (items, last_verified, printed_at)
     labels/
       2026-08-04-1712.pdf   # archived label sheet from each print run
 ```
 
 **Photographs are not filed under the drawer they were taken of.** A frame is a picture of some things that happened to be in a drawer at a moment, and putting it under that drawer encodes an ownership that stops being true twice over: 18 frames in this rack are referenced by more than one item, one of them by 22, and an item that moves takes its references with it. While the file lived under the slot, a moved item's references resolved against the *new* drawer's directory and answered 404 — so `MoveItem` had to strip an item of its photographs to avoid showing a broken one. Now they simply follow it.
 
-`Slot.photos` survives as *frames taken of this drawer* — what the fallback strip shows and what a resync replaces. It no longer implies ownership of the files. `GET /photos/{filename}` serves them flat, and the filename is validated as a bare name: one folder for the whole rack means a `../` would walk out of the data directory rather than merely into the next drawer.
+**Items own photographs. Slots do not.** A slot contains items; an item is a physical thing; a photograph is a picture of an item. `Slot.photos` is gone — the slot's frames are *derived* from its items (`Slot.frames()`, a plain method rather than a record component, so it is never written to disk).
 
-**Deleting a frame is now a question about the whole rack, not one slot.** A resync asks `PartIndex.photosInUse()` first, because the frames it is finished with may be the only picture another drawer's item has.
+Having the reference in two places is what caused most of the bugs this design has had: a drawer emptied of items still counted as occupied and could not be deleted; a photograph could be listed by a slot and rendered by nobody; a moved item left its picture behind; three frames in this rack were listed by a slot and named by no item; and deciding whether a file was still in use meant consulting both lists. Each of those stops being a bug that needs fixing and becomes a state that cannot be written down. Delete an item and its frames are unreferenced; move it and they go with it; empty a drawer and it has no frames.
+
+The old key is inert rather than migrated, per the no-migrations rule: `fail-on-unknown-properties` is off (now stated in `application.yml` rather than inherited, because a load that fails on it is every drawer at once), and each slot file drops its dead `photos` key the first time that slot is rewritten. `JsonFilePartIndexTest` pins both halves — a file carrying the old key still loads, and a file written now carries no photo list of its own.
+
+`GET /photos/{filename}` serves them flat, and the filename is validated as a bare name: one folder for the whole rack means a `../` would walk out of the data directory rather than merely into the next drawer.
+
+**Deleting a frame is a question about the whole rack, not one slot.** `PartIndex.photosInUse()` is the union of what every item names, and every path that can orphan a file asks it before removing anything — the frames one drawer is finished with may be the only picture another drawer's item has.
 
 - `JsonFilePartIndex` walks `data/<container>/*.json` at startup into `Map<ContainerId, Map<SlotId, Slot>>`.
 - Writes: serialise to `<slot>.json.tmp`, then `Files.move` with `ATOMIC_MOVE`. Single writer on a single box.
@@ -194,7 +201,7 @@ It is a diff, in two halves. `POST /c/{container}/{slot}/resync/preview` extract
 
 **Matching is one-to-one, greedy, best pair first.** Where both readings carry a part number that is the whole answer: equal is the same part, different is a different part, and no wording overlap may argue otherwise — this drawer holds 100K, 82K, 68K and 15K resistors, and BC547 beside BC557, whose names overlap more than enough to pair. Only where a part number is missing does wording decide it, at half the shorter label's words in common.
 
-**An item kept despite not being in the photos points at no frame.** Overruling a "gone" verdict says the thing is in the drawer, not that it is in these photos; its old frames are about to be deleted, so pinning it to a new one that does not show it would put a lie where the evidence used to be. It falls back to the slot's strip instead. An added item is the one case that may fall back to the first frame, because it demonstrably came out of the batch.
+**An item kept despite not being in the photos points at no frame.** Overruling a "gone" verdict says the thing is in the drawer, not that it is in these photos; its old frames are about to be deleted, so pinning it to a new one that does not show it would put a lie where the evidence used to be. It shows no strip, which is the honest rendering of an item nobody has a current picture of; if that leaves the batch's frames unclaimed they are swept too. An added item is the one case that may fall back to the first frame, because it demonstrably came out of the batch.
 
 Gone items are removed rather than zeroed, and the old photos are deleted — after the index write, so a crash leaves an orphan file rather than slot state naming a photo that no longer exists.
 
@@ -203,7 +210,7 @@ Gone items are removed rather than zeroed, and the old photos are deleted — af
 `/containers.html` lists every container with its slot/item/label counts and is the single place to register, print labels, rename, rescale, or delete one. There is no separate register page.
 
 - **Name and label scale are editable; the slot layout is not.** Reshaping a container would orphan slots that hold items, so `UpdateContainer` only ever rewrites those two fields.
-- **Delete refuses while any slot holds items** (`409`, naming the occupied slots in layout order). An item is the claim that something physically exists in there, and hiding that claim is what this refuses to do. A photograph is not such a claim: it used to block deletion too, on the grounds that dropping the registration would orphan a file that still meant something, and that stopped being true when photographs moved to one folder for the whole rack. A printed label is not content either. `DeleteContainer` checks `PartIndex.all(container)` rather than the current layout, so an item parked in an off-layout slot still blocks it, and the UI disables the button rather than offering a delete the server will refuse.
+- **Delete refuses while any slot holds items** (`409`, naming the occupied slots in layout order). An item is the claim that something physically exists in there, and hiding that claim is what this refuses to do. A photograph is not such a claim, and can no longer be one on its own: it hangs off an item, so emptying the items empties the pictures with them. A printed label is not content either. `DeleteContainer` checks `PartIndex.all(container)` rather than the current layout, so an item parked in an off-layout slot still blocks it, and the UI disables the button rather than offering a delete the server will refuse.
 - Deleting drops the registration only — `data/<container>/` is left on disk, so re-registering the same id picks its slot state (and `printedAt`) back up.
 - `server.error.include-message: always` is set so those refusal messages actually reach the browser.
 
@@ -261,11 +268,11 @@ That rule needs more than one frame per slot, so `put.html` collects photos into
 
 Each extraction carries an `image_index` back, which `AddPhotoToSlot` maps to the stored filename so `Item.sourcePhoto` points at the frame that actually shows that item. A missing or out-of-range index falls back to the first photo (the model omits it often enough to be worth pinning).
 
-Every frame is kept in `Slot.photos` whether or not an item references it — the photo is ground truth, and an unreferenced frame is exactly the evidence that the extraction missed something.
+**A frame the extraction attributed nothing to is not kept.** Items own photographs, so such a frame has nothing to hang off — and the model was looking straight at it when it found nothing, which makes dropping it a reading of the picture rather than a guess about it. This reverses an earlier call to keep it as *evidence the extraction missed something*; in practice that produced pictures no page rendered and a container that refused to be deleted, so the frame outlived only itself. The count comes back as `discarded` and `put.html` says so in the status line, because a frame going quiet is the one case where the user needs to know to shoot it again.
 
-**A drawer's own frames are shown whenever it has any**, not only inside an expanded item, each with an × to drop it. They used to appear only within an item, so a drawer emptied of items but still listing a frame read "Nothing here yet" — invisible, unremovable, and enough to block its container from being deleted. Keeping a photograph is a decision, so there has to be a way to decide otherwise.
+**A drawer's own frames are shown whenever it has any**, worked out in the page from the items it already has. Worth showing next to the per-item strips because it is the only place a single photograph can be dropped, and because it makes plain when two items were read from the same shot.
 
-**A photograph nothing points at is deleted.** `ForgetUnusedPhotos` sweeps at boot and every path that can orphan one cleans up after itself, so the rule holds by construction rather than by each of them remembering. "Nothing" means no slot's photo list *and* no item's frames — a frame no item names is kept on purpose, since that is the evidence the extraction missed something.
+**A photograph nothing points at is deleted.** `ForgetUnusedPhotos` sweeps at boot and every path that can orphan one cleans up after itself, so the rule holds by construction rather than by each of them remembering. "Nothing" means no item names it — one question with one place to ask it.
 
 **Expanding an item shows its frames**, the one it was read from first and badged. `Item.sourcePhoto` records which frame the model quoted, not the only frame the thing appears in: a part shot from two angles with its label on a third yields one item naming one photo. Across this rack 31 of 58 frames are named by no item, and almost none of them are spare — they are the label shots and second angles that were merged into items. Showing the slot's whole strip is what makes them reachable.
 

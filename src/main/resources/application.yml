@@ -12,6 +12,13 @@ spring:
           no-cache: true
   jackson:
     property-naming-strategy: SNAKE_CASE
+    deserialization:
+      # No schema migrations: a field can arrive and be absent from old files,
+      # and it can leave and still be present in them. Slots written while the
+      # slot kept its own photo list still carry a "photos" key; items own their
+      # photographs now, so it is read past. Spring Boot defaults to this — said
+      # out loud because a load that fails here is every drawer, not one field.
+      fail-on-unknown-properties: false
   servlet:
     multipart:
       max-file-size: 20MB

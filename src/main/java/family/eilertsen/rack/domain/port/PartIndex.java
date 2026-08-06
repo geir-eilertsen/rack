@@ -17,6 +17,17 @@ public interface PartIndex {
 
     Collection<Slot> all(ContainerId container);
 
+    /**
+     * Drops everything the index knows about a container.
+     *
+     * <p>Deleting a container used to leave its slot state on disk so that
+     * re-registering the same id picked it back up. That left a folder that
+     * looks like a live container and, worse, kept its photo references alive —
+     * so frames belonging to something that no longer exists stayed protected
+     * from the sweep by state nothing could reach.
+     */
+    void forget(ContainerId container);
+
     List<SearchHit> searchByKeyword(String query);
 
     List<SearchHit> searchBySimilarity(float[] queryVector, int topK);

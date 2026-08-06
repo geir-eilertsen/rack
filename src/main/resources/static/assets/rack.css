@@ -224,6 +224,8 @@ label.field {
 .status { font-size: .9rem; color: var(--muted); margin: .75rem 0; }
 .status.ok { color: var(--success); }
 .status.error { color: var(--error); }
+/* Done, but with something worth reading before moving on. */
+.status.warn { color: var(--warn, #b26b00); }
 
 /* Callouts */
 .callout {
