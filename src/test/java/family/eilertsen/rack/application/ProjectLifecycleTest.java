@@ -5,6 +5,7 @@ import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.Project;
 import family.eilertsen.rack.domain.model.ProjectId;
 import family.eilertsen.rack.domain.model.ProjectPart;
+import family.eilertsen.rack.domain.model.ProjectStep;
 import family.eilertsen.rack.domain.model.SearchHit;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
@@ -35,6 +36,7 @@ class ProjectLifecycleTest {
     private StartProject start;
     private RunProject run;
     private SettleProject settle;
+    private AdoptPlan adopt;
 
     @BeforeEach
     void setUp() {
@@ -44,6 +46,7 @@ class ProjectLifecycleTest {
         start = new StartProject(projects);
         run = new RunProject(projects);
         settle = new SettleProject(projects, index);
+        adopt = new AdoptPlan(projects);
     }
 
     @Test
@@ -249,13 +252,74 @@ class ProjectLifecycleTest {
     void onlyPartsMarkedUsedAreSettled() {
         index.put(RACK, B7, item("0.22R 5W resistors", 10));
         Project p = start.execute(new StartProject.Request("Recap", null,
-            List.of(new StartProject.Line("0.22R 5W resistors", "8", ProjectPart.ARRIVED, null, null, null, null,
-                List.of(new StartProject.Source("rack", "B7", "0.22R 5W resistors")))),
+            List.of(new PlanShapes.Line("0.22R 5W resistors", "8", ProjectPart.ARRIVED, null, null, null, null,
+                List.of(new PlanShapes.Source("rack", "B7", "0.22R 5W resistors")))),
             List.of(), List.of()));
 
         assertThat(settle.preview(p.id()).changes()).isEmpty();
         settle.settle(p.id(), false);
         assertThat(qty()).isEqualTo(10);
+    }
+
+    @Test
+    void takingInAdviceAppendsAndOverwritesNothing() {
+        // By the time you ask a second time some parts are ordered, some steps are
+        // ticked and one carries a note about a lifted pad. A fresh plan knows
+        // none of that and could not reproduce it, so nothing here replaces a
+        // part, a step, a status or a note.
+        Project p = start.execute(new StartProject.Request("Recap", null,
+            List.of(line("Caps", ProjectPart.TO_BUY)), List.of(step("Desolder")), List.of()));
+        p = run.setPartStatus(p.id(), 0, ProjectPart.ORDERED, null);
+        p = run.tickStep(p.id(), 0, true);
+        p = run.noteStep(p.id(), 0, "one pad lifted");
+
+        p = adopt.execute(p.id(), new AdoptPlan.Adoption(
+            List.of(line("Transistors", ProjectPart.TO_BUY)),
+            List.of(step("Refit the boards")), List.of("Mains voltage")));
+
+        assertThat(p.parts()).extracting(ProjectPart::part).containsExactly("Caps", "Transistors");
+        assertThat(p.parts().get(0).status()).isEqualTo(ProjectPart.ORDERED);
+        assertThat(p.steps()).extracting(ProjectStep::title).containsExactly("Desolder", "Refit the boards");
+        assertThat(p.steps().get(0).done()).isTrue();
+        assertThat(p.steps().get(0).note()).isEqualTo("one pad lifted");
+        assertThat(p.cautions()).containsExactly("Mains voltage");
+        assertThat(p.log()).last().extracting(n -> n.text())
+            .isEqualTo("Took in 1 part, 1 step, 1 caution from the model.");
+    }
+
+    @Test
+    void theSameHazardProposedTwiceIsStillOneHazard() {
+        // Cautions are the one thing deduplicated, and only because they are plain
+        // strings with no status or note that a second copy could differ in.
+        Project p = start.execute(new StartProject.Request("Recap", null, List.of(), List.of(),
+            List.of("Mains voltage")));
+
+        p = adopt.execute(p.id(), new AdoptPlan.Adoption(List.of(), List.of(),
+            List.of("Mains voltage", "Charged capacitors")));
+
+        assertThat(p.cautions()).containsExactly("Mains voltage", "Charged capacitors");
+    }
+
+    @Test
+    void anEmptyProjectGivenSomethingToBuyStartsShopping() {
+        Project p = start.execute(new StartProject.Request("Recap", null, List.of(), List.of(), List.of()));
+        assertThat(p.status()).isEqualTo(Project.PLANNING);
+
+        p = adopt.execute(p.id(), new AdoptPlan.Adoption(
+            List.of(line("Caps", ProjectPart.TO_BUY)), List.of(), List.of()));
+
+        assertThat(p.status()).isEqualTo(Project.SHOPPING);
+    }
+
+    @Test
+    void takingInNothingChangesNothing() {
+        Project p = start.execute(new StartProject.Request("Recap", null, List.of(), List.of(), List.of()));
+        Instant before = p.updatedAt();
+
+        Project after = adopt.execute(p.id(), new AdoptPlan.Adoption(List.of(), List.of(), List.of()));
+
+        assertThat(after.updatedAt()).isEqualTo(before);
+        assertThat(after.log()).hasSize(1);
     }
 
     @Test
@@ -271,9 +335,9 @@ class ProjectLifecycleTest {
 
     private Project withUsedPart(String itemName, int used) {
         Project p = start.execute(new StartProject.Request("Recap", null,
-            List.of(new StartProject.Line(itemName, String.valueOf(used), ProjectPart.IN_STOCK,
+            List.of(new PlanShapes.Line(itemName, String.valueOf(used), ProjectPart.IN_STOCK,
                 null, null, null, null,
-                List.of(new StartProject.Source("rack", "B7", itemName)))),
+                List.of(new PlanShapes.Source("rack", "B7", itemName)))),
             List.of(), List.of()));
         return run.setPartStatus(p.id(), 0, ProjectPart.USED, used);
     }
@@ -282,12 +346,12 @@ class ProjectLifecycleTest {
         return index.get(RACK, B7).orElseThrow().items().get(0).qtyEstimate();
     }
 
-    private static StartProject.Line line(String part, String status) {
-        return new StartProject.Line(part, "1", status, null, null, null, null, List.of());
+    private static PlanShapes.Line line(String part, String status) {
+        return new PlanShapes.Line(part, "1", status, null, null, null, null, List.of());
     }
 
-    private static StartProject.Step step(String title) {
-        return new StartProject.Step(title, "do it", List.of());
+    private static PlanShapes.Step step(String title) {
+        return new PlanShapes.Step(title, "do it", List.of());
     }
 
     private static Item item(String name, Integer qty) {

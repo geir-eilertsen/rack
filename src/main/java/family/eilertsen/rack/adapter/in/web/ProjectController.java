@@ -1,5 +1,6 @@
 package family.eilertsen.rack.adapter.in.web;
 
+import family.eilertsen.rack.application.AdoptPlan;
 import family.eilertsen.rack.application.KeepDocuments;
 import family.eilertsen.rack.application.Projects;
 import family.eilertsen.rack.application.RunProject;
@@ -34,14 +35,16 @@ public class ProjectController {
     private final RunProject run;
     private final SettleProject settle;
     private final KeepDocuments docs;
+    private final AdoptPlan adopt;
 
     public ProjectController(Projects projects, StartProject start, RunProject run,
-                             SettleProject settle, KeepDocuments docs) {
+                             SettleProject settle, KeepDocuments docs, AdoptPlan adopt) {
         this.projects = projects;
         this.start = start;
         this.run = run;
         this.settle = settle;
         this.docs = docs;
+        this.adopt = adopt;
     }
 
     /** The list page's whole payload: enough per project to show a card, no more. */
@@ -77,6 +80,16 @@ public class ProjectController {
         List<ProjectDocument> held = one(id).documents();
         run.delete(pid);
         docs.forget(held);
+    }
+
+    /**
+     * Folds a checklist or a plan into this project. The advice itself still
+     * comes from {@code /ask} and {@code /plan} — this is only where it lands, so
+     * that asking for help on a project does not have to mean starting a new one.
+     */
+    @PostMapping("/{id}/adopt")
+    public Project adopt(@PathVariable String id, @RequestBody AdoptPlan.Adoption body) {
+        return adopt.execute(new ProjectId(id), body);
     }
 
     @PostMapping(value = "/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

@@ -10,6 +10,7 @@
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
   <link rel="stylesheet" href="/assets/project.css">
+  <link rel="stylesheet" href="/assets/advice.css">
   <style>
     .head { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; margin-bottom: .3rem; }
     .head h1 { margin: 0; flex: 1; min-width: 0; }
@@ -135,6 +136,22 @@
       background: var(--card); color: var(--primary-hover); text-decoration: none; font-size: .82rem; }
     .look .ls a:hover { background: var(--primary-soft); border-color: var(--primary); }
 
+    /* Asking about the job, on the page the job lives on. */
+    .advice { padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--card); box-shadow: var(--shadow); }
+    .advice > p { margin: 0 0 .7rem; }
+    .advice .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+    .adopt { margin: 1rem 0 0; padding: .8rem .9rem; border: 1px solid var(--primary);
+      border-left-width: 3px; border-radius: var(--radius); background: var(--primary-soft); }
+    .adopt h4 { margin: 0 0 .4rem; font-size: .95rem; }
+    .adopt label { display: flex; gap: .5rem; align-items: flex-start; padding: .3rem 0; font-size: .9rem; }
+    .adopt label input { margin-top: .2rem; accent-color: var(--primary); }
+    .adopt .dupe { color: var(--muted); }
+    .adopt .dupe .badge { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+      background: var(--border); color: var(--muted); padding: .1rem .35rem; border-radius: 999px;
+      margin-left: .3rem; white-space: nowrap; }
+    .adopt .acts { margin-top: .6rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+
     .log { list-style: none; padding: 0; margin: 0; font-size: .88rem; }
     .log li { padding: .4rem 0; border-top: 1px solid var(--border); display: flex; gap: .6rem; }
     .log li:first-child { border-top: none; }
@@ -172,6 +189,7 @@
 
   <script src="/assets/usage.js"></script>
   <script src="/assets/project.js"></script>
+  <script src="/assets/advice.js"></script>
   <script>
     const esc = rackProject.esc;
     const page = document.getElementById('page');
@@ -258,6 +276,19 @@
             ? '<div class="section-head">Steps <span class="of">' + doneCount + ' of ' + steps.length + '</span></div>'
               + '<ul class="rows" id="steps">' + steps.map(stepRow).join('') + '</ul>'
             : '')
+
+        + '<div class="section-head">Ask about this job</div>'
+        + '<div class="advice" id="advice">'
+          + '<p>Work out what this needs from everything in the rack, then group the gaps '
+          + 'by supplier and write up the steps. Nothing is written until you say so, and '
+          + 'nothing already here is overwritten.</p>'
+          + '<div class="row">'
+            + '<button class="btn primary" id="adviceBtn">'
+            + (parts.length || steps.length ? 'Ask again' : 'Work out what this needs') + '</button>'
+            + '<span class="status" id="adviceStatus"></span>'
+          + '</div>'
+          + '<div id="adviceOut"></div>'
+        + '</div>'
 
         + '<div class="section-head">Settle up</div><div class="settle" id="settle">'
           + '<p>Reduce the drawers by what this job used. This is the only thing in rack that '
@@ -485,6 +516,7 @@
       });
 
       document.getElementById('settleBtn').addEventListener('click', showSettlement);
+      document.getElementById('adviceBtn').addEventListener('click', seekAdvice);
 
       const docFile = document.getElementById('docFile');
       if (docFile) docFile.addEventListener('change', () => upload(docFile));
@@ -517,30 +549,162 @@
       }
     }
 
-    // One listener for every copy button, including ones drawn later.
-    document.addEventListener('click', async e => {
-      const btn = e.target.closest('[data-copy]');
-      if (!btn) return;
-      try {
-        await navigator.clipboard.writeText(btn.dataset.copy);
-        const was = btn.textContent;
-        btn.textContent = 'Copied';
-        setTimeout(() => { btn.textContent = was; }, 1400);
-      } catch (err) {
-        // Clipboard refused — no permission, or not a secure context. Showing the
-        // text is the fallback that always works.
-        const pre = document.createElement('pre');
-        pre.textContent = btn.dataset.copy;
-        pre.style.cssText = 'white-space:pre-wrap;font-size:.82rem;margin:.5rem 0 0';
-        btn.replaceWith(pre);
-      }
-    });
 
     async function addNote() {
       const el = document.getElementById('noteText');
       const text = el.value.trim();
       if (!text) return;
       if (await send('/notes', 'POST', { text })) { /* redrawn, box is fresh */ }
+    }
+
+    // ---- asking the model about this job -----------------------------------
+    //
+    // The same two calls the ask page makes, landing here instead of in a new
+    // project. Before this, a project named by hand started empty and the only
+    // way to get parts and steps was to begin somewhere else and be given a
+    // different project — the help lived somewhere other than the thing it helps.
+    let advice = { answer: null, plan: null };
+
+    async function seekAdvice() {
+      const btn = document.getElementById('adviceBtn');
+      const st = document.getElementById('adviceStatus');
+      const out = document.getElementById('adviceOut');
+      btn.disabled = true;
+      st.className = 'status';
+      st.textContent = 'Reading every item in the rack…';
+      out.innerHTML = '';
+      advice = { answer: null, plan: null };
+      try {
+        // The brief if there is one, since it is what was actually asked; the
+        // name otherwise, which is all a hand-made project has.
+        advice.answer = await rackAdvice.ask(project.brief || project.name);
+        out.innerHTML = rackAdvice.renderAnswer(advice.answer);
+        const gaps = rackAdvice.gaps(advice.answer);
+        out.insertAdjacentHTML('beforeend',
+          '<div class="row" style="margin-top:.75rem">'
+          + (gaps.length
+              ? '<button class="btn" id="advicePlanBtn">Plan the order for ' + gaps.length
+                + (gaps.length === 1 ? ' part' : ' parts') + '</button>'
+              : '')
+          + '<button class="btn primary" id="adoptBtn">Take this in</button></div>');
+        if (gaps.length) document.getElementById('advicePlanBtn').addEventListener('click', advicePlan);
+        document.getElementById('adoptBtn').addEventListener('click', showAdoption);
+        st.textContent = '';
+        if (window.rackUsage) rackUsage.refresh();
+      } catch (e) {
+        st.className = 'status error';
+        st.textContent = 'Could not work that out: ' + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function advicePlan() {
+      const btn = document.getElementById('advicePlanBtn');
+      const st = document.getElementById('adviceStatus');
+      btn.disabled = true;
+      st.className = 'status';
+      st.textContent = 'Grouping by supplier and writing up the job — this takes a minute or two…';
+      try {
+        advice.plan = await rackAdvice.plan(project.brief || project.name,
+          rackAdvice.gaps(advice.answer).map(rackAdvice.shoppingLine));
+        document.getElementById('adviceOut').insertAdjacentHTML('beforeend',
+          rackAdvice.renderPlan(advice.plan));
+        st.textContent = '';
+        if (window.rackUsage) rackUsage.refresh();
+        showAdoption();
+      } catch (e) {
+        st.className = 'status error';
+        st.textContent = 'Could not plan that: ' + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    /**
+     * What would be added, with anything that looks like a line already here
+     * unticked to start with.
+     *
+     * Deciding a proposal is a duplicate is the user's call, made on screen where
+     * both are visible — the server appends exactly what it is given. Matching on
+     * the normalised part text only, because that is the one field a second
+     * reading is likely to phrase the same way.
+     */
+    function showAdoption() {
+      const out = document.getElementById('adviceOut');
+      document.querySelectorAll('.adopt').forEach(el => el.remove());
+      const parts = rackAdvice.partsFrom(advice.answer, advice.plan);
+      const steps = rackAdvice.stepsFrom(advice.plan);
+      const cautions = (advice.plan && advice.plan.cautions) || [];
+      const held = new Set((project.parts || []).map(x => norm(x.part)));
+      const heldSteps = new Set((project.steps || []).map(s => norm(s.title)));
+
+      out.insertAdjacentHTML('beforeend',
+        '<div class="adopt"><h4>Take into this project</h4>'
+        + (parts.length
+            ? '<div class="grp"><strong>Parts</strong>' + parts.map((x, i) => {
+                const dupe = held.has(norm(x.part));
+                return '<label class="' + (dupe ? 'dupe' : '') + '">'
+                  + '<input type="checkbox" data-adopt-part="' + i + '"' + (dupe ? '' : ' checked') + '>'
+                  + '<span>' + esc(x.part)
+                  + (dupe ? '<span class="badge">already here</span>' : '') + '</span></label>';
+              }).join('') + '</div>'
+            : '')
+        + (steps.length
+            ? '<div class="grp" style="margin-top:.5rem"><strong>Steps</strong>' + steps.map((s, i) => {
+                const dupe = heldSteps.has(norm(s.title));
+                return '<label class="' + (dupe ? 'dupe' : '') + '">'
+                  + '<input type="checkbox" data-adopt-step="' + i + '"' + (dupe ? '' : ' checked') + '>'
+                  + '<span>' + esc(s.title)
+                  + (dupe ? '<span class="badge">already here</span>' : '') + '</span></label>';
+              }).join('') + '</div>'
+            : '')
+        + (cautions.length
+            ? '<label style="margin-top:.5rem"><input type="checkbox" id="adoptCautions" checked>'
+              + '<span><strong>' + cautions.length + ' cautions</strong></span></label>'
+            : '')
+        + '<div class="acts"><button class="btn primary" id="adoptGo">Add the ticked ones</button>'
+        + '<button class="btn" id="adoptCancel">Leave it</button>'
+        + '<span class="status" id="adoptStatus"></span></div></div>');
+
+      document.getElementById('adoptGo').addEventListener('click', () => adopt(parts, steps, cautions));
+      document.getElementById('adoptCancel').addEventListener('click', () => {
+        document.querySelectorAll('.adopt').forEach(el => el.remove());
+      });
+    }
+
+    function norm(s) {
+      return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    async function adopt(parts, steps, cautions) {
+      const pick = (sel, list) => [...document.querySelectorAll(sel)]
+        .filter(c => c.checked).map(c => list[Number(c.dataset.adoptPart ?? c.dataset.adoptStep)]);
+      const chosenParts = pick('[data-adopt-part]', parts);
+      const chosenSteps = pick('[data-adopt-step]', steps);
+      const wantCautions = document.getElementById('adoptCautions');
+      const st = document.getElementById('adoptStatus');
+      st.className = 'status';
+      st.textContent = 'Adding…';
+      try {
+        const res = await fetch('/projects/' + encodeURIComponent(id) + '/adopt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            parts: chosenParts, steps: chosenSteps,
+            cautions: wantCautions && wantCautions.checked ? cautions : []
+          })
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        project = await res.json();
+        advice = { answer: null, plan: null };
+        render();
+        setStatus('ok', 'Added.');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (e) {
+        st.className = 'status error';
+        st.textContent = 'Could not add it: ' + e.message;
+      }
     }
 
     async function showSettlement() {

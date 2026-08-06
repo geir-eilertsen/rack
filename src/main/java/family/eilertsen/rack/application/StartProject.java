@@ -1,12 +1,10 @@
 package family.eilertsen.rack.application;
 
-import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Project;
 import family.eilertsen.rack.domain.model.ProjectId;
 import family.eilertsen.rack.domain.model.ProjectNote;
 import family.eilertsen.rack.domain.model.ProjectPart;
 import family.eilertsen.rack.domain.model.ProjectStep;
-import family.eilertsen.rack.domain.model.SlotId;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -43,21 +41,8 @@ public class StartProject {
         ProjectId id = projects.freeId(shorten(name));
         Instant now = Instant.now();
 
-        List<ProjectPart> parts = new ArrayList<>();
-        for (Line line : request.parts() == null ? List.<Line>of() : request.parts()) {
-            if (line == null || line.part() == null || line.part().isBlank()) continue;
-            parts.add(new ProjectPart(line.part().strip(), line.qty(),
-                ProjectPart.isStatus(line.status()) ? line.status() : ProjectPart.TO_BUY,
-                line.supplier(), line.search(), line.code(), line.note(),
-                sources(line.from()), null));
-        }
-
-        List<ProjectStep> steps = new ArrayList<>();
-        for (Step step : request.steps() == null ? List.<Step>of() : request.steps()) {
-            if (step == null || step.title() == null || step.title().isBlank()) continue;
-            steps.add(new ProjectStep(step.title().strip(), step.detail(),
-                sources(step.uses()), false, null, null));
-        }
+        List<ProjectPart> parts = PlanShapes.parts(request.parts());
+        List<ProjectStep> steps = PlanShapes.steps(request.steps());
 
         // Where it starts is a fact about the parts, not a choice: nothing to buy
         // means the shopping is already done.
@@ -87,27 +72,6 @@ public class StartProject {
         return first.length() <= 72 ? first : first.substring(0, 72).strip();
     }
 
-    private static List<ProjectPart.ProjectSource> sources(List<Source> given) {
-        List<ProjectPart.ProjectSource> out = new ArrayList<>();
-        for (Source s : given == null ? List.<Source>of() : given) {
-            if (s == null || s.container() == null || s.slot() == null) continue;
-            try {
-                out.add(new ProjectPart.ProjectSource(
-                    new ContainerId(s.container().strip()), new SlotId(s.slot().strip()), s.item()));
-            } catch (IllegalArgumentException e) {
-                // A malformed location is not worth refusing a whole project over.
-            }
-        }
-        return List.copyOf(out);
-    }
-
-    public record Source(String container, String slot, String item) {}
-
-    public record Line(String part, String qty, String status, String supplier,
-                       String search, String code, String note, List<Source> from) {}
-
-    public record Step(String title, String detail, List<Source> uses) {}
-
-    public record Request(String name, String brief, List<Line> parts,
-                          List<Step> steps, List<String> cautions) {}
+    public record Request(String name, String brief, List<PlanShapes.Line> parts,
+                          List<PlanShapes.Step> steps, List<String> cautions) {}
 }

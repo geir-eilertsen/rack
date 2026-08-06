@@ -9,6 +9,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
+  <link rel="stylesheet" href="/assets/advice.css">
   <style>
     .askbox { display: flex; flex-direction: column; gap: .6rem; margin-bottom: 1rem; }
     .askbox textarea { font-family: inherit; font-size: 1.05rem; padding: .8rem 1rem; min-height: 5.5rem;
@@ -23,83 +24,6 @@
       cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent; }
     .examples button:hover { background: var(--primary-soft); border-color: var(--primary); }
 
-    .summary { padding: 1rem; border: 1px solid var(--border); border-left: 3px solid var(--primary);
-      border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); margin-bottom: 1rem; }
-    .summary p { margin: 0; }
-    .summary .considered { margin-top: .6rem; font-size: .8rem; color: var(--muted); }
-
-    .needs { list-style: none; padding: 0; margin: 0; }
-    .need { padding: .85rem 1rem; border: 1px solid var(--border); border-radius: var(--radius);
-      margin-bottom: .6rem; background: var(--card); box-shadow: var(--shadow); }
-    .need .head { display: flex; gap: .6rem; align-items: baseline; }
-    .need .part { font-weight: 700; flex: 1; min-width: 0; }
-    .need .why { margin: .3rem 0 0; font-size: .9rem; color: var(--muted); }
-    .need .note { margin: .5rem 0 0; font-size: .88rem; }
-    /* The state is the point of the row, so it reads before the text does. */
-    .tag { flex: 0 0 auto; font-size: .68rem; letter-spacing: .04em; text-transform: uppercase;
-      font-weight: 700; padding: .2rem .5rem; border-radius: 999px; white-space: nowrap; }
-    .tag.have { background: var(--success-soft); color: var(--success); }
-    .tag.partial { background: #fdf0dd; color: #8a5a12; }
-    .tag.missing { background: var(--error-soft); color: var(--error); }
-    .need.missing { border-left: 3px solid var(--error); }
-    .need.partial { border-left: 3px solid #d99b3c; }
-    .need.have { border-left: 3px solid var(--success); }
-
-    .found { list-style: none; padding: 0; margin: .55rem 0 0; }
-    .found li { display: flex; gap: .5rem; align-items: baseline; padding: .35rem 0; font-size: .9rem;
-      border-top: 1px solid var(--border); }
-    .found li:first-child { border-top: none; }
-    .found a { color: var(--primary-hover); font-family: var(--font-mono); font-weight: 700;
-      text-decoration: none; flex: 0 0 auto; }
-    .found a:hover { text-decoration: underline; }
-    .found .what { flex: 1; min-width: 0; }
-    .counts { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0 0 1rem; font-size: .9rem; }
-    .counts b { font-variant-numeric: tabular-nums; }
-
-    /* The shopping run and the job, once you know what is missing. */
-    .plan-bar { margin: 1.25rem 0; display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
-    .section-head { font-size: 1.15rem; font-weight: 700; margin: 1.75rem 0 .75rem; }
-    .supplier { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
-      box-shadow: var(--shadow); margin-bottom: .75rem; overflow: hidden; }
-    .supplier > .top { padding: .85rem 1rem; border-bottom: 1px solid var(--border); }
-    .supplier .who { display: flex; gap: .5rem; align-items: baseline; }
-    .supplier .who .nm { font-weight: 700; font-size: 1.02rem; flex: 1; min-width: 0; }
-    .reach { flex: 0 0 auto; font-size: .68rem; letter-spacing: .04em; text-transform: uppercase;
-      font-weight: 700; padding: .2rem .5rem; border-radius: 999px; background: var(--primary-soft);
-      color: var(--primary-hover); white-space: nowrap; }
-    .reach.international { background: var(--border); color: var(--muted); }
-    .supplier .why, .supplier .ordering { margin: .35rem 0 0; font-size: .88rem; color: var(--muted); }
-    .lines { list-style: none; padding: 0; margin: 0; }
-    .lines li { padding: .6rem 1rem; border-top: 1px solid var(--border); display: flex; gap: .6rem; align-items: baseline; }
-    .lines li:first-child { border-top: none; }
-    .lines .qty { flex: 0 0 auto; font-family: var(--font-mono); font-weight: 700; color: var(--primary-hover);
-      min-width: 2.5rem; font-variant-numeric: tabular-nums; }
-    .lines .body { flex: 1; min-width: 0; }
-    .lines .what { font-weight: 600; }
-    .lines .search { font-family: var(--font-mono); font-size: .82rem; color: var(--muted); }
-    .lines .code { font-family: var(--font-mono); font-size: .82rem; color: var(--success); }
-    .lines .lnote { display: block; font-size: .85rem; color: var(--muted); margin-top: .15rem; }
-    .supplier .foot { padding: .6rem 1rem; border-top: 1px solid var(--border); background: var(--primary-soft); }
-
-    .steps { list-style: none; counter-reset: step; padding: 0; margin: 0; }
-    .steps li { counter-increment: step; padding: .85rem 1rem .85rem 3rem; position: relative;
-      border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
-      box-shadow: var(--shadow); margin-bottom: .6rem; }
-    .steps li::before { content: counter(step); position: absolute; left: 1rem; top: .85rem;
-      width: 1.4rem; height: 1.4rem; border-radius: 50%; background: var(--primary); color: #fff;
-      font-size: .78rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-    .steps .title { font-weight: 700; }
-    .steps .detail { margin: .3rem 0 0; font-size: .92rem; }
-    .steps .uses { list-style: none; padding: 0; margin: .5rem 0 0; font-size: .85rem; }
-    .steps .uses li { all: unset; display: block; margin-top: .2rem; }
-    .steps .uses a { color: var(--primary-hover); font-family: var(--font-mono); font-weight: 700; text-decoration: none; }
-    .steps .uses a:hover { text-decoration: underline; }
-    /* Hazards go above the steps, because reading them afterwards is no use. */
-    .cautions { padding: .9rem 1rem; border: 1px solid var(--error); border-left-width: 3px;
-      border-radius: var(--radius); background: var(--error-soft); margin-bottom: .9rem; }
-    .cautions h3 { margin: 0 0 .4rem; font-size: .95rem; color: var(--error); }
-    .cautions ul { margin: 0; padding-left: 1.2rem; font-size: .9rem; }
-    .cautions li { margin-bottom: .25rem; }
   </style>
 </head>
 <body>
@@ -132,18 +56,18 @@
   </div>
 
   <script src="/assets/usage.js"></script>
+  <script src="/assets/advice.js"></script>
   <script>
+    const esc = rackAdvice.esc;
     const q = document.getElementById('q');
     const go = document.getElementById('go');
     const status = document.getElementById('status');
     const out = document.getElementById('out');
     const planOut = document.getElementById('planOut');
-    // What the checklist could not find, kept so the plan can be asked for
-    // without retyping the project or paying for the question a second time.
-    let lastAsk = null;
+
     // The answer and the plan as they were rendered. A project is built from what
-    // is on screen rather than by asking again: they have paid for both and read
-    // both, and a plan you have read is the one worth keeping.
+    // is on screen rather than by asking again: both have been paid for and read,
+    // and a plan you have read is the one worth keeping.
     let lastAnswer = null;
     let lastPlan = null;
 
@@ -173,22 +97,17 @@
       const question = q.value.trim();
       if (!question) { q.focus(); return; }
       go.disabled = true;
-      // Say what it is doing and why it takes a moment: it is one call over
-      // everything, which is the thing that makes the answer worth trusting.
+      // Say what it is doing and why it takes a moment: one call over everything,
+      // which is the thing that makes the answer worth trusting.
       setStatus('', 'Reading every item…');
       out.innerHTML = '';
       planOut.innerHTML = '';
-      lastAsk = null;
       lastAnswer = null;
       lastPlan = null;
       try {
-        const res = await fetch('/ask', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question })
-        });
-        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
-        render(await res.json());
+        lastAnswer = await rackAdvice.ask(question);
+        out.innerHTML = rackAdvice.renderAnswer(lastAnswer);
+        addActions();
         setStatus('', '');
         if (window.rackUsage) rackUsage.refresh();
       } catch (e) {
@@ -198,54 +117,23 @@
       }
     }
 
-    function render(a) {
-      lastAnswer = a;
-      const list = a.checklist || [];
-      const n = s => list.filter(x => x.status === s).length;
-      const counts = list.length
-        ? '<div class="counts">'
-          + '<span><b>' + n('have') + '</b> have</span>'
-          + (n('partial') ? '<span><b>' + n('partial') + '</b> partial</span>' : '')
-          + '<span><b>' + n('missing') + '</b> missing</span>'
-          + '</div>'
-        : '';
-
-      out.innerHTML =
-        (a.summary ? '<div class="summary"><p>' + esc(a.summary) + '</p>'
-          // Worth stating: the answer read the whole index, so a thing not
-          // listed as found is a thing the rack really has not got.
-          + '<p class="considered">Read all ' + a.items_considered + ' items in the index.</p></div>' : '')
-        + counts
-        + (list.length
-            ? '<ul class="needs">' + list.map(need).join('') + '</ul>'
-            : '<p class="empty">Nothing to check against that.</p>');
-
-      // Only offer the shopping run when there is something to buy. Finding out
-      // you already have everything is a complete answer, and should not come
-      // with a button that spends money to say so.
-      const toBuy = list.filter(x => x.status !== 'have');
-      lastAsk = toBuy.length ? { project: a.question, needed: toBuy.map(shoppingLine) } : null;
+    function addActions() {
+      const toBuy = rackAdvice.gaps(lastAnswer);
       out.insertAdjacentHTML('beforeend',
         '<div class="plan-bar">'
         + (toBuy.length
             ? '<button class="btn primary" id="planBtn">Plan the order for '
               + toBuy.length + (toBuy.length === 1 ? ' part' : ' parts') + '</button>'
             : '')
-        // Worth keeping even when nothing is missing: the steps and the ticking off
-        // are most of what a project is for.
+        // Worth keeping even when nothing is missing: the steps and the ticking
+        // off are most of what a project is for.
         + '<button class="btn" id="keepBtn">Keep this as a project</button>'
         + '<span class="status" id="planStatus"></span></div>');
       if (toBuy.length) document.getElementById('planBtn').addEventListener('click', plan);
       document.getElementById('keepBtn').addEventListener('click', keep);
     }
 
-    /** The part plus the caveat, since a substitution changes what to order. */
-    function shoppingLine(x) {
-      return x.part + (x.note ? ' — ' + x.note : '');
-    }
-
     async function plan() {
-      if (!lastAsk) return;
       const btn = document.getElementById('planBtn');
       const st = document.getElementById('planStatus');
       btn.disabled = true;
@@ -253,14 +141,13 @@
       st.textContent = 'Grouping by supplier and writing up the job…';
       planOut.innerHTML = '';
       try {
-        const res = await fetch('/plan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(lastAsk)
-        });
-        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
-        lastPlan = await res.json();
-        renderPlan(lastPlan);
+        lastPlan = await rackAdvice.plan(lastAnswer.question,
+          rackAdvice.gaps(lastAnswer).map(rackAdvice.shoppingLine));
+        planOut.innerHTML = rackAdvice.renderPlan(lastPlan)
+          + '<div class="plan-bar"><button class="btn primary" id="keepBtn2">'
+          + 'Start this project — keep the list and tick it off</button>'
+          + '<span class="status" id="keepStatus"></span></div>';
+        document.getElementById('keepBtn2').addEventListener('click', keep);
         st.textContent = '';
         if (window.rackUsage) rackUsage.refresh();
         planOut.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -272,74 +159,20 @@
       }
     }
 
-    function renderPlan(p) {
-      const suppliers = p.suppliers || [];
-      const steps = p.steps || [];
-      const cautions = p.cautions || [];
-      planOut.innerHTML =
-        (suppliers.length
-          ? '<div class="section-head">What to buy, and where</div>'
-            + suppliers.map(supplier).join('')
-          : '')
-        + (cautions.length
-          ? '<div class="section-head">How to do it</div>'
-            + '<div class="cautions"><h3>Before you start</h3><ul>'
-            + cautions.map(c => '<li>' + esc(c) + '</li>').join('') + '</ul></div>'
-          : (steps.length ? '<div class="section-head">How to do it</div>' : ''))
-        + (steps.length ? '<ul class="steps">' + steps.map(step).join('') + '</ul>' : '')
-        + '<div class="plan-bar"><button class="btn primary" id="keepBtn2">'
-        + 'Start this project — keep the list and tick it off</button>'
-        + '<span class="status" id="keepStatus"></span></div>';
-      document.getElementById('keepBtn2').addEventListener('click', keep);
-    }
-
-    /**
-     * Builds the project from the plan where there is one and the checklist
-     * otherwise. Taken from the plan's own supplier lines rather than matched
-     * against the checklist by name — the two describe the same parts in
-     * different words, and guessing which line is which would put the wrong
-     * order code beside the wrong part.
-     */
     async function keep() {
       if (!lastAnswer) return;
       const st = document.getElementById('keepStatus') || document.getElementById('planStatus');
       const btns = [document.getElementById('keepBtn'), document.getElementById('keepBtn2')].filter(Boolean);
       btns.forEach(b => b.disabled = true);
       if (st) { st.className = 'status'; st.textContent = 'Keeping it…'; }
-
-      const checklist = lastAnswer.checklist || [];
-      const parts = [];
-      // What is already on the shelf, with the drawers it is in.
-      for (const need of checklist.filter(x => x.status === 'have' || x.status === 'partial')) {
-        parts.push({
-          part: need.part, status: 'in_stock', note: need.note,
-          from: (need.found || []).map(f => ({ container: f.container, slot: f.slot, item: f.item }))
-        });
-      }
-      if (lastPlan) {
-        for (const s of lastPlan.suppliers || []) {
-          for (const l of s.items || []) {
-            parts.push({ part: l.part, qty: l.qty, status: 'to_buy', supplier: s.name,
-                         search: l.search, code: l.code, note: l.note, from: [] });
-          }
-        }
-      } else {
-        for (const need of checklist.filter(x => x.status === 'missing')) {
-          parts.push({ part: need.part, status: 'to_buy', note: need.note, from: [] });
-        }
-      }
-
-      const steps = ((lastPlan && lastPlan.steps) || []).map(s => ({
-        title: s.title, detail: s.detail,
-        uses: (s.uses || []).map(u => ({ container: u.container, slot: u.slot, item: u.item }))
-      }));
-
       try {
         const res = await fetch('/projects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            brief: lastAnswer.question, parts, steps,
+            brief: lastAnswer.question,
+            parts: rackAdvice.partsFrom(lastAnswer, lastPlan),
+            steps: rackAdvice.stepsFrom(lastPlan),
             cautions: (lastPlan && lastPlan.cautions) || []
           })
         });
@@ -352,89 +185,10 @@
       }
     }
 
-    function supplier(s) {
-      const reach = ['local', 'national', 'international'].includes(s.reach) ? s.reach : 'national';
-      const lines = s.items || [];
-      // Pasteable, because the next thing you do with a list is put it somewhere.
-      const plain = lines.map(l => (l.qty ? l.qty + '× ' : '') + l.part
-        + (l.code ? '  [' + l.code + ']' : '') + (l.search ? '  (' + l.search + ')' : '')).join('\n');
-      return '<div class="supplier">'
-        + '<div class="top"><div class="who"><span class="nm">' + esc(s.name || '') + '</span>'
-          + '<span class="reach ' + reach + '">' + reach + '</span></div>'
-          + (s.why ? '<p class="why">' + esc(s.why) + '</p>' : '') + '</div>'
-        + '<ul class="lines">' + lines.map(l =>
-            '<li><span class="qty">' + esc(l.qty || '') + '</span><span class="body">'
-            + '<span class="what">' + esc(l.part || '') + '</span>'
-            + (l.code ? ' <span class="code">' + esc(l.code) + '</span>' : '')
-            + (l.search ? '<br><span class="search">search: ' + esc(l.search) + '</span>' : '')
-            + (l.note ? '<span class="lnote">' + esc(l.note) + '</span>' : '')
-            + '</span></li>').join('') + '</ul>'
-        + '<div class="foot">'
-          + (s.ordering ? '<p class="ordering">' + esc(s.ordering) + '</p>' : '')
-          + '<button class="btn" type="button" data-copy="' + esc(plain) + '">Copy this list</button>'
-        + '</div></div>';
-    }
-
-    function step(s) {
-      const uses = s.uses || [];
-      return '<li><span class="title">' + esc(s.title || '') + '</span>'
-        + (s.detail ? '<p class="detail">' + esc(s.detail) + '</p>' : '')
-        + (uses.length
-            ? '<ul class="uses">' + uses.map(u =>
-                '<li>Uses <a href="/put.html?c=' + encodeURIComponent(u.container)
-                + '&s=' + encodeURIComponent(u.slot) + '">' + esc(u.container) + ' · ' + esc(u.slot)
-                + '</a> — ' + esc(u.item || '') + '</li>').join('') + '</ul>'
-            : '')
-        + '</li>';
-    }
-
-    // One listener for every copy button, present and future.
-    document.addEventListener('click', async e => {
-      const btn = e.target.closest('[data-copy]');
-      if (!btn) return;
-      try {
-        await navigator.clipboard.writeText(btn.dataset.copy);
-        const was = btn.textContent;
-        btn.textContent = 'Copied';
-        setTimeout(() => { btn.textContent = was; }, 1400);
-      } catch (err) {
-        // Clipboard refused (no permission, or not a secure context). Showing the
-        // text is the fallback that always works.
-        const pre = document.createElement('pre');
-        pre.textContent = btn.dataset.copy;
-        pre.style.cssText = 'white-space:pre-wrap;font-size:.85rem;margin:.5rem 0 0';
-        btn.replaceWith(pre);
-      }
-    });
-
-    function need(x) {
-      const s = ['have', 'partial', 'missing'].includes(x.status) ? x.status : 'missing';
-      const found = (x.found || []);
-      return '<li class="need ' + s + '">'
-        + '<div class="head">'
-          + '<span class="part">' + esc(x.part || '') + '</span>'
-          + '<span class="tag ' + s + '">' + s + '</span>'
-        + '</div>'
-        + (x.why ? '<p class="why">' + esc(x.why) + '</p>' : '')
-        + (found.length
-            ? '<ul class="found">' + found.map(f =>
-                '<li><a href="/put.html?c=' + encodeURIComponent(f.container)
-                  + '&s=' + encodeURIComponent(f.slot) + '">'
-                  + esc(f.container) + ' · ' + esc(f.slot) + '</a>'
-                + '<span class="what">' + esc(f.item || '')
-                + (f.note ? ' — ' + esc(f.note) : '') + '</span></li>').join('')
-              + '</ul>'
-            : '')
-        + (x.note ? '<p class="note">' + esc(x.note) + '</p>' : '')
-        + '</li>';
-    }
-
     function setStatus(kind, text) {
       status.className = 'status' + (kind ? ' ' + kind : '');
       status.textContent = text;
     }
-
-    function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   </script>
 </body>
 </html>
