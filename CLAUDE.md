@@ -167,6 +167,7 @@ Committing after each write gives history, per-drawer undo, and free multi-site 
 
 - `/` → index page (hub)
 - `/identify.html`, `POST /identify` → identify a part from a photo, no persistence
+- `/ask.html`, `POST /ask` → one question about the whole rack (project checklist); the entire index goes in the prompt
 - `/find.html`, `GET /search?q=` → search; `&smart=true` widens a query that came up short (see Search above). `POST /search/photo` searches by photo instead of by typing. All three return `{query, expanded_terms, hits}`
 - `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state. The photo endpoint (and `POST /suggest`) take **repeated `photo` parts** — one part is just a batch of one.
 - `/containers.html`, `POST /c` (register), `PATCH /c/{container}` (name + label scale), `DELETE /c/{container}` → maintain containers; also hosts registration and the label flow below
@@ -194,6 +195,18 @@ The consequence: **printed labels and consumed stickers are different numbers**,
 **And the sheet can be set by hand.** A part-used sheet is a physical thing the app cannot see, so the labels panel takes a start position, defaulting to the ledger's answer. Count the stickers already gone, top-left to bottom-right, and say which is next.
 
 **Sheet position is global, printing is per container.** A sheet of paper is a shared physical resource, so `resolveOffset` counts stickers consumed across *every* container: print 8 labels for a 0.4-scale container (4 stickers) and the next container's run starts at position 5, whichever container that is. There is deliberately no "print everything" run — not every container gets labels, so printing stays a per-container action. Packing only ever combines labels within one container's run, so a part-filled sticker is never continued by the next container; sharing happens at sticker granularity, not inside one.
+
+### Asking about a project
+
+`POST /ask` (`AskAboutRack`) answers a question about the whole rack rather than one item: *"I am restoring a Quad 606 amplifier. Do I have all the parts?"* It returns a checklist — what the job needs, which drawer each part is in, and what is missing — and `ask.html` renders it with the missing things first.
+
+**The whole index goes into the prompt, and that is the design.** All 152 items with every field come to ~7,400 tokens: two cents at Sonnet rates, and a rounding error against a 1M window. Retrieval exists to solve a corpus that does not fit, and this one fits a hundred times over, so there is no chunking, no top-k and no similarity threshold to tune.
+
+**It is also the only version of this that can be trusted.** The question is *what am I missing*, and a retrieval step that drops one item answers it by telling you to buy something you already own — a false negative invisible in the answer. Handing over everything cannot fail that way. This is the direct argument against vector search here (#29): the failure mode retrieval introduces is exactly the failure mode this question cannot tolerate. If the rack ever outgrows the window, the honest fix is to say so, not to quietly start sampling.
+
+**The model brings what a job needs; the rack brings what is in the drawers.** Those are different kinds of knowledge and the prompt separates them — component values and quantities for a Quad 606 recap are the model's to know, and only the index can say what is on the shelf. So every claim of possession must cite a container and slot, and `AskAboutRack.verify` drops any citation naming an item that drawer does not hold, matching case- and whitespace-insensitively because the model echoes a label rather than a key. A `have` whose every citation was invented is rewritten to `missing` — the one failure this cannot have is sending someone to a drawer for a part that was never in it.
+
+Each line carries how long ago its drawer was last checked, so an answer leaning on a stale reading can say so. Drift is the failure the whole app is built against, and an answer that hides it is worse than no answer.
 
 ### Resyncing a drawer
 

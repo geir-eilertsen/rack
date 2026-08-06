@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rack — ask about a project</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/rack.svg">
+  <link rel="apple-touch-icon" href="/assets/rack.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#d97747">
+  <link rel="stylesheet" href="/assets/rack.css">
+  <style>
+    .askbox { display: flex; flex-direction: column; gap: .6rem; margin-bottom: 1rem; }
+    .askbox textarea { font-family: inherit; font-size: 1.05rem; padding: .8rem 1rem; min-height: 5.5rem;
+      resize: vertical; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+      background: var(--card); color: inherit; }
+    .askbox .row { display: flex; gap: .5rem; align-items: center; }
+    .askbox .row .btn { flex: 0 0 auto; }
+    /* Openers, because the hard part of this is knowing it can be asked at all. */
+    .examples { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 1.25rem; }
+    .examples button { padding: .35rem .7rem; border: 1px solid var(--border); border-radius: 999px;
+      background: var(--card); color: var(--primary-hover); font-size: .82rem; font-family: inherit;
+      cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent; }
+    .examples button:hover { background: var(--primary-soft); border-color: var(--primary); }
+
+    .summary { padding: 1rem; border: 1px solid var(--border); border-left: 3px solid var(--primary);
+      border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); margin-bottom: 1rem; }
+    .summary p { margin: 0; }
+    .summary .considered { margin-top: .6rem; font-size: .8rem; color: var(--muted); }
+
+    .needs { list-style: none; padding: 0; margin: 0; }
+    .need { padding: .85rem 1rem; border: 1px solid var(--border); border-radius: var(--radius);
+      margin-bottom: .6rem; background: var(--card); box-shadow: var(--shadow); }
+    .need .head { display: flex; gap: .6rem; align-items: baseline; }
+    .need .part { font-weight: 700; flex: 1; min-width: 0; }
+    .need .why { margin: .3rem 0 0; font-size: .9rem; color: var(--muted); }
+    .need .note { margin: .5rem 0 0; font-size: .88rem; }
+    /* The state is the point of the row, so it reads before the text does. */
+    .tag { flex: 0 0 auto; font-size: .68rem; letter-spacing: .04em; text-transform: uppercase;
+      font-weight: 700; padding: .2rem .5rem; border-radius: 999px; white-space: nowrap; }
+    .tag.have { background: var(--success-soft); color: var(--success); }
+    .tag.partial { background: #fdf0dd; color: #8a5a12; }
+    .tag.missing { background: var(--error-soft); color: var(--error); }
+    .need.missing { border-left: 3px solid var(--error); }
+    .need.partial { border-left: 3px solid #d99b3c; }
+    .need.have { border-left: 3px solid var(--success); }
+
+    .found { list-style: none; padding: 0; margin: .55rem 0 0; }
+    .found li { display: flex; gap: .5rem; align-items: baseline; padding: .35rem 0; font-size: .9rem;
+      border-top: 1px solid var(--border); }
+    .found li:first-child { border-top: none; }
+    .found a { color: var(--primary-hover); font-family: var(--font-mono); font-weight: 700;
+      text-decoration: none; flex: 0 0 auto; }
+    .found a:hover { text-decoration: underline; }
+    .found .what { flex: 1; min-width: 0; }
+    .counts { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0 0 1rem; font-size: .9rem; }
+    .counts b { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="app-header">
+      <a class="back" href="/">← Home</a>
+      <a class="brand" href="/">
+        <img class="logo" src="/assets/rack.svg" alt="">
+        <span class="name">rack</span>
+      </a>
+    </header>
+
+    <h1>Ask about a project</h1>
+    <p class="callout">Say what you're building or fixing. Every item in every container is read
+      — nothing is sampled — and you get back what you have, which drawer it's in, and what's missing.</p>
+
+    <div class="askbox">
+      <textarea id="q" placeholder="I am restoring a Quad 606 amplifier. Do I have all the parts?"
+        aria-label="Your question"></textarea>
+      <div class="row">
+        <button class="btn primary" id="go">Ask</button>
+        <span class="status" id="status"></span>
+      </div>
+    </div>
+
+    <div class="examples" id="examples"></div>
+
+    <div id="out"></div>
+  </div>
+
+  <script src="/assets/usage.js"></script>
+  <script>
+    const q = document.getElementById('q');
+    const go = document.getElementById('go');
+    const status = document.getElementById('status');
+    const out = document.getElementById('out');
+
+    const EXAMPLES = [
+      'I am restoring a Quad 606 amplifier. Do I have all the parts?',
+      'What do I need to build a bench power supply?',
+      'Can I repair a pair of headphones with a broken cable?',
+      'What am I missing to solder surface-mount parts?'
+    ];
+
+    const examples = document.getElementById('examples');
+    examples.innerHTML = EXAMPLES.map((e, i) =>
+      '<button type="button" data-i="' + i + '">' + esc(e) + '</button>').join('');
+    examples.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+      q.value = EXAMPLES[Number(b.dataset.i)];
+      ask();
+    }));
+
+    go.addEventListener('click', ask);
+    // Enter sends, newline needs a modifier — the box is multi-line because a
+    // project takes a sentence or two to describe, not because it wants prose.
+    q.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
+    });
+
+    async function ask() {
+      const question = q.value.trim();
+      if (!question) { q.focus(); return; }
+      go.disabled = true;
+      // Say what it is doing and why it takes a moment: it is one call over
+      // everything, which is the thing that makes the answer worth trusting.
+      setStatus('', 'Reading every item…');
+      out.innerHTML = '';
+      try {
+        const res = await fetch('/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        render(await res.json());
+        setStatus('', '');
+        if (window.rackUsage) rackUsage.refresh();
+      } catch (e) {
+        setStatus('error', 'Could not answer that: ' + e.message);
+      } finally {
+        go.disabled = false;
+      }
+    }
+
+    function render(a) {
+      const list = a.checklist || [];
+      const n = s => list.filter(x => x.status === s).length;
+      const counts = list.length
+        ? '<div class="counts">'
+          + '<span><b>' + n('have') + '</b> have</span>'
+          + (n('partial') ? '<span><b>' + n('partial') + '</b> partial</span>' : '')
+          + '<span><b>' + n('missing') + '</b> missing</span>'
+          + '</div>'
+        : '';
+
+      out.innerHTML =
+        (a.summary ? '<div class="summary"><p>' + esc(a.summary) + '</p>'
+          // Worth stating: the answer read the whole index, so a thing not
+          // listed as found is a thing the rack really has not got.
+          + '<p class="considered">Read all ' + a.items_considered + ' items in the index.</p></div>' : '')
+        + counts
+        + (list.length
+            ? '<ul class="needs">' + list.map(need).join('') + '</ul>'
+            : '<p class="empty">Nothing to check against that.</p>');
+    }
+
+    function need(x) {
+      const s = ['have', 'partial', 'missing'].includes(x.status) ? x.status : 'missing';
+      const found = (x.found || []);
+      return '<li class="need ' + s + '">'
+        + '<div class="head">'
+          + '<span class="part">' + esc(x.part || '') + '</span>'
+          + '<span class="tag ' + s + '">' + s + '</span>'
+        + '</div>'
+        + (x.why ? '<p class="why">' + esc(x.why) + '</p>' : '')
+        + (found.length
+            ? '<ul class="found">' + found.map(f =>
+                '<li><a href="/put.html?c=' + encodeURIComponent(f.container)
+                  + '&s=' + encodeURIComponent(f.slot) + '">'
+                  + esc(f.container) + ' · ' + esc(f.slot) + '</a>'
+                + '<span class="what">' + esc(f.item || '')
+                + (f.note ? ' — ' + esc(f.note) : '') + '</span></li>').join('')
+              + '</ul>'
+            : '')
+        + (x.note ? '<p class="note">' + esc(x.note) + '</p>' : '')
+        + '</li>';
+    }
+
+    function setStatus(kind, text) {
+      status.className = 'status' + (kind ? ' ' + kind : '');
+      status.textContent = text;
+    }
+
+    function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  </script>
+</body>
+</html>

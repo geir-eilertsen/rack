@@ -57,6 +57,9 @@ rack:
     # few tenths of a cent for a question you ask by hand.
     ask-model: ${RACK_ASK_MODEL:claude-sonnet-4-6}
     ask-max-tokens: 2048
+    # A question about the whole rack answers with a checklist rather than a
+    # paragraph, and a restoration has a lot of lines in it.
+    rack-question-max-tokens: 4096
 
     # Bridging "isolating tape" to "electrical tape" is a synonym lookup against
     # a list of words we hand it, not a reasoning job, and it sits in front of a
