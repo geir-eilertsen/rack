@@ -67,7 +67,8 @@ public class StartProject {
         Project project = new Project(id, shorten(name).strip(), request.brief(), status,
             now, now, null, List.copyOf(parts), List.copyOf(steps),
             request.cautions() == null ? List.of() : List.copyOf(request.cautions()),
-            List.of(ProjectNote.app("Project started — " + parts.size() + " parts, " + steps.size() + " steps.")));
+            List.of(ProjectNote.app("Project started — " + parts.size() + " parts, " + steps.size() + " steps.")),
+            List.of());
 
         projects.save(project);
         return project;

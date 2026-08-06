@@ -37,7 +37,9 @@ public record Project(
     List<ProjectStep> steps,
     List<String> cautions,
     /** What happened, oldest first. A project's memory of itself. */
-    List<ProjectNote> log
+    List<ProjectNote> log,
+    /** Service manuals, schematics, photographs of the board before it was stripped. */
+    List<ProjectDocument> documents
 ) {
     public static final String PLANNING = "planning";
     public static final String SHOPPING = "shopping";
@@ -58,6 +60,9 @@ public record Project(
         steps = steps == null ? List.of() : List.copyOf(steps);
         cautions = cautions == null ? List.of() : List.copyOf(cautions);
         log = log == null ? List.of() : List.copyOf(log);
+        // Absent from every project file written before documents existed. No
+        // migration, per the storage model: a missing field reads as none.
+        documents = documents == null ? List.of() : List.copyOf(documents);
     }
 
     public static boolean isStatus(String s) {

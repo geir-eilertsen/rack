@@ -56,7 +56,7 @@ public class RunProject {
         // Nor does ticking the last step finish a project: putting the lid back on
         // and knowing it works are different, and only the user can say the second.
         return saved(new Project(p.id(), p.name(), p.brief(), p.status(), p.startedAt(), now,
-            p.finishedAt(), p.parts(), List.copyOf(steps), p.cautions(), log));
+            p.finishedAt(), p.parts(), List.copyOf(steps), p.cautions(), log, p.documents()));
     }
 
     public Project noteStep(ProjectId id, int index, String note) {
@@ -65,7 +65,7 @@ public class RunProject {
         checkRange(index, steps.size(), "Step");
         steps.set(index, steps.get(index).annotated(note == null || note.isBlank() ? null : note.strip()));
         return saved(new Project(p.id(), p.name(), p.brief(), p.status(), p.startedAt(), Instant.now(),
-            p.finishedAt(), p.parts(), List.copyOf(steps), p.cautions(), p.log()));
+            p.finishedAt(), p.parts(), List.copyOf(steps), p.cautions(), p.log(), p.documents()));
     }
 
     public Project setPartStatus(ProjectId id, int index, String status, Integer usedQty) {
@@ -86,7 +86,7 @@ public class RunProject {
         if (!newStatus.equals(p.status())) log = append(log, "Everything is here — on to the build.");
 
         return saved(new Project(p.id(), p.name(), p.brief(), newStatus, p.startedAt(), Instant.now(),
-            p.finishedAt(), List.copyOf(parts), p.steps(), p.cautions(), log));
+            p.finishedAt(), List.copyOf(parts), p.steps(), p.cautions(), log, p.documents()));
     }
 
     public Project setStatus(ProjectId id, String status) {
@@ -102,14 +102,15 @@ public class RunProject {
         // longer true of anything.
         Instant finished = Project.DONE.equals(next) ? now : null;
         return saved(new Project(p.id(), p.name(), p.brief(), next, p.startedAt(), now, finished,
-            p.parts(), p.steps(), p.cautions(), append(p, "Status: " + p.status() + " → " + next)));
+            p.parts(), p.steps(), p.cautions(), append(p, "Status: " + p.status() + " → " + next),
+            p.documents()));
     }
 
     public Project rename(ProjectId id, String name) {
         Project p = require(id);
         if (name == null || name.isBlank()) throw new IllegalArgumentException("name is required");
         return saved(new Project(p.id(), name.strip(), p.brief(), p.status(), p.startedAt(),
-            Instant.now(), p.finishedAt(), p.parts(), p.steps(), p.cautions(), p.log()));
+            Instant.now(), p.finishedAt(), p.parts(), p.steps(), p.cautions(), p.log(), p.documents()));
     }
 
     public Project addNote(ProjectId id, String text) {
@@ -118,7 +119,7 @@ public class RunProject {
         List<ProjectNote> log = new ArrayList<>(p.log());
         log.add(ProjectNote.user(text.strip()));
         return saved(new Project(p.id(), p.name(), p.brief(), p.status(), p.startedAt(), Instant.now(),
-            p.finishedAt(), p.parts(), p.steps(), p.cautions(), List.copyOf(log)));
+            p.finishedAt(), p.parts(), p.steps(), p.cautions(), List.copyOf(log), p.documents()));
     }
 
     public void delete(ProjectId id) {

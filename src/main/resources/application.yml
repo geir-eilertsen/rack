@@ -21,7 +21,10 @@ spring:
       fail-on-unknown-properties: false
   servlet:
     multipart:
-      max-file-size: 20MB
+      # A service manual runs to tens of megabytes of scanned pages, and a
+      # rejected upload of one is worse than a generous cap on a box nobody
+      # else can reach. Photographs are resized to well under a megabyte first.
+      max-file-size: 60MB
       # A slot is filed as a batch of photos in one request, so the request cap
       # has to be a multiple of the per-file cap rather than equal to it.
       max-request-size: 100MB

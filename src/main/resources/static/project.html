@@ -109,6 +109,32 @@
       .pl-act { margin-left: auto; }
     }
 
+    /* Reference material, consulted throughout rather than at one step, so it
+       sits above the parts. */
+    .docs { list-style: none; padding: 0; margin: 0; }
+    .docs > li { display: flex; gap: .6rem; align-items: center; padding: .55rem .9rem;
+      border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
+      box-shadow: var(--shadow); margin-bottom: .4rem; }
+    .docs .dt { flex: 1; min-width: 0; }
+    .docs .dt a { color: var(--primary-hover); font-weight: 600; text-decoration: none;
+      overflow-wrap: anywhere; }
+    .docs .dt a:hover { text-decoration: underline; }
+    .docs .dm { display: block; font-size: .78rem; color: var(--muted); margin-top: .1rem; }
+    .docs .drop { flex: 0 0 auto; background: transparent; border: none; color: var(--error);
+      font-size: 1.1rem; line-height: 1; cursor: pointer; padding: .2rem .35rem; }
+    .docadd { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: .5rem 0 0; }
+    .docadd .pick { display: inline-flex; }
+    /* Searches, not links to a document. The app cannot reach the internet and
+       neither can the model, so anything claiming to be the manual's address
+       would be a guess. */
+    .look { margin: .9rem 0 0; padding: .7rem .9rem; border: 1px dashed var(--border-strong);
+      border-radius: var(--radius); font-size: .85rem; }
+    .look .lh { color: var(--muted); }
+    .look .ls { display: inline-flex; flex-wrap: wrap; gap: .35rem; margin-top: .4rem; }
+    .look .ls a { padding: .3rem .6rem; border: 1px solid var(--border); border-radius: 999px;
+      background: var(--card); color: var(--primary-hover); text-decoration: none; font-size: .82rem; }
+    .look .ls a:hover { background: var(--primary-soft); border-color: var(--primary); }
+
     .log { list-style: none; padding: 0; margin: 0; font-size: .88rem; }
     .log li { padding: .4rem 0; border-top: 1px solid var(--border); display: flex; gap: .6rem; }
     .log li:first-child { border-top: none; }
@@ -218,6 +244,10 @@
               + p.cautions.map(c => '<li>' + esc(c) + '</li>').join('') + '</ul></div>'
             : '')
 
+        + '<div class="section-head">Documents'
+          + ((p.documents || []).length ? ' <span class="of">' + p.documents.length + '</span>' : '') + '</div>'
+        + documentsBlock(p)
+
         + (parts.length
             ? '<div class="section-head">Parts <span class="of">'
               + parts.filter(x => x.status === 'to_buy' || x.status === 'ordered').length + ' still to come</span></div>'
@@ -244,6 +274,69 @@
           + '<button class="btn" id="noteBtn">Add</button></div>';
 
       wire();
+    }
+
+    /**
+     * Kept files, and honest ways to go looking for the ones not kept yet.
+     *
+     * <p>Step one of this plan is "download the service manual". Keeping it here
+     * is so step one never happens twice — and so the schematic sits beside the
+     * drawer links rather than in whichever downloads folder it landed in.
+     */
+    function documentsBlock(p) {
+      const docs = p.documents || [];
+      return (docs.length
+          ? '<ul class="docs">' + docs.map(docRow).join('') + '</ul>'
+          : '<p class="empty">Nothing kept yet — the manual, the schematic, a photo of the board before you stripped it.</p>')
+        + '<div class="docadd">'
+          + '<label class="btn pick">Add a document'
+          + '<input type="file" id="docFile" hidden accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,image/*,application/pdf">'
+          + '</label>'
+          + '<span class="status" id="docStatus"></span>'
+        + '</div>'
+        + lookBlock(p.name);
+    }
+
+    function docRow(d) {
+      return '<li><span class="dt">'
+        + '<a href="/documents/' + encodeURIComponent(d.filename) + '" target="_blank" rel="noopener">'
+        + esc(d.title) + '</a>'
+        + '<span class="dm">' + size(d.size) + ' · kept ' + rackProject.when(d.added_at, '').trim() + '</span>'
+        + '</span>'
+        + '<button class="drop" type="button" title="Remove this document" data-doc="'
+        + esc(d.filename) + '">×</button></li>';
+    }
+
+    function size(bytes) {
+      if (bytes == null) return 'unknown size';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' kB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    /**
+     * Searches built from the project's name, not addresses of documents.
+     *
+     * <p>rack cannot reach the internet, and neither can the model that writes
+     * the plans — asked where to buy compound it answered "I can't browse the
+     * internet, but here are reliable sources". A list of URLs from something
+     * that cannot open one is a list of guesses, and being sent where the manual
+     * is not is worse than not being sent. A search box always exists.
+     */
+    function lookBlock(name) {
+      const q = encodeURIComponent((name || '').trim());
+      if (!q) return '';
+      const LOOKS = [
+        ['service manual', 'https://duckduckgo.com/?q=' + q + '+service+manual'],
+        ['schematic (PDF)', 'https://duckduckgo.com/?q=' + q + '+schematic+filetype%3Apdf'],
+        ['on Google', 'https://www.google.com/search?q=' + q + '+service+manual+pdf']
+      ];
+      return '<div class="look"><span class="lh">Haven\'t got the manual? These are searches for '
+        + '<strong>' + esc(name) + '</strong> — rack can\'t fetch documents, so where to look is a '
+        + 'search box, not a link it made up.</span>'
+        + '<span class="ls">' + LOOKS.map(([label, url]) =>
+            '<a href="' + url + '" target="_blank" rel="noopener">' + esc(label) + '</a>').join('')
+        + '</span></div>';
     }
 
     const HERE = 'Already in the rack';
@@ -392,6 +485,36 @@
       });
 
       document.getElementById('settleBtn').addEventListener('click', showSettlement);
+
+      const docFile = document.getElementById('docFile');
+      if (docFile) docFile.addEventListener('change', () => upload(docFile));
+      document.querySelectorAll('[data-doc]').forEach(b => b.addEventListener('click', () => {
+        if (confirm('Remove this document? The file goes unless another project keeps it too.')) {
+          send('/documents/' + encodeURIComponent(b.dataset.doc), 'DELETE');
+        }
+      }));
+    }
+
+    async function upload(input) {
+      const file = input.files && input.files[0];
+      input.value = '';
+      if (!file) return;
+      const st = document.getElementById('docStatus');
+      st.className = 'status';
+      st.textContent = 'Keeping ' + file.name + '…';
+      const form = new FormData();
+      form.append('document', file);
+      try {
+        const res = await fetch('/projects/' + encodeURIComponent(id) + '/documents',
+          { method: 'POST', body: form });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        project = await res.json();
+        render();
+        setStatus('ok', 'Kept ' + file.name + '.');
+      } catch (e) {
+        st.className = 'status error';
+        st.textContent = 'Could not keep it: ' + e.message;
+      }
     }
 
     // One listener for every copy button, including ones drawn later.

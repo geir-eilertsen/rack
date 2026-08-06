@@ -62,6 +62,7 @@ Small-parts inventory system. Photograph the contents of a slot in a physical st
 Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all swappable:
 
 - `ImageStore` — persists photographs to one flat folder for the whole rack
+- `DocumentStore` — the same, for manuals and schematics kept with a project
 - `PartExtractor` — one vision-model call that turns a batch of photos into `List<Extraction>` (Spring AI)
 - `PartIndex` — read/write of slot state; search
 
@@ -110,8 +111,10 @@ Order of magnitude: ~60 slots × ~20 items = ~1,200 items per container. That's 
 data/
   photos/                # every photograph, for the whole rack
     2026-08-04-1712.jpg
+  documents/                    # service manuals, schematics — flat, like photos
+    Quad-405-2-606-707-service-manual.pdf
   projects/
-    quad-606-restoration.json   # one job of work: parts, steps, cautions, log
+    quad-606-restoration.json   # one job of work: parts, steps, cautions, log, documents
   <container>/
     <slot>.json          # slot state (items, last_verified, printed_at)
     labels/
@@ -179,7 +182,7 @@ Committing after each write gives history, per-drawer undo, and free multi-site 
 
 - `/` → index page (hub)
 - `/identify.html`, `POST /identify` → identify a part from a photo, no persistence
-- `/projects.html`, `/project.html`, `GET|POST /projects`, `GET|PATCH|DELETE /projects/{id}`, `PATCH /projects/{id}/steps/{n}`, `PATCH /projects/{id}/parts/{n}`, `POST /projects/{id}/notes`, `GET|POST /projects/{id}/settle` → a job of work, tracked and settled against stock
+- `/projects.html`, `/project.html`, `GET|POST /projects`, `GET|PATCH|DELETE /projects/{id}`, `PATCH /projects/{id}/steps/{n}`, `PATCH /projects/{id}/parts/{n}`, `POST /projects/{id}/notes`, `GET|POST /projects/{id}/settle`, `POST|PATCH|DELETE /projects/{id}/documents` → a job of work, tracked and settled against stock
 - `/ask.html`, `POST /ask` → one question about the whole rack (project checklist); the entire index goes in the prompt. `POST /plan` turns the gaps into per-supplier shopping lists plus steps for the job
 - `/find.html`, `GET /search?q=` → search; `&smart=true` widens a query that came up short (see Search above). `POST /search/photo` searches by photo instead of by typing. All three return `{query, expanded_terms, hits}`
 - `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state. The photo endpoint (and `POST /suggest`) take **repeated `photo` parts** — one part is just a batch of one.
@@ -248,6 +251,14 @@ Built from what is already on screen. `ask.html` offers **Keep this as a project
 **The parts list is grouped by supplier, because that is what it is for.** Eighteen of the Quad 606's lines come from Farnell, and a card each — repeating "Farnell (element14) — Norwegian account" eighteen times, with a 250-character caveat underneath in full — printed one fact eighteen times and lost the parts among it. One card per supplier now, hairline rows inside, the supplier named once with a Copy button beside it, and each caveat behind a `why / caveats` disclosure: worth keeping, not worth reading twenty times. Groups still owing something come first.
 
 **Having no supplier is not the same as being on the shelf.** The assorted-capacitors line came off the checklist with no supplier and was then marked *ordered*, and it sat under a heading reading "Already in the rack" — the group name contradicting the row beneath it. Rows with no supplier now split by status: `in_stock` and `used` are *Already in the rack*, everything else is *Still to source*.
+
+**Documents are stored, not linked.** A service manual, a schematic, a photograph of the board before it was stripped: `POST /projects/{id}/documents` keeps the file in `data/documents/` and `GET /documents/{filename}` serves it inline, because a manual is for reading at the bench rather than downloading again every time you check a resistor value. Step one of the Quad 606 plan is *download the service manual*; the point of keeping it is that step one never happens twice.
+
+**rack does not offer links to documents, because it cannot check one.** There is no web access anywhere in the app, and the model knows it — asked where to buy compound it answered "I can't browse the internet, but here are reliable sources". URLs from something that cannot open one are guesses, and being sent where the manual is not is worse than not being sent. So the page offers *searches* built from the project's name (a search box always exists) and the finding stays the user's errand. Same rule as `vouched` order codes and `keepReal` citations.
+
+Documents live flat in one folder with one owner, exactly like photographs: `KeepDocuments.inUse()` is the union of what every project names, `ForgetUnusedDocuments` sweeps at boot, deleting a project takes its documents unless another project holds them. The stored name keeps the uploaded one, cleaned to `[A-Za-z0-9._-]` — "Quad-405-2-606-707-service-manual.pdf" is worth recognising in a listing six months later where a timestamp is not — and a collision gets a `_2` suffix, since two revisions of one manual are two documents. `max-file-size` is 60MB: a scanned manual runs to tens of megabytes and a rejected upload is worse than a generous cap on a box nobody else can reach.
+
+**Normalise both sides of a path guard.** `FilesystemDocumentStore` checked `resolved.startsWith(dir)` with `dir` built by `toAbsolutePath()` and `resolved` by `normalize()`. `rack.data-dir` is `./data`, so the `.` survived on one side and not the other, and the guard rejected *every* legal filename in the container while passing every test — `@TempDir` hands out a path with no `.` in it. The test now builds a store on `…/./sub/../nested` deliberately.
 
 **Every change writes to the log.** That is most of the reason to store a project at all: "when did the transistors arrive" and "why did I skip step nine" are the questions, and neither is answerable from current state. A part's status says where it is; the log says how it got there. `ProjectNote.by` separates what the app did from what the user wrote.
 

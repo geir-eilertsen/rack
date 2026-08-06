@@ -143,7 +143,7 @@ public class SettleProject {
 
         Project updated = new Project(project.id(), project.name(), project.brief(), status,
             project.startedAt(), now, finish ? now : project.finishedAt(),
-            project.parts(), project.steps(), project.cautions(), List.copyOf(log));
+            project.parts(), project.steps(), project.cautions(), List.copyOf(log), project.documents());
         projects.save(updated);
         return new Result(updated, settlement);
     }

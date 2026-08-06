@@ -1,11 +1,18 @@
 package family.eilertsen.rack.adapter.in.web;
 
+import family.eilertsen.rack.application.KeepDocuments;
 import family.eilertsen.rack.application.Projects;
 import family.eilertsen.rack.application.RunProject;
 import family.eilertsen.rack.application.SettleProject;
 import family.eilertsen.rack.application.StartProject;
 import family.eilertsen.rack.domain.model.Project;
+import family.eilertsen.rack.domain.model.ProjectDocument;
 import family.eilertsen.rack.domain.model.ProjectId;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -26,12 +33,15 @@ public class ProjectController {
     private final StartProject start;
     private final RunProject run;
     private final SettleProject settle;
+    private final KeepDocuments docs;
 
-    public ProjectController(Projects projects, StartProject start, RunProject run, SettleProject settle) {
+    public ProjectController(Projects projects, StartProject start, RunProject run,
+                             SettleProject settle, KeepDocuments docs) {
         this.projects = projects;
         this.start = start;
         this.run = run;
         this.settle = settle;
+        this.docs = docs;
     }
 
     /** The list page's whole payload: enough per project to show a card, no more. */
@@ -60,9 +70,32 @@ public class ProjectController {
         return current != null ? current : one(id);
     }
 
+    /** Takes the project's documents with it, unless another project keeps them. */
     @DeleteMapping("/{id}")
     public void delete(@PathVariable String id) {
-        run.delete(new ProjectId(id));
+        ProjectId pid = new ProjectId(id);
+        List<ProjectDocument> held = one(id).documents();
+        run.delete(pid);
+        docs.forget(held);
+    }
+
+    @PostMapping(value = "/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Project addDocument(@PathVariable String id,
+                               @RequestParam("document") MultipartFile file,
+                               @RequestParam(value = "title", required = false) String title) throws IOException {
+        return docs.attach(new ProjectId(id), file.getBytes(),
+            file.getOriginalFilename(), file.getContentType(), title);
+    }
+
+    @PatchMapping("/{id}/documents/{filename}")
+    public Project retitleDocument(@PathVariable String id, @PathVariable String filename,
+                                   @RequestBody Title body) {
+        return docs.retitle(new ProjectId(id), filename, body.title());
+    }
+
+    @DeleteMapping("/{id}/documents/{filename}")
+    public Project removeDocument(@PathVariable String id, @PathVariable String filename) {
+        return docs.detach(new ProjectId(id), filename);
     }
 
     @PatchMapping("/{id}/steps/{index}")
@@ -106,6 +139,8 @@ public class ProjectController {
     public record PartPatch(String status, Integer usedQty) {}
 
     public record Note(String text) {}
+
+    public record Title(String title) {}
 
     public record SettleRequest(Boolean finish) {}
 
