@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rack — project</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/rack.svg">
+  <link rel="apple-touch-icon" href="/assets/rack.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#d97747">
+  <link rel="stylesheet" href="/assets/rack.css">
+  <link rel="stylesheet" href="/assets/project.css">
+  <style>
+    .head { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; margin-bottom: .3rem; }
+    .head h1 { margin: 0; flex: 1; min-width: 0; }
+    .brief { color: var(--muted); font-size: .92rem; margin: 0 0 1rem; }
+    .bar { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1.25rem; align-items: center; }
+    .bar select { font-family: inherit; font-size: .9rem; padding: .45rem .6rem;
+      border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--card); color: inherit; }
+    .section-head { font-size: 1.1rem; font-weight: 700; margin: 1.75rem 0 .6rem;
+      display: flex; align-items: baseline; gap: .5rem; }
+    .section-head .of { font-size: .85rem; font-weight: 400; color: var(--muted); }
+
+    /* What is next, said once and loudly — it is the question a stored project answers. */
+    .upnext { padding: 1rem; border: 1px solid var(--primary); border-left-width: 3px;
+      border-radius: var(--radius); background: var(--primary-soft); margin-bottom: 1rem; }
+    .upnext .lbl { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase;
+      font-weight: 700; color: var(--primary-hover); }
+    .upnext .t { font-weight: 700; margin: .25rem 0 0; }
+    .upnext .d { margin: .35rem 0 0; font-size: .92rem; }
+
+    .cautions { padding: .9rem 1rem; border: 1px solid var(--error); border-left-width: 3px;
+      border-radius: var(--radius); background: var(--error-soft); margin-bottom: 1rem; }
+    .cautions h3 { margin: 0 0 .4rem; font-size: .95rem; color: var(--error); }
+    .cautions ul { margin: 0; padding-left: 1.2rem; font-size: .9rem; }
+
+    .rows { list-style: none; padding: 0; margin: 0; }
+    .rows > li { padding: .75rem 1rem; border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--card); box-shadow: var(--shadow); margin-bottom: .5rem; }
+    .rows .r { display: flex; gap: .65rem; align-items: flex-start; }
+    .rows .body { flex: 1; min-width: 0; }
+    .rows .t { font-weight: 600; }
+    .rows .d { margin: .25rem 0 0; font-size: .9rem; color: var(--muted); }
+    .rows li.ticked .t { text-decoration: line-through; color: var(--muted); }
+    .tick { flex: 0 0 auto; width: 1.5rem; height: 1.5rem; margin-top: .1rem; cursor: pointer;
+      accent-color: var(--primary); }
+    .num { flex: 0 0 auto; font-family: var(--font-mono); font-weight: 700; color: var(--muted);
+      min-width: 1.5rem; text-align: right; }
+    .uses { list-style: none; padding: 0; margin: .45rem 0 0; font-size: .85rem; }
+    .uses li { margin-top: .15rem; }
+    .uses a { color: var(--primary-hover); font-family: var(--font-mono); font-weight: 700; text-decoration: none; }
+    .uses a:hover { text-decoration: underline; }
+    .stepnote { margin: .45rem 0 0; }
+    .stepnote textarea { width: 100%; box-sizing: border-box; font-family: inherit; font-size: .88rem;
+      padding: .45rem .6rem; border: 1px solid var(--border); border-radius: var(--radius-xs);
+      background: var(--bg); color: inherit; resize: vertical; min-height: 2.2rem; }
+
+    .pstate { flex: 0 0 auto; font-family: inherit; font-size: .82rem; padding: .3rem .5rem;
+      border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+      background: var(--card); color: inherit; }
+    .used { flex: 0 0 auto; width: 4rem; font-family: inherit; font-size: .82rem; padding: .3rem .4rem;
+      border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); color: inherit; }
+    .rows .sup { font-size: .82rem; color: var(--muted); }
+    .rows .code { font-family: var(--font-mono); color: var(--success); font-size: .82rem; }
+
+    .log { list-style: none; padding: 0; margin: 0; font-size: .88rem; }
+    .log li { padding: .4rem 0; border-top: 1px solid var(--border); display: flex; gap: .6rem; }
+    .log li:first-child { border-top: none; }
+    .log .at { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .log li.user .tx { font-weight: 600; }
+    .notebox { display: flex; gap: .5rem; margin: .75rem 0 0; }
+    .notebox input { flex: 1; min-width: 0; font-size: .95rem; padding: .55rem .75rem; }
+
+    .settle { padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--card); box-shadow: var(--shadow); }
+    .settle table { width: 100%; border-collapse: collapse; font-size: .9rem; margin: .6rem 0; }
+    .settle th, .settle td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--border); }
+    .settle th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .settle td.n { font-variant-numeric: tabular-nums; text-align: right; font-family: var(--font-mono); }
+    .settle .problems { margin: .5rem 0 0; padding-left: 1.2rem; font-size: .88rem; color: #8a5a12; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="app-header">
+      <a class="back" href="/projects.html">← Projects</a>
+      <a class="brand" href="/">
+        <img class="logo" src="/assets/rack.svg" alt="">
+        <span class="name">rack</span>
+      </a>
+    </header>
+
+    <div id="page"></div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <script src="/assets/usage.js"></script>
+  <script src="/assets/project.js"></script>
+  <script>
+    const esc = rackProject.esc;
+    const page = document.getElementById('page');
+    const status = document.getElementById('status');
+    const id = new URLSearchParams(location.search).get('p');
+    let project = null;
+
+    if (!id) page.innerHTML = '<p class="empty">No project named in the address.</p>';
+    else load();
+
+    async function load() {
+      try {
+        const res = await fetch('/projects/' + encodeURIComponent(id));
+        if (!res.ok) throw new Error(res.status === 404 ? 'No such project.' : ('HTTP ' + res.status));
+        project = await res.json();
+        render();
+      } catch (e) {
+        page.innerHTML = '<p class="empty">' + esc(e.message) + '</p>';
+      }
+    }
+
+    /** Every change returns the whole project, so the page is redrawn from truth. */
+    async function send(path, method, body) {
+      setStatus('', 'Saving…');
+      try {
+        const res = await fetch('/projects/' + encodeURIComponent(id) + path, {
+          method,
+          headers: body ? { 'Content-Type': 'application/json' } : undefined,
+          body: body ? JSON.stringify(body) : undefined
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        project = await res.json();
+        render();
+        setStatus('ok', 'Saved.');
+        return true;
+      } catch (e) {
+        setStatus('error', 'Could not save: ' + e.message);
+        return false;
+      }
+    }
+
+    function render() {
+      const p = project;
+      const steps = p.steps || [];
+      const parts = p.parts || [];
+      const next = steps.find(s => !s.done);
+      const doneCount = steps.filter(s => s.done).length;
+
+      page.innerHTML =
+        '<div class="head"><h1>' + esc(p.name) + '</h1>' + rackProject.statusTag(p.status) + '</div>'
+        + (p.brief && p.brief !== p.name ? '<p class="brief">' + esc(p.brief) + '</p>' : '')
+        + '<div class="bar">'
+          + '<select id="statusPick" aria-label="Project status">'
+            + ['planning', 'shopping', 'building', 'done', 'parked'].map(s =>
+                '<option value="' + s + '"' + (s === p.status ? ' selected' : '') + '>' + s + '</option>').join('')
+          + '</select>'
+          + '<button class="btn" id="renameBtn">Rename</button>'
+          + '<button class="btn danger" id="deleteBtn">Delete</button>'
+        + '</div>'
+
+        + (next
+            ? '<div class="upnext"><div class="lbl">Up next</div><p class="t">' + esc(next.title) + '</p>'
+              + (next.detail ? '<p class="d">' + esc(next.detail) + '</p>' : '') + '</div>'
+            : (steps.length ? '<div class="upnext"><div class="lbl">Up next</div>'
+                + '<p class="t">Every step is ticked.</p>'
+                + '<p class="d">Settle up below when the parts you used are recorded, then mark it done.</p></div>' : ''))
+
+        + ((p.cautions || []).length
+            ? '<div class="cautions"><h3>Cautions</h3><ul>'
+              + p.cautions.map(c => '<li>' + esc(c) + '</li>').join('') + '</ul></div>'
+            : '')
+
+        + (parts.length
+            ? '<div class="section-head">Parts <span class="of">'
+              + parts.filter(x => x.status === 'to_buy' || x.status === 'ordered').length + ' still to come</span></div>'
+              + '<ul class="rows" id="parts">' + parts.map(partRow).join('') + '</ul>'
+            : '')
+
+        + (steps.length
+            ? '<div class="section-head">Steps <span class="of">' + doneCount + ' of ' + steps.length + '</span></div>'
+              + '<ul class="rows" id="steps">' + steps.map(stepRow).join('') + '</ul>'
+            : '')
+
+        + '<div class="section-head">Settle up</div><div class="settle" id="settle">'
+          + '<p>Reduce the drawers by what this job used. This is the only thing in rack that '
+          + 'records stock <em>leaving</em> — a camera cannot see parts that went into an amplifier.</p>'
+          + '<button class="btn" id="settleBtn">Show what it would change</button>'
+          + '<div id="settleOut"></div>'
+        + '</div>'
+
+        + '<div class="section-head">Log</div>'
+        + '<ul class="log">' + (p.log || []).slice().reverse().map(n =>
+            '<li class="' + esc(n.by) + '"><span class="at">' + rackProject.when(n.at, '') .trim()
+            + '</span><span class="tx">' + esc(n.text) + '</span></li>').join('') + '</ul>'
+        + '<div class="notebox"><input id="noteText" placeholder="What happened?" aria-label="Add a note">'
+          + '<button class="btn" id="noteBtn">Add</button></div>';
+
+      wire();
+    }
+
+    function partRow(x, i) {
+      const states = ['in_stock', 'to_buy', 'ordered', 'arrived', 'used'];
+      return '<li><div class="r"><div class="body">'
+        + '<div class="t">' + esc(x.part) + (x.qty ? ' <span class="sup">× ' + esc(x.qty) + '</span>' : '') + '</div>'
+        + (x.supplier || x.code || x.search
+            ? '<div class="d">' + [x.supplier ? esc(x.supplier) : '',
+                x.code ? '<span class="code">' + esc(x.code) + '</span>' : '',
+                x.search ? 'search: ' + esc(x.search) : ''].filter(Boolean).join(' · ') + '</div>'
+            : '')
+        + (x.note ? '<div class="d">' + esc(x.note) + '</div>' : '')
+        + ((x.from || []).length
+            ? '<ul class="uses">' + x.from.map(f =>
+                '<li>In <a href="/put.html?c=' + encodeURIComponent(f.container) + '&s='
+                + encodeURIComponent(f.slot) + '">' + esc(f.container) + ' · ' + esc(f.slot) + '</a>'
+                + (f.item ? ' — ' + esc(f.item) : '') + '</li>').join('') + '</ul>'
+            : '')
+        + '</div>'
+        + '<select class="pstate" data-part="' + i + '" aria-label="Part state">'
+          + states.map(s => '<option value="' + s + '"' + (s === x.status ? ' selected' : '') + '>'
+              + s.replace('_', ' ') + '</option>').join('')
+        + '</select>'
+        // Only asked for once it matters: how many were used is the number that
+        // settles up, and it is not knowable before the job is done.
+        + (x.status === 'used'
+            ? '<input class="used" type="number" min="0" inputmode="numeric" data-used="' + i + '"'
+              + ' value="' + (x.used_qty == null ? '' : x.used_qty) + '" placeholder="used" aria-label="Quantity used">'
+            : '')
+        + '</div></li>';
+    }
+
+    function stepRow(s, i) {
+      return '<li class="' + (s.done ? 'ticked' : '') + '">'
+        + '<div class="r"><span class="num">' + (i + 1) + '</span>'
+        + '<input class="tick" type="checkbox" data-step="' + i + '"' + (s.done ? ' checked' : '')
+          + ' aria-label="Step done">'
+        + '<div class="body"><div class="t">' + esc(s.title) + '</div>'
+        + (s.detail ? '<div class="d">' + esc(s.detail) + '</div>' : '')
+        + ((s.uses || []).length
+            ? '<ul class="uses">' + s.uses.map(u =>
+                '<li>Uses <a href="/put.html?c=' + encodeURIComponent(u.container) + '&s='
+                + encodeURIComponent(u.slot) + '">' + esc(u.container) + ' · ' + esc(u.slot) + '</a>'
+                + (u.item ? ' — ' + esc(u.item) : '') + '</li>').join('') + '</ul>'
+            : '')
+        + '<div class="stepnote"><textarea data-note="' + i + '" rows="1" placeholder="Note — what you found, what you changed">'
+          + esc(s.note || '') + '</textarea></div>'
+        + '</div></div></li>';
+    }
+
+    function wire() {
+      document.querySelectorAll('.tick').forEach(b => b.addEventListener('change', () =>
+        send('/steps/' + b.dataset.step, 'PATCH', { done: b.checked })));
+
+      document.querySelectorAll('.pstate').forEach(sel => sel.addEventListener('change', () =>
+        send('/parts/' + sel.dataset.part, 'PATCH', { status: sel.value })));
+
+      document.querySelectorAll('.used').forEach(inp => inp.addEventListener('change', () => {
+        const n = inp.value === '' ? null : Number(inp.value);
+        send('/parts/' + inp.dataset.used, 'PATCH', { status: 'used', used_qty: n });
+      }));
+
+      // On blur, not on every keystroke: a note is written, not typed at.
+      document.querySelectorAll('[data-note]').forEach(t => {
+        const was = t.value;
+        t.addEventListener('blur', () => {
+          if (t.value !== was) send('/steps/' + t.dataset.note, 'PATCH', { note: t.value });
+        });
+      });
+
+      document.getElementById('statusPick').addEventListener('change', e =>
+        send('', 'PATCH', { status: e.target.value }));
+
+      document.getElementById('renameBtn').addEventListener('click', () => {
+        const name = prompt('Name this project', project.name);
+        if (name && name.trim() && name.trim() !== project.name) send('', 'PATCH', { name: name.trim() });
+      });
+
+      document.getElementById('deleteBtn').addEventListener('click', async () => {
+        if (!confirm('Delete "' + project.name + '"? The drawers are untouched; only the project goes.')) return;
+        const res = await fetch('/projects/' + encodeURIComponent(id), { method: 'DELETE' });
+        if (res.ok) location.href = '/projects.html';
+        else setStatus('error', 'Could not delete it.');
+      });
+
+      document.getElementById('noteBtn').addEventListener('click', addNote);
+      document.getElementById('noteText').addEventListener('keydown', e => {
+        if (e.key === 'Enter') addNote();
+      });
+
+      document.getElementById('settleBtn').addEventListener('click', showSettlement);
+    }
+
+    async function addNote() {
+      const el = document.getElementById('noteText');
+      const text = el.value.trim();
+      if (!text) return;
+      if (await send('/notes', 'POST', { text })) { /* redrawn, box is fresh */ }
+    }
+
+    async function showSettlement() {
+      const out = document.getElementById('settleOut');
+      out.innerHTML = '<p class="status">Working it out…</p>';
+      try {
+        const res = await fetch('/projects/' + encodeURIComponent(id) + '/settle');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const s = await res.json();
+        const changes = s.changes || [];
+        const problems = s.problems || [];
+        out.innerHTML =
+          (changes.length
+            ? '<table><thead><tr><th>Drawer</th><th>Item</th><th>Now</th><th>Used</th><th>Left</th></tr></thead><tbody>'
+              + changes.map(c => '<tr><td><a href="/put.html?c=' + encodeURIComponent(c.container)
+                  + '&s=' + encodeURIComponent(c.slot) + '">' + esc(c.container) + ' · ' + esc(c.slot) + '</a></td>'
+                  + '<td>' + esc(c.item) + '</td><td class="n">' + c.before + '</td>'
+                  + '<td class="n">−' + c.used + '</td><td class="n">' + c.after + '</td></tr>').join('')
+              + '</tbody></table>'
+            : '<p class="empty">Nothing to take out of stock. Mark the parts you used as <em>used</em>, '
+              + 'and say how many, and they show up here.</p>')
+          + (problems.length
+            ? '<ul class="problems">' + problems.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>'
+            : '')
+          + (changes.length
+            ? '<button class="btn primary" id="doSettle">Apply and mark the project done</button>'
+              + ' <button class="btn" id="doSettleOnly">Apply, keep it open</button>'
+            : '');
+        if (changes.length) {
+          document.getElementById('doSettle').addEventListener('click', () => applySettlement(true));
+          document.getElementById('doSettleOnly').addEventListener('click', () => applySettlement(false));
+        }
+      } catch (e) {
+        out.innerHTML = '<p class="status error">Could not work it out: ' + esc(e.message) + '</p>';
+      }
+    }
+
+    async function applySettlement(finish) {
+      if (!confirm('Reduce the drawers as shown? This changes your inventory.')) return;
+      setStatus('', 'Settling up…');
+      try {
+        const res = await fetch('/projects/' + encodeURIComponent(id) + '/settle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ finish })
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const r = await res.json();
+        project = r.project;
+        render();
+        setStatus('ok', 'Stock updated.');
+      } catch (e) {
+        setStatus('error', 'Could not settle up: ' + e.message);
+      }
+    }
+
+    function setStatus(kind, text) {
+      status.className = 'status' + (kind ? ' ' + kind : '');
+      status.textContent = text;
+    }
+  </script>
+</body>
+</html>

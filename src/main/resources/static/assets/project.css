@@ -1,0 +1,10 @@
+/* Shared by the project list and one project's page. */
+.pstatus {
+  flex: 0 0 auto; font-size: .68rem; letter-spacing: .04em; text-transform: uppercase;
+  font-weight: 700; padding: .2rem .5rem; border-radius: 999px; white-space: nowrap;
+}
+.pstatus.planning { background: var(--border); color: var(--muted); }
+.pstatus.shopping { background: #fdf0dd; color: #8a5a12; }
+.pstatus.building { background: var(--primary-soft); color: var(--primary-hover); }
+.pstatus.done     { background: var(--success-soft); color: var(--success); }
+.pstatus.parked   { background: var(--border); color: var(--muted); }

@@ -141,6 +141,11 @@
     // What the checklist could not find, kept so the plan can be asked for
     // without retyping the project or paying for the question a second time.
     let lastAsk = null;
+    // The answer and the plan as they were rendered. A project is built from what
+    // is on screen rather than by asking again: they have paid for both and read
+    // both, and a plan you have read is the one worth keeping.
+    let lastAnswer = null;
+    let lastPlan = null;
 
     const EXAMPLES = [
       'I am restoring a Quad 606 amplifier. Do I have all the parts?',
@@ -174,6 +179,8 @@
       out.innerHTML = '';
       planOut.innerHTML = '';
       lastAsk = null;
+      lastAnswer = null;
+      lastPlan = null;
       try {
         const res = await fetch('/ask', {
           method: 'POST',
@@ -192,6 +199,7 @@
     }
 
     function render(a) {
+      lastAnswer = a;
       const list = a.checklist || [];
       const n = s => list.filter(x => x.status === s).length;
       const counts = list.length
@@ -216,13 +224,19 @@
       // you already have everything is a complete answer, and should not come
       // with a button that spends money to say so.
       const toBuy = list.filter(x => x.status !== 'have');
-      if (!toBuy.length) return;
-      lastAsk = { project: a.question, needed: toBuy.map(shoppingLine) };
+      lastAsk = toBuy.length ? { project: a.question, needed: toBuy.map(shoppingLine) } : null;
       out.insertAdjacentHTML('beforeend',
-        '<div class="plan-bar"><button class="btn primary" id="planBtn">Plan the order for '
-        + toBuy.length + (toBuy.length === 1 ? ' part' : ' parts') + '</button>'
+        '<div class="plan-bar">'
+        + (toBuy.length
+            ? '<button class="btn primary" id="planBtn">Plan the order for '
+              + toBuy.length + (toBuy.length === 1 ? ' part' : ' parts') + '</button>'
+            : '')
+        // Worth keeping even when nothing is missing: the steps and the ticking off
+        // are most of what a project is for.
+        + '<button class="btn" id="keepBtn">Keep this as a project</button>'
         + '<span class="status" id="planStatus"></span></div>');
-      document.getElementById('planBtn').addEventListener('click', plan);
+      if (toBuy.length) document.getElementById('planBtn').addEventListener('click', plan);
+      document.getElementById('keepBtn').addEventListener('click', keep);
     }
 
     /** The part plus the caveat, since a substitution changes what to order. */
@@ -245,7 +259,8 @@
           body: JSON.stringify(lastAsk)
         });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
-        renderPlan(await res.json());
+        lastPlan = await res.json();
+        renderPlan(lastPlan);
         st.textContent = '';
         if (window.rackUsage) rackUsage.refresh();
         planOut.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -271,7 +286,70 @@
             + '<div class="cautions"><h3>Before you start</h3><ul>'
             + cautions.map(c => '<li>' + esc(c) + '</li>').join('') + '</ul></div>'
           : (steps.length ? '<div class="section-head">How to do it</div>' : ''))
-        + (steps.length ? '<ul class="steps">' + steps.map(step).join('') + '</ul>' : '');
+        + (steps.length ? '<ul class="steps">' + steps.map(step).join('') + '</ul>' : '')
+        + '<div class="plan-bar"><button class="btn primary" id="keepBtn2">'
+        + 'Start this project — keep the list and tick it off</button>'
+        + '<span class="status" id="keepStatus"></span></div>';
+      document.getElementById('keepBtn2').addEventListener('click', keep);
+    }
+
+    /**
+     * Builds the project from the plan where there is one and the checklist
+     * otherwise. Taken from the plan's own supplier lines rather than matched
+     * against the checklist by name — the two describe the same parts in
+     * different words, and guessing which line is which would put the wrong
+     * order code beside the wrong part.
+     */
+    async function keep() {
+      if (!lastAnswer) return;
+      const st = document.getElementById('keepStatus') || document.getElementById('planStatus');
+      const btns = [document.getElementById('keepBtn'), document.getElementById('keepBtn2')].filter(Boolean);
+      btns.forEach(b => b.disabled = true);
+      if (st) { st.className = 'status'; st.textContent = 'Keeping it…'; }
+
+      const checklist = lastAnswer.checklist || [];
+      const parts = [];
+      // What is already on the shelf, with the drawers it is in.
+      for (const need of checklist.filter(x => x.status === 'have' || x.status === 'partial')) {
+        parts.push({
+          part: need.part, status: 'in_stock', note: need.note,
+          from: (need.found || []).map(f => ({ container: f.container, slot: f.slot, item: f.item }))
+        });
+      }
+      if (lastPlan) {
+        for (const s of lastPlan.suppliers || []) {
+          for (const l of s.items || []) {
+            parts.push({ part: l.part, qty: l.qty, status: 'to_buy', supplier: s.name,
+                         search: l.search, code: l.code, note: l.note, from: [] });
+          }
+        }
+      } else {
+        for (const need of checklist.filter(x => x.status === 'missing')) {
+          parts.push({ part: need.part, status: 'to_buy', note: need.note, from: [] });
+        }
+      }
+
+      const steps = ((lastPlan && lastPlan.steps) || []).map(s => ({
+        title: s.title, detail: s.detail,
+        uses: (s.uses || []).map(u => ({ container: u.container, slot: u.slot, item: u.item }))
+      }));
+
+      try {
+        const res = await fetch('/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            brief: lastAnswer.question, parts, steps,
+            cautions: (lastPlan && lastPlan.cautions) || []
+          })
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const project = await res.json();
+        location.href = '/project.html?p=' + encodeURIComponent(project.id);
+      } catch (e) {
+        btns.forEach(b => b.disabled = false);
+        if (st) { st.className = 'status error'; st.textContent = 'Could not keep it: ' + e.message; }
+      }
     }
 
     function supplier(s) {

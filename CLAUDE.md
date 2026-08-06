@@ -71,6 +71,7 @@ Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all s
 - **Slot** — one location inside a container. Identified by URL-safe `SlotId` ("A1", "3", "top-left"). Uniqueness is *per container*: two containers can both have an "A1". **Each container says what one of its slots is called** — `slotLabel`, defaulting to "slot". "Drawer" is right for a rack of drawers and wrong for a plastic box, and only the owner knows which they have. `Slot` stays the code and URL vocabulary, which is true of all of them.
 
 **A container with a single slot has no subdivisions at all**, and the UI stops mentioning them: no grid to pick from, no word for a part it has not got, and the title is just the container's name. Selecting it selects the one place. That is the plastic box — the box *is* the location, and asking which compartment would be asking about something that does not exist.
+- **Project** — a job of work. Holds what it needs (`ProjectPart`, each with a status from `in_stock` through `to_buy`, `ordered`, `arrived` to `used`), how to do it (`ProjectStep`, tickable, annotatable), its hazards, and a log. The only thing in the app that records stock *leaving*.
 - **Item** — one identified thing inside a slot (a transistor, a bag of screws, ...). Comes from vision extraction.
 - **Photograph** — a picture of an item. **Items own photographs; slots do not.** `Item.sourcePhoto` is the frame it was read from and `Item.seenIn` is every frame showing it; a slot has no photo list of its own. The containment runs one way — container holds slots, slot holds items, item holds photographs — and everything else is derived from it.
 - Containers are defined in `application.yml` under `rack.containers` and materialised at boot by `ContainerRegistry` (see `application/RackConfiguration.java`). Layout kinds: `grid` (cols × rows → A1..) and `linear` (N → 1..N with optional prefix).
@@ -80,8 +81,9 @@ Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all s
 ```
 family.eilertsen.rack
 ├── domain
-│   ├── model      # records: Container, ContainerId, Slot, SlotId, Item, Extraction, SearchHit, ContainerLayout
-│   └── port       # interfaces: ImageStore, PartExtractor, PartIndex
+│   ├── model      # records: Container, ContainerId, Slot, SlotId, Item, Extraction, SearchHit, ContainerLayout,
+│   │               #          Project, ProjectId, ProjectPart, ProjectStep, ProjectNote
+│   └── port       # interfaces: ImageStore, PartExtractor, PartIndex, ProjectStore
 ├── application    # AddPhotoToSlot service, ContainerRegistry, RackProperties/Configuration
 └── adapter
     ├── in.web     # ContainerController, IdentifyController, LabelSheetController, HelloController
@@ -108,6 +110,8 @@ Order of magnitude: ~60 slots × ~20 items = ~1,200 items per container. That's 
 data/
   photos/                # every photograph, for the whole rack
     2026-08-04-1712.jpg
+  projects/
+    quad-606-restoration.json   # one job of work: parts, steps, cautions, log
   <container>/
     <slot>.json          # slot state (items, last_verified, printed_at)
     labels/
@@ -175,6 +179,7 @@ Committing after each write gives history, per-drawer undo, and free multi-site 
 
 - `/` → index page (hub)
 - `/identify.html`, `POST /identify` → identify a part from a photo, no persistence
+- `/projects.html`, `/project.html`, `GET|POST /projects`, `GET|PATCH|DELETE /projects/{id}`, `PATCH /projects/{id}/steps/{n}`, `PATCH /projects/{id}/parts/{n}`, `POST /projects/{id}/notes`, `GET|POST /projects/{id}/settle` → a job of work, tracked and settled against stock
 - `/ask.html`, `POST /ask` → one question about the whole rack (project checklist); the entire index goes in the prompt. `POST /plan` turns the gaps into per-supplier shopping lists plus steps for the job
 - `/find.html`, `GET /search?q=` → search; `&smart=true` widens a query that came up short (see Search above). `POST /search/photo` searches by photo instead of by typing. All three return `{query, expanded_terms, hits}`
 - `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state. The photo endpoint (and `POST /suggest`) take **repeated `photo` parts** — one part is just a batch of one.
@@ -227,6 +232,20 @@ Each line carries how long ago its drawer was last checked, so an answer leaning
 **Citations are resolved, not demanded.** Every listing line begins `lab/10 | …`, so a model asked for a container and a slot separately sometimes hands back the token it read: `{"container": "lab/10", "slot": "lab/10"}`. The first real plan lost **62 of about 100** tool references that way — every one a real item in a real drawer, rejected over punctuation. `AskAboutRack.locate` now tries the pair as given, then either field split on its slash, and repairs the citation into the form the drawer links need. The standard is unchanged: whichever reading is tried, that drawer must hold that item. Fixing it took kept references from 43 to 58, all 58 verifiable against `data/`.
 
 **It takes about two minutes.** ~8k output tokens of supplier lists and twenty steps, at ~5–10¢. A deliberate button press with a status line, not something that fires as you type.
+
+### A project is a thing in the app, not a page of advice
+
+`/projects.html` and `/project.html`, `data/projects/<id>.json`, `Project` in the domain. Asking what a job needs is one moment; a restoration is weeks. Parts arrive on different days from different suppliers, steps get done out of order, and after a fortnight the question is *where was I* — which the plan cannot answer, because it never knew.
+
+Built from what is already on screen. `ask.html` offers **Keep this as a project** after the checklist and **Start this project** after the plan; the parts come from the plan's own supplier lines and the `have` rows of the checklist, never matched between the two by name — they describe the same parts in different words, and guessing which line is which would put the wrong order code beside the wrong part. Nothing is regenerated: a plan you have annotated is worth more than a fresh one.
+
+**It closes the last hole in the drift argument.** Every other mitigation watches the same direction — a photo puts things in, a resync corrects what a camera can see. But stock mostly leaves the rack by being *used*, and a camera was never going to catch that: eight of ten emitter resistors go into an amplifier and the drawer still says ten, correctly recorded, verified last week, wrong. A project is the only thing that knows, so `SettleProject` is where settling up belongs — previewed then applied, the way `ResyncSlot` is, because it takes things away.
+
+**Settling up does not stamp `lastVerified`.** That date means somebody looked, and this is arithmetic on a number that was an estimate off a photograph. Writing today's date on a deduction would turn the app's one honest signal about staleness into a decoration. A row that reaches zero stays at zero rather than being deleted: "none left" is a thing to go and check, and removing the row would take its photographs with it. What settling *cannot* do is listed as `problems` rather than skipped quietly — an item that has since been renamed, a row with no recorded count, a part recorded in two drawers at once.
+
+**Status moves on its own only where the answer is not a matter of opinion.** The last outstanding part arriving ends the shopping. Ticking a step does not: the first steps of a job are reading the manual and photographing the inside, both done while waiting for the post — a real run ticked step one with nineteen parts unordered and the project promptly called itself "building". And ticking the *last* step does not finish a project, because putting the lid back on and knowing it works are different things.
+
+**Every change writes to the log.** That is most of the reason to store a project at all: "when did the transistors arrive" and "why did I skip step nine" are the questions, and neither is answerable from current state. A part's status says where it is; the log says how it got there. `ProjectNote.by` separates what the app did from what the user wrote.
 
 ### Resyncing a drawer
 
