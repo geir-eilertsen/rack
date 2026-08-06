@@ -81,6 +81,88 @@ class JsonFilePartIndexTest {
     }
 
     @Test
+    void searchReachesWhatWasAskedAboutAnItem() throws IOException {
+        // The Q&A is the only part of an item written by the person who owns it.
+        // Asking "is this a good selection for an audio amp" is how you know the
+        // capacitor as the one you picked for the amp — and before this, that was
+        // the one thing about it search could not see.
+        writeSlot("B12", """
+            {"id":"B12","items":[{"name":"220uF 100V capacitor","description":"radial electrolytic","category":"capacitor","qty_estimate":4,"confidence":0.9,"tags":[],"qa":[{"question":"is this a good selection for an audio amp","answer":"Generally yes, with caveats.","at":"2026-08-05T10:00:00Z"}]}],"last_verified":null,"printed_at":null}
+            """);
+
+        List<SearchHit> hits = load().searchByKeyword("audio amp");
+
+        assertThat(hits).hasSize(1);
+        assertThat(hits.get(0).item().name()).isEqualTo("220uF 100V capacitor");
+    }
+
+    @Test
+    void aQuestionCountsForMoreThanTheAnswerToIt() throws IOException {
+        // A question is short and deliberate: 29 characters at the median in this
+        // rack. An answer is model prose at 946, so a word turning up somewhere
+        // inside one is thinner evidence than the same word being asked about.
+        writeSlot("A1", """
+            {"id":"A1","items":[{"name":"Ear tips","description":"silicone","category":"other","qty_estimate":6,"confidence":0.9,"tags":[],"qa":[{"question":"why do they itch after a while","answer":"Possible reasons for irritation.","at":"2026-08-05T10:00:00Z"}]}],"last_verified":null,"printed_at":null}
+            """);
+        writeSlot("A2", """
+            {"id":"A2","items":[{"name":"Heat sink compound","description":"Dow Corning 340","category":"other","qty_estimate":1,"confidence":0.9,"tags":[],"qa":[{"question":"where to buy","answer":"Many suppliers stock it; some itch to sell you more.","at":"2026-08-05T10:00:00Z"}]}],"last_verified":null,"printed_at":null}
+            """);
+
+        List<SearchHit> hits = load().searchByKeyword("itch");
+
+        assertThat(hits).extracting(h -> h.item().name())
+            .containsExactly("Ear tips", "Heat sink compound");
+        assertThat(hits.get(0).score()).isGreaterThan(hits.get(1).score());
+    }
+
+    @Test
+    void aQaOnlyHitIsNeverConvincingEnoughToStopTheSearchWidening() throws IOException {
+        // 2 for the question plus 0.5 for the answer is deliberately under the 3.0
+        // that FindItems treats as a search that worked. An item found only through
+        // its Q&A is a real hit and a weak one, so it must not suppress the
+        // expansion — a word buried in a model's prose is not the rack telling you
+        // it has the thing.
+        writeSlot("A1", """
+            {"id":"A1","items":[{"name":"Intel NUC NUC5i3RYH","description":"mini PC","category":"other","qty_estimate":1,"confidence":0.9,"tags":[],"qa":[{"question":"how big ram","answer":"Max 16GB across two SO-DIMM slots.","at":"2026-08-05T10:00:00Z"}]}],"last_verified":null,"printed_at":null}
+            """);
+
+        List<SearchHit> hits = load().searchByKeyword("16GB");
+
+        assertThat(hits).hasSize(1);
+        assertThat(hits.get(0).score()).isLessThan(3.0);
+    }
+
+    @Test
+    void aQaHitScoresOnceHoweverManyQuestionsWereAsked() throws IOException {
+        // Otherwise curiosity about one item would quietly outrank an identical
+        // item nobody happened to ask about.
+        writeSlot("A1", """
+            {"id":"A1","items":[{"name":"Shelly relay","description":"one","category":"other","qty_estimate":1,"confidence":0.9,"tags":[],"qa":[{"question":"is it zigbee","answer":"No, wifi.","at":"2026-08-05T10:00:00Z"},{"question":"zigbee again","answer":"Still no zigbee.","at":"2026-08-05T11:00:00Z"},{"question":"zigbee really","answer":"Zigbee, no.","at":"2026-08-05T12:00:00Z"}]}],"last_verified":null,"printed_at":null}
+            """);
+        writeSlot("A2", """
+            {"id":"A2","items":[{"name":"Zigbee dongle","description":"USB stick","category":"other","qty_estimate":1,"confidence":0.9,"tags":[],"last_verified":null}],"last_verified":null,"printed_at":null}
+            """);
+
+        List<SearchHit> hits = load().searchByKeyword("zigbee");
+
+        // The one actually called Zigbee wins, three questions or not.
+        assertThat(hits).extracting(h -> h.item().name())
+            .containsExactly("Zigbee dongle", "Shelly relay");
+    }
+
+    @Test
+    void anItemWithNoQaSectionIsScoredAsBefore() throws IOException {
+        writeSlot("A1", """
+            {"id":"A1","items":[{"name":"BC547 transistor","description":"TO-92","category":"transistor","qty_estimate":30,"confidence":0.9,"tags":[]}],"last_verified":null,"printed_at":null}
+            """);
+
+        List<SearchHit> hits = load().searchByKeyword("BC547");
+
+        assertThat(hits).hasSize(1);
+        assertThat(hits.get(0).score()).isEqualTo(3.0);
+    }
+
+    @Test
     void keywordSearchMatchesTheNameAndOutranksADescriptionOnlyHit() throws IOException {
         writeSlot("A1", """
             {"id":"A1","items":[{"name":"BC547 transistor","description":"loose pile, TO-92 package","category":"transistor","qty_estimate":30,"confidence":0.9,"tags":[]}],"photos":[],"last_verified":null,"printed_at":null}

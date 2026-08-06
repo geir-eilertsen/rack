@@ -183,6 +183,30 @@ public class JsonFilePartIndex implements PartIndex {
         return score;
     }
 
+    /**
+     * What was asked about an item is worth as much as its own description; what
+     * the model answered is worth much less than either.
+     *
+     * <p>A question is a human's words for the thing in front of them, typed
+     * deliberately and short — 29 characters at the median in this rack. An answer
+     * is model prose at 946, and a word appearing somewhere inside it is thin
+     * evidence: the heat sink compound's answer says "internet" and "sources"
+     * without being either, and the capacitor's mentions itching.
+     *
+     * <p><strong>Together they stay under the weight of a name.</strong> 2 + 0.5
+     * is deliberately below {@code FindItems.CONVINCING}, so an item found only
+     * through its Q&amp;A is a hit but never the kind of hit that stops the query
+     * being widened. Searching "16GB" turns up the NUC because its answer lists
+     * the maximum, and still looks for related words, which is the right reading
+     * of evidence that thin.
+     *
+     * <p>Scored once per field however many exchanges an item has, the way tags
+     * are — otherwise asking five questions would make an item five times as
+     * findable as the identical one nobody asked about.
+     */
+    private static final double QUESTION_WEIGHT = 2;
+    private static final double ANSWER_WEIGHT = 0.5;
+
     private static double termScore(Item item, String term) {
         double score = 0;
         if (contains(item.partNumber(), term)) score += 3;
@@ -192,7 +216,22 @@ public class JsonFilePartIndex implements PartIndex {
         if (item.tags() != null) {
             for (String tag : item.tags()) if (contains(tag, term)) { score += 1; break; }
         }
+        score += qaScore(item, term);
         return score;
+    }
+
+    /** What you asked about a thing is part of what you know it by. */
+    private static double qaScore(Item item, String term) {
+        if (item.qa() == null) return 0;
+        boolean inQuestion = false;
+        boolean inAnswer = false;
+        for (Item.QA exchange : item.qa()) {
+            if (exchange == null) continue;
+            inQuestion |= contains(exchange.question(), term);
+            inAnswer |= contains(exchange.answer(), term);
+            if (inQuestion && inAnswer) break;
+        }
+        return (inQuestion ? QUESTION_WEIGHT : 0) + (inAnswer ? ANSWER_WEIGHT : 0);
     }
 
     private static boolean contains(String s, String q) {
