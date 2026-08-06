@@ -271,6 +271,39 @@ class JsonFilePartIndexTest {
     }
 
     @Test
+    void theVocabularyComesOutInTheSameOrderEveryTime() throws IOException {
+        // The expander sends the first N of these and this rack has outgrown N,
+        // so which words are dropped is a real decision. It used to be made by
+        // ConcurrentHashMap's hash order, which differs between restarts — and
+        // "isolating tape" bridged to the electrical tape or found nothing at all
+        // depending on the boot.
+        for (String slot : new String[] {"E3", "A1", "C2", "B7", "D9"}) {
+            writeSlot(slot, """
+                {"id":"%s","items":[{"name":"item %s","category":"cat %s","tags":["tag %s"],"confidence":0.9}],"last_verified":null,"printed_at":null}
+                """.formatted(slot, slot, slot, slot));
+        }
+
+        List<String> first = List.copyOf(load().vocabulary());
+        List<String> again = List.copyOf(load().vocabulary());
+
+        assertThat(first).isEqualTo(again);
+        // Slot order, so the list is the rack read top to bottom rather than by hash.
+        assertThat(first).startsWith("item A1", "cat A1", "tag A1", "item B7");
+    }
+
+    @Test
+    void aWordSpelledTwoWaysTakesOnlyOnePlaceInTheVocabulary() throws IOException {
+        // An item named "Electrical tape" and tagged "electrical tape" spent two
+        // of a capped list's places on one word.
+        JsonFilePartIndex index = new JsonFilePartIndex(dataDir.toString(), mapper);
+        Item item = new Item("Electrical tape", "one black roll", null, "other", 1, 0.9,
+            List.of("electrical tape", "ELECTRICAL TAPE", "pvc"), List.of(), null, null);
+        index.save(RACK, new Slot(new SlotId("A9"), List.of(item), null, null));
+
+        assertThat(index.vocabulary()).containsExactly("Electrical tape", "other", "pvc");
+    }
+
+    @Test
     void savedItemsKeepTheirNameAcrossAReload() throws IOException {
         JsonFilePartIndex index = load();
         Item item = new Item("M4 hex bolts", "bag of about fifty, DIN 933", null, "fastener",

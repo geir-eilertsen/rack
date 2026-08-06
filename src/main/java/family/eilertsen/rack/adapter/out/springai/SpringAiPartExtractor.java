@@ -97,7 +97,7 @@ public class SpringAiPartExtractor implements PartExtractor {
             .chatResponse();
         String reply = SpringAi.tally(response, usage);
 
-        String json = SpringAi.stripCodeFences(reply);
+        String json = SpringAi.json(reply);
         try {
             List<ExtractedItem> extracted = mapper.readValue(json, new TypeReference<>() {});
             return extracted.stream().map(e -> e.toExtraction(images.size())).toList();

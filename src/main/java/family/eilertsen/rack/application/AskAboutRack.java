@@ -137,7 +137,7 @@ public class AskAboutRack {
 
         Reply reply;
         try {
-            reply = mapper.readValue(json(raw), Reply.class);
+            reply = mapper.readValue(ModelReply.json(raw), Reply.class);
         } catch (Exception e) {
             // A malformed reply is one unusable answer, not a broken rack — but it
             // is unreadable without seeing what came back, so log the head of it.
@@ -264,22 +264,6 @@ public class AskAboutRack {
         long days = ChronoUnit.DAYS.between(lastVerified, Instant.now());
         if (days <= 0) return " | last checked: today";
         return " | last checked: " + days + (days == 1 ? " day ago" : " days ago");
-    }
-
-    /**
-     * The outermost JSON object in whatever came back.
-     *
-     * <p>Asked for JSON and nothing else, this call still opened with "I'll go
-     * through what a Quad 606 restoration needs…" and buried the object below it.
-     * Tightening the instruction is a guess about the next reply; taking the
-     * object out of the text is not. This also covers the markdown fence models
-     * add however firmly asked not to, and any sign-off after the closing brace.
-     */
-    static String json(String raw) {
-        String s = raw == null ? "" : raw.strip();
-        int open = s.indexOf('{');
-        int close = s.lastIndexOf('}');
-        return open >= 0 && close > open ? s.substring(open, close + 1) : s;
     }
 
     private static String head(String raw) {

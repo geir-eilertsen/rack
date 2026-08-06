@@ -18,6 +18,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -239,15 +241,39 @@ public class JsonFilePartIndex implements PartIndex {
     }
 
 
+    /**
+     * Every distinct short label in the index, in a stable order.
+     *
+     * <p><strong>Sorted, because the caller truncates.</strong> The expander sends
+     * the first N of these and this rack has outgrown N, so which words are
+     * dropped is a real decision — and it used to be made by {@link
+     * java.util.concurrent.ConcurrentHashMap}'s hash order, which is arbitrary and
+     * differs between restarts. The result was that "isolating tape" bridged to
+     * the electrical tape or found nothing at all depending on the boot: the
+     * feature the whole search design is named for, working as a coin flip. Same
+     * rack, same words, same answer is the least this owes.
+     *
+     * <p>Deduplicated ignoring case, since an item named "Electrical tape" and
+     * tagged "electrical tape" spends two of those places on one word.
+     */
     @Override
     public Set<String> vocabulary() {
         Set<String> words = new LinkedHashSet<>();
-        for (Map<SlotId, Slot> slots : byContainer.values()) {
-            for (Slot slot : slots.values()) {
+        Set<String> seen = new HashSet<>();
+        List<ContainerId> containers = new ArrayList<>(byContainer.keySet());
+        containers.sort(Comparator.comparing(ContainerId::value));
+        for (ContainerId cid : containers) {
+            Map<SlotId, Slot> slots = byContainer.get(cid);
+            if (slots == null) continue;
+            List<SlotId> ids = new ArrayList<>(slots.keySet());
+            ids.sort(Comparator.comparing(SlotId::value));
+            for (SlotId sid : ids) {
+                Slot slot = slots.get(sid);
+                if (slot == null || slot.items() == null) continue;
                 for (Item item : slot.items()) {
-                    add(words, label(item));
-                    add(words, item.category());
-                    if (item.tags() != null) for (String tag : item.tags()) add(words, tag);
+                    add(words, seen, label(item));
+                    add(words, seen, item.category());
+                    if (item.tags() != null) for (String tag : item.tags()) add(words, seen, tag);
                 }
             }
         }
@@ -279,7 +305,10 @@ public class JsonFilePartIndex implements PartIndex {
         return d.length() <= 60 ? d : d.substring(0, 60);
     }
 
-    private static void add(Set<String> words, String word) {
-        if (word != null && !word.isBlank()) words.add(word.strip());
+    /** Keeps the first spelling of a word and counts later casings as the same. */
+    private static void add(Set<String> words, Set<String> seen, String word) {
+        if (word == null || word.isBlank()) return;
+        String w = word.strip();
+        if (seen.add(w.toLowerCase(Locale.ROOT))) words.add(w);
     }
 }

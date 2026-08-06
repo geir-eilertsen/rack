@@ -149,7 +149,7 @@ public class PlanPurchases {
 
         Reply reply;
         try {
-            reply = mapper.readValue(AskAboutRack.json(raw), Reply.class);
+            reply = mapper.readValue(ModelReply.json(raw), Reply.class);
         } catch (Exception e) {
             log.warn("Could not read the purchase plan: {}", e.toString());
             throw new IllegalStateException("The model's plan could not be read. Try again.", e);

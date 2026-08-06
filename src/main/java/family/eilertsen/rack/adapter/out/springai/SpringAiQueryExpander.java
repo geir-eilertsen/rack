@@ -25,7 +25,17 @@ public class SpringAiQueryExpander implements QueryExpander {
     private static final Logger log = LoggerFactory.getLogger(SpringAiQueryExpander.class);
 
     /** Enough vocabulary to recognise the drawer's wording, short enough to stay a small prompt. */
-    private static final int MAX_VOCABULARY = 400;
+    /**
+     * A ceiling on the prompt, not a sample of the rack.
+     *
+     * <p>400 was under this rack's 658 words, so a quarter of them never reached
+     * the model — and the search's headline case, "isolating tape" finding the
+     * electrical tape, depended on which side of the cut the word landed. At
+     * haiku rates the whole list is about a quarter of a cent a call, and the
+     * call only happens when the literal search already failed. The cap is a
+     * guard against a rack ten times this size, not a budget.
+     */
+    private static final int MAX_VOCABULARY = 1500;
     private static final int MAX_TERMS = 6;
 
     private static final String PROMPT = """
@@ -91,8 +101,17 @@ public class SpringAiQueryExpander implements QueryExpander {
         }
 
         try {
-            List<String> terms = mapper.readValue(SpringAi.stripCodeFences(reply), new TypeReference<>() {});
-            return clean(terms, query);
+            List<String> terms = mapper.readValue(SpringAi.json(reply), new TypeReference<>() {});
+            List<String> cleaned = clean(terms, query);
+            // A widening that widens nothing is the design working — a term built
+            // only from words the query already had puts the noise back. But
+            // silently it is indistinguishable from a call that never happened,
+            // and "isolating tape" quietly returning nothing is worth being able
+            // to look up rather than guess at.
+            if (cleaned.isEmpty() && !terms.isEmpty()) {
+                log.info("Query expansion for \"{}\" brought no new words: {}", query, terms);
+            }
+            return cleaned;
         } catch (Exception e) {
             log.warn("Query expansion returned non-JSON for \"{}\": {}", query, reply);
             return List.of();
@@ -106,6 +125,12 @@ public class SpringAiQueryExpander implements QueryExpander {
         for (String word : vocabulary) {
             if (shown++ == MAX_VOCABULARY) break;
             list.append("- ").append(word).append('\n');
+        }
+        if (vocabulary.size() > MAX_VOCABULARY) {
+            // Silently sending part of the rack is how this broke: the missing
+            // words are exactly the ones a query would have needed bridging to.
+            log.warn("Vocabulary is {} words and only {} were sent — raise MAX_VOCABULARY",
+                vocabulary.size(), MAX_VOCABULARY);
         }
         return list.toString();
     }

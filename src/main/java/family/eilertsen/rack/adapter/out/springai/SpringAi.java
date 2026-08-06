@@ -1,5 +1,6 @@
 package family.eilertsen.rack.adapter.out.springai;
 
+import family.eilertsen.rack.application.ModelReply;
 import family.eilertsen.rack.domain.port.UsageLog;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.Usage;
@@ -28,16 +29,15 @@ final class SpringAi {
         return count == null ? 0 : count;
     }
 
-    /** Models wrap JSON in ```json fences often enough to be worth undoing here. */
-    static String stripCodeFences(String s) {
-        String t = s.strip();
-        if (t.startsWith("```")) {
-            int nl = t.indexOf('\n');
-            t = nl < 0 ? "" : t.substring(nl + 1);
-            if (t.endsWith("```")) {
-                t = t.substring(0, t.length() - 3);
-            }
-        }
-        return t.strip();
+    /**
+     * The JSON out of a reply that is nearly JSON.
+     *
+     * <p>This used to undo code fences and nothing else, which was not enough:
+     * mid-filing the extractor answered "Looking at the photos:" ahead of the
+     * array and took the upload down with it. {@link ModelReply} does the whole
+     * job, for every call that asks for structured output.
+     */
+    static String json(String s) {
+        return ModelReply.json(s);
     }
 }
