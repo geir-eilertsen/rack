@@ -55,13 +55,40 @@
       padding: .45rem .6rem; border: 1px solid var(--border); border-radius: var(--radius-xs);
       background: var(--bg); color: inherit; resize: vertical; min-height: 2.2rem; }
 
-    .pstate { flex: 0 0 auto; font-family: inherit; font-size: .82rem; padding: .3rem .5rem;
-      border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
-      background: var(--card); color: inherit; }
-    .used { flex: 0 0 auto; width: 4rem; font-family: inherit; font-size: .82rem; padding: .3rem .4rem;
+    /* One card per supplier, not per part. Nineteen of these came from Farnell,
+       so nineteen cards each repeating "Farnell (element14) — Norwegian account"
+       was the same fact printed nineteen times and the parts lost among it. */
+    .group { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
+      box-shadow: var(--shadow); margin-bottom: .75rem; overflow: hidden; }
+    .group > .gh { display: flex; gap: .5rem; align-items: baseline; padding: .7rem .9rem;
+      border-bottom: 1px solid var(--border); background: var(--primary-soft); }
+    .group > .gh .gn { font-weight: 700; font-size: .95rem; flex: 1; min-width: 0; }
+    .group > .gh .gc { font-size: .8rem; color: var(--muted); white-space: nowrap; }
+    .group.here > .gh { background: var(--success-soft); }
+    .plines { list-style: none; padding: 0; margin: 0; }
+    .plines > li { padding: .6rem .9rem; border-top: 1px solid var(--border); }
+    .plines > li:first-child { border-top: none; }
+    .plines > li.is-used { opacity: .6; }
+    .pl-top { display: flex; gap: .55rem; align-items: baseline; }
+    .qty { flex: 0 0 auto; font-family: var(--font-mono); font-weight: 700; font-size: .85rem;
+      color: var(--primary-hover); min-width: 1.9rem; text-align: right; font-variant-numeric: tabular-nums; }
+    .pl-name { flex: 1; min-width: 0; font-weight: 600; font-size: .95rem; }
+    .pl-sub { margin: .2rem 0 0 2.45rem; font-size: .82rem; color: var(--muted); }
+    .pl-sub .code { font-family: var(--font-mono); color: var(--success); }
+    .pl-sub .term { font-family: var(--font-mono); }
+    .pl-sub a { color: var(--primary-hover); font-family: var(--font-mono); font-weight: 700; text-decoration: none; }
+    .pl-sub a:hover { text-decoration: underline; }
+    /* A 250-character caveat is worth keeping and not worth reading twenty times. */
+    .pl-why { margin: .25rem 0 0 2.45rem; font-size: .82rem; }
+    .pl-why summary { cursor: pointer; color: var(--primary-hover); width: fit-content; }
+    .pl-why[open] summary { margin-bottom: .2rem; }
+    .pl-why p { margin: 0; color: var(--muted); }
+    .pstate { flex: 0 0 auto; font-family: inherit; font-size: .78rem; padding: .22rem .4rem;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--bg); color: var(--muted); }
+    .used { flex: 0 0 auto; width: 3.4rem; font-family: inherit; font-size: .78rem; padding: .22rem .35rem;
       border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); color: inherit; }
-    .rows .sup { font-size: .82rem; color: var(--muted); }
-    .rows .code { font-family: var(--font-mono); color: var(--success); font-size: .82rem; }
+    .gh .btn { padding: .25rem .55rem; font-size: .78rem; }
 
     .log { list-style: none; padding: 0; margin: 0; font-size: .88rem; }
     .log li { padding: .4rem 0; border-top: 1px solid var(--border); display: flex; gap: .6rem; }
@@ -171,7 +198,7 @@
         + (parts.length
             ? '<div class="section-head">Parts <span class="of">'
               + parts.filter(x => x.status === 'to_buy' || x.status === 'ordered').length + ' still to come</span></div>'
-              + '<ul class="rows" id="parts">' + parts.map(partRow).join('') + '</ul>'
+              + partGroups(parts)
             : '')
 
         + (steps.length
@@ -196,34 +223,86 @@
       wire();
     }
 
-    function partRow(x, i) {
+    const HERE = 'Already in the rack';
+    const UNSOURCED = 'Still to source';
+
+    /**
+     * Which group a part belongs in. Having no supplier is not the same as being
+     * on the shelf: the assorted-capacitors line came off the checklist with no
+     * supplier and was then marked ordered, and it sat under "Already in the
+     * rack" saying "ordered" — a heading contradicting the row beneath it.
+     */
+    function groupOf(x) {
+      if (x.supplier && x.supplier.trim()) return x.supplier.trim();
+      return (x.status === 'in_stock' || x.status === 'used') ? HERE : UNSOURCED;
+    }
+
+    /**
+     * Grouped by supplier, which is what the list is for: eighteen of these come
+     * from Farnell, and a card each repeating "Farnell (element14) — Norwegian
+     * account" printed one fact eighteen times and lost the parts among it.
+     *
+     * Groups still owing something come first, because those are the ones with
+     * anything to do. Order within a group is left as the plan had it.
+     */
+    function partGroups(parts) {
+      const groups = new Map();
+      parts.forEach((x, i) => {
+        const key = groupOf(x);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push({ x, i });
+      });
+      const owing = g => g.some(r => r.x.status === 'to_buy' || r.x.status === 'ordered');
+      return [...groups.entries()]
+        .sort((a, b) => (owing(b[1]) ? 1 : 0) - (owing(a[1]) ? 1 : 0))
+        .map(([name, rows]) => group(name, rows)).join('');
+    }
+
+    function group(name, rows) {
+      const left = rows.filter(r => r.x.status === 'to_buy' || r.x.status === 'ordered').length;
+      const here = name === HERE;
+      // Pasteable, because the next thing you do with a shopping list is put it
+      // into somebody's search box.
+      const plain = rows.filter(r => !here).map(r =>
+        (r.x.qty ? r.x.qty + '× ' : '') + r.x.part
+        + (r.x.code ? '  [' + r.x.code + ']' : '')
+        + (r.x.search ? '  (' + r.x.search + ')' : '')).join('\n');
+      return '<div class="group' + (here ? ' here' : '') + '">'
+        + '<div class="gh"><span class="gn">' + esc(name) + '</span>'
+        + '<span class="gc">' + (here ? rows.length + ' on the shelf' : left + ' of ' + rows.length + ' to get') + '</span>'
+        + (here ? '' : '<button class="btn" type="button" data-copy="' + esc(plain) + '">Copy</button>')
+        + '</div><ul class="plines">' + rows.map(r => partLine(r.x, r.i)).join('') + '</ul></div>';
+    }
+
+    function partLine(x, i) {
       const states = ['in_stock', 'to_buy', 'ordered', 'arrived', 'used'];
-      return '<li><div class="r"><div class="body">'
-        + '<div class="t">' + esc(x.part) + (x.qty ? ' <span class="sup">× ' + esc(x.qty) + '</span>' : '') + '</div>'
-        + (x.supplier || x.code || x.search
-            ? '<div class="d">' + [x.supplier ? esc(x.supplier) : '',
-                x.code ? '<span class="code">' + esc(x.code) + '</span>' : '',
-                x.search ? 'search: ' + esc(x.search) : ''].filter(Boolean).join(' · ') + '</div>'
-            : '')
-        + (x.note ? '<div class="d">' + esc(x.note) + '</div>' : '')
-        + ((x.from || []).length
-            ? '<ul class="uses">' + x.from.map(f =>
-                '<li>In <a href="/put.html?c=' + encodeURIComponent(f.container) + '&s='
-                + encodeURIComponent(f.slot) + '">' + esc(f.container) + ' · ' + esc(f.slot) + '</a>'
-                + (f.item ? ' — ' + esc(f.item) : '') + '</li>').join('') + '</ul>'
-            : '')
+      const where = (x.from || []).map(f =>
+        '<a href="/put.html?c=' + encodeURIComponent(f.container) + '&s=' + encodeURIComponent(f.slot)
+        + '">' + esc(f.container) + ' · ' + esc(f.slot) + '</a>'
+        + (f.item ? ' ' + esc(f.item) : '')).join(' &nbsp; ');
+      const sub = [
+        where,
+        x.code ? '<span class="code">' + esc(x.code) + '</span>' : '',
+        x.search ? '<span class="term">' + esc(x.search) + '</span>' : ''
+      ].filter(Boolean).join(' · ');
+      return '<li' + (x.status === 'used' ? ' class="is-used"' : '') + '>'
+        + '<div class="pl-top">'
+          + '<span class="qty">' + (x.qty ? esc(x.qty) + '×' : '') + '</span>'
+          + '<span class="pl-name">' + esc(x.part) + '</span>'
+          + '<select class="pstate" data-part="' + i + '" aria-label="Part state">'
+            + states.map(s => '<option value="' + s + '"' + (s === x.status ? ' selected' : '') + '>'
+                + s.replace('_', ' ') + '</option>').join('')
+          + '</select>'
+          // Only asked for once it matters: how many were used is the number that
+          // settles up, and it is not knowable before the job is done.
+          + (x.status === 'used'
+              ? '<input class="used" type="number" min="0" inputmode="numeric" data-used="' + i + '"'
+                + ' value="' + (x.used_qty == null ? '' : x.used_qty) + '" placeholder="qty" aria-label="Quantity used">'
+              : '')
         + '</div>'
-        + '<select class="pstate" data-part="' + i + '" aria-label="Part state">'
-          + states.map(s => '<option value="' + s + '"' + (s === x.status ? ' selected' : '') + '>'
-              + s.replace('_', ' ') + '</option>').join('')
-        + '</select>'
-        // Only asked for once it matters: how many were used is the number that
-        // settles up, and it is not knowable before the job is done.
-        + (x.status === 'used'
-            ? '<input class="used" type="number" min="0" inputmode="numeric" data-used="' + i + '"'
-              + ' value="' + (x.used_qty == null ? '' : x.used_qty) + '" placeholder="used" aria-label="Quantity used">'
-            : '')
-        + '</div></li>';
+        + (sub ? '<div class="pl-sub">' + sub + '</div>' : '')
+        + (x.note ? '<details class="pl-why"><summary>why / caveats</summary><p>' + esc(x.note) + '</p></details>' : '')
+        + '</li>';
     }
 
     function stepRow(s, i) {
@@ -286,6 +365,25 @@
 
       document.getElementById('settleBtn').addEventListener('click', showSettlement);
     }
+
+    // One listener for every copy button, including ones drawn later.
+    document.addEventListener('click', async e => {
+      const btn = e.target.closest('[data-copy]');
+      if (!btn) return;
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copy);
+        const was = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = was; }, 1400);
+      } catch (err) {
+        // Clipboard refused — no permission, or not a secure context. Showing the
+        // text is the fallback that always works.
+        const pre = document.createElement('pre');
+        pre.textContent = btn.dataset.copy;
+        pre.style.cssText = 'white-space:pre-wrap;font-size:.82rem;margin:.5rem 0 0';
+        btn.replaceWith(pre);
+      }
+    });
 
     async function addNote() {
       const el = document.getElementById('noteText');

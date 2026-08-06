@@ -245,6 +245,10 @@ Built from what is already on screen. `ask.html` offers **Keep this as a project
 
 **Status moves on its own only where the answer is not a matter of opinion.** The last outstanding part arriving ends the shopping. Ticking a step does not: the first steps of a job are reading the manual and photographing the inside, both done while waiting for the post — a real run ticked step one with nineteen parts unordered and the project promptly called itself "building". And ticking the *last* step does not finish a project, because putting the lid back on and knowing it works are different things.
 
+**The parts list is grouped by supplier, because that is what it is for.** Eighteen of the Quad 606's lines come from Farnell, and a card each — repeating "Farnell (element14) — Norwegian account" eighteen times, with a 250-character caveat underneath in full — printed one fact eighteen times and lost the parts among it. One card per supplier now, hairline rows inside, the supplier named once with a Copy button beside it, and each caveat behind a `why / caveats` disclosure: worth keeping, not worth reading twenty times. Groups still owing something come first.
+
+**Having no supplier is not the same as being on the shelf.** The assorted-capacitors line came off the checklist with no supplier and was then marked *ordered*, and it sat under a heading reading "Already in the rack" — the group name contradicting the row beneath it. Rows with no supplier now split by status: `in_stock` and `used` are *Already in the rack*, everything else is *Still to source*.
+
 **Every change writes to the log.** That is most of the reason to store a project at all: "when did the transistors arrive" and "why did I skip step nine" are the questions, and neither is answerable from current state. A part's status says where it is; the log says how it got there. `ProjectNote.by` separates what the app did from what the user wrote.
 
 ### Resyncing a drawer
