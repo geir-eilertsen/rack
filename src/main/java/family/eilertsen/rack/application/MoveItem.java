@@ -56,7 +56,9 @@ public class MoveItem {
             original.tags(),
             original.qa(),
             original.sourcePhoto(),
-            original.seenIn()
+            original.seenIn(),
+            // Follows the item, the same as its photographs.
+            original.documents()
         );
 
         Instant now = Instant.now();

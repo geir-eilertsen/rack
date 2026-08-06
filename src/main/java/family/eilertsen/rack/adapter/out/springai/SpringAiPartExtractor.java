@@ -117,7 +117,8 @@ public class SpringAiPartExtractor implements PartExtractor {
         List<Integer> imageIndexes
     ) {
         Extraction toExtraction(int imageCount) {
-            Item item = new Item(name, description, partNumber, category, qtyEstimate, confidence, tags, null, null, null);
+            Item item = new Item(name, description, partNumber, category, qtyEstimate, confidence, tags,
+                null, null, null, List.of());
             return new Extraction(item, inRange(imageIndexes, imageCount));
         }
 

@@ -41,7 +41,9 @@ public class EditItem {
             update.tags() == null ? List.of() : List.copyOf(update.tags()),
             current.qa(),
             current.sourcePhoto(),
-            current.seenIn()
+            current.seenIn(),
+            // Not editable here; a datasheet is attached and removed on its own.
+            current.documents()
         );
 
         List<Item> newItems = new ArrayList<>(existing.items());

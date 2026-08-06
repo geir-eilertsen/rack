@@ -226,7 +226,7 @@ class ProjectLifecycleTest {
     @Test
     void aPartWithNoRecordedCountIsLeftAloneAndReported() {
         index.put(RACK, B7, new Item("Heat shrink", "assorted", null, "other", null, 0.9,
-            List.of(), List.of(), null, null));
+            List.of(), List.of(), null, null, List.of()));
         Project p = withUsedPart("Heat shrink", 2);
 
         SettleProject.Settlement pre = settle.preview(p.id());
@@ -355,7 +355,7 @@ class ProjectLifecycleTest {
     }
 
     private static Item item(String name, Integer qty) {
-        return new Item(name, name, null, "other", qty, 0.9, List.of(), List.of(), null, null);
+        return new Item(name, name, null, "other", qty, 0.9, List.of(), List.of(), null, null, List.of());
     }
 
     private static final class FakeStore implements ProjectStore {
@@ -406,6 +406,11 @@ class ProjectLifecycleTest {
         @Override
         public void forget(ContainerId container) {
             slots.remove(container);
+        }
+
+        @Override
+        public Set<String> documentsInUse() {
+            return Set.of();
         }
 
         @Override

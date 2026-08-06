@@ -23,7 +23,18 @@ public record Item(
     List<String> tags,
     List<QA> qa,
     String sourcePhoto,
-    List<String> seenIn
+    List<String> seenIn,
+    /**
+     * Datasheets and the like. The item owns them, exactly as it owns its
+     * photographs — move the item and its datasheet goes with it, delete the item
+     * and the file is unreferenced. Absent from every item filed before this,
+     * which reads as none.
+     */
+    List<Document> documents
 ) {
+    public Item {
+        documents = documents == null ? List.of() : List.copyOf(documents);
+    }
+
     public record QA(String question, String answer, Instant at) {}
 }

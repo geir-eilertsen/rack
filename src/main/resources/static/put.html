@@ -9,7 +9,9 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
+  <link rel="stylesheet" href="/assets/itemdocs.css">
   <script src="/assets/photos.js"></script>
+  <script src="/assets/itemdocs.js"></script>
   <style>
     .current { list-style: none; padding: 0; margin: .5rem 0 0; }
     .current li { padding: .75rem .9rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: .5rem; background: var(--card); cursor: pointer; transition: background .12s ease, border-color .12s ease; }
@@ -623,6 +625,9 @@
       currentEl.querySelectorAll('.remove').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); removeItem(b.closest('li')); }));
       currentEl.querySelectorAll('.ask-btn').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); askItem(b.closest('li')); }));
       currentEl.querySelectorAll('.ai-q').forEach(inp => inp.addEventListener('click', e => e.stopPropagation()));
+      // The block replaces itself from the slot the server returns; the count in
+      // the resync bar is the only thing out here that cares.
+      rackItemDocs.wire(currentEl, slot => { slotItemCount = (slot.items || []).length; });
       currentEl.querySelectorAll('.merge-panel').forEach(panel => wireMergePanel(panel, list));
       currentEl.querySelectorAll('.move-panel').forEach(panel => wireMovePanel(panel));
     }
@@ -862,6 +867,8 @@
             '<button class="remove" title="Remove this item">Remove</button>' +
           '</div>' +
           photoStrip(it, photoUrl) +
+          rackItemDocs.render(it, {
+            container: selectedContainer.id, slot: selectedSlot, index: idx }) +
           '<div class="ai">' +
             '<h4>Ask AI about this item</h4>' +
             renderQaLog(it.qa || []) +

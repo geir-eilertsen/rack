@@ -45,4 +45,13 @@ public interface PartIndex {
      * own list.
      */
     Set<String> photosInUse();
+
+    /**
+     * Every document filename any item still points at, across every container.
+     *
+     * <p>The photograph rule again: documents sit in one folder for the whole
+     * rack, so a datasheet one drawer is finished with may be the only copy
+     * another drawer's item has.
+     */
+    Set<String> documentsInUse();
 }

@@ -189,7 +189,9 @@ public class ResyncSlot {
         return new Item(item.name(), item.description(), item.partNumber(), item.category(),
             qty == null ? item.qtyEstimate() : qty, item.confidence(), item.tags(), item.qa(),
             frames.isEmpty() ? null : frames.get(0),
-            frames.isEmpty() ? null : frames);
+            frames.isEmpty() ? null : frames,
+            // A kept item keeps its datasheet — a camera has nothing to say about it.
+            item.documents());
     }
 
     private static List<Integer> framesOf(Extraction extraction, int photoCount) {

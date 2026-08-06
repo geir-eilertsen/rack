@@ -1,6 +1,7 @@
 package family.eilertsen.rack.adapter.in.web;
 
 import family.eilertsen.rack.application.AddPhotoToSlot;
+import family.eilertsen.rack.application.KeepDocuments;
 import family.eilertsen.rack.application.AskAboutItem;
 import family.eilertsen.rack.application.ContainerRegistry;
 import family.eilertsen.rack.application.DeleteContainer;
@@ -51,12 +52,14 @@ public class ContainerController {
     private final MergeItems mergeItems;
     private final RemovePhoto removePhoto;
     private final AskAboutItem askAboutItem;
+    private final KeepDocuments documents;
 
     public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto,
                                 RegisterContainer registerContainer, UpdateContainer updateContainer,
                                 DeleteContainer deleteContainer, RemoveItem removeItem,
                                 EditItem editItem, MoveItem moveItem, MergeItems mergeItems,
-                                RemovePhoto removePhoto, AskAboutItem askAboutItem) {
+                                RemovePhoto removePhoto, AskAboutItem askAboutItem,
+                                KeepDocuments documents) {
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
@@ -69,6 +72,7 @@ public class ContainerController {
         this.mergeItems = mergeItems;
         this.removePhoto = removePhoto;
         this.askAboutItem = askAboutItem;
+        this.documents = documents;
     }
 
     @GetMapping
@@ -239,6 +243,29 @@ public class ContainerController {
 
     /** The row that survives; the one in the path is the one folded into it. */
     public record MergeRequest(int into) {}
+
+    /**
+     * Keeps a file on one item. A datasheet, in practice — the part number on a
+     * chip is three millimetres wide and the pinout is not printed on it.
+     */
+    @PostMapping(value = "/{container}/{slot}/items/{index}/documents",
+                 consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Slot addItemDocument(@PathVariable String container,
+                                @PathVariable String slot,
+                                @PathVariable int index,
+                                @RequestParam("document") MultipartFile file,
+                                @RequestParam(value = "title", required = false) String title) throws IOException {
+        return documents.attachToItem(new ContainerId(container), new SlotId(slot), index,
+            file.getBytes(), file.getOriginalFilename(), file.getContentType(), title);
+    }
+
+    @DeleteMapping("/{container}/{slot}/items/{index}/documents/{filename}")
+    public Slot removeItemDocument(@PathVariable String container,
+                                   @PathVariable String slot,
+                                   @PathVariable int index,
+                                   @PathVariable String filename) {
+        return documents.detachFromItem(new ContainerId(container), new SlotId(slot), index, filename);
+    }
 
     /**
      * Drops one photograph from a drawer: off every item here that names it, and

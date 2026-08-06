@@ -113,7 +113,7 @@ class ContainerMaintenanceTest {
         // own their photographs now, which makes the state that trapped it
         // unrepresentable rather than merely allowed.
         Item photographed = new Item("BC547", "on a reel", null, null, null, 0.9,
-            List.of(), List.of(), "2026-08-04-1712.jpg", List.of("2026-08-04-1712.jpg"));
+            List.of(), List.of(), "2026-08-04-1712.jpg", List.of("2026-08-04-1712.jpg"), List.of());
         index.put(BIN, new Slot(new SlotId("b1"), List.of(photographed), null, null));
         assertThat(index.get(BIN, new SlotId("b1")).orElseThrow().frames())
             .containsExactly("2026-08-04-1712.jpg");
@@ -181,7 +181,7 @@ class ContainerMaintenanceTest {
     }
 
     private static Item item(String description) {
-        return new Item(description, description, null, null, null, 0.9, List.of(), List.of(), null, null);
+        return new Item(description, description, null, null, null, 0.9, List.of(), List.of(), null, null, List.of());
     }
 
     private static final class FakeStore implements ContainerStore {
@@ -233,6 +233,11 @@ class ContainerMaintenanceTest {
         @Override
         public void forget(ContainerId container) {
             slots.remove(container);
+        }
+
+        @Override
+        public Set<String> documentsInUse() {
+            return Set.of();
         }
 
         @Override

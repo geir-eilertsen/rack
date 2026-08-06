@@ -64,7 +64,7 @@ Small-parts inventory system. Photograph the contents of a slot in a physical st
 Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all swappable:
 
 - `ImageStore` — persists photographs to one flat folder for the whole rack
-- `DocumentStore` — the same, for manuals and schematics kept with a project
+- `DocumentStore` — the same, for manuals on a project and datasheets on an item
 - `PartExtractor` — one vision-model call that turns a batch of photos into `List<Extraction>` (Spring AI)
 - `PartIndex` — read/write of slot state; search
 
@@ -76,6 +76,7 @@ Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all s
 **A container with a single slot has no subdivisions at all**, and the UI stops mentioning them: no grid to pick from, no word for a part it has not got, and the title is just the container's name. Selecting it selects the one place. That is the plastic box — the box *is* the location, and asking which compartment would be asking about something that does not exist.
 - **Project** — a job of work. Holds what it needs (`ProjectPart`, each with a status from `in_stock` through `to_buy`, `ordered`, `arrived` to `used`), how to do it (`ProjectStep`, tickable, annotatable), its hazards, and a log. The only thing in the app that records stock *leaving*.
 - **Item** — one identified thing inside a slot (a transistor, a bag of screws, ...). Comes from vision extraction.
+- **Document** — a file kept with something: a service manual on a project, a datasheet on an item. Held by its owner, stored flat in `data/documents/`, swept when nothing names it.
 - **Photograph** — a picture of an item. **Items own photographs; slots do not.** `Item.sourcePhoto` is the frame it was read from and `Item.seenIn` is every frame showing it; a slot has no photo list of its own. The containment runs one way — container holds slots, slot holds items, item holds photographs — and everything else is derived from it.
 - Containers are defined in `application.yml` under `rack.containers` and materialised at boot by `ContainerRegistry` (see `application/RackConfiguration.java`). Layout kinds: `grid` (cols × rows → A1..) and `linear` (N → 1..N with optional prefix).
 
@@ -85,7 +86,7 @@ Spring Boot with hexagonal (ports and adapters) architecture. Three ports, all s
 family.eilertsen.rack
 ├── domain
 │   ├── model      # records: Container, ContainerId, Slot, SlotId, Item, Extraction, SearchHit, ContainerLayout,
-│   │               #          Project, ProjectId, ProjectPart, ProjectStep, ProjectNote
+│   │               #          Project, ProjectId, ProjectPart, ProjectStep, ProjectNote, Document
 │   └── port       # interfaces: ImageStore, PartExtractor, PartIndex, ProjectStore
 ├── application    # AddPhotoToSlot service, ContainerRegistry, RackProperties/Configuration
 └── adapter
@@ -261,6 +262,12 @@ Built from what is already on screen. `ask.html` offers **Keep this as a project
 **Adoption appends and never rewrites.** By the second asking some parts are ordered, some steps are ticked and one carries a note about a lifted pad; a fresh plan knows none of it and could not reproduce it. So nothing replaces a part, a step, a status or a note. Whether a proposed line duplicates one already there is the user's call, made on screen with both visible — the panel unticks likely duplicates (normalised part text, the one field a second reading is likely to phrase the same way) and the server appends exactly what it is given. Cautions are the single exception, deduplicated because they are plain strings with no state to lose.
 
 `assets/advice.js` and `assets/advice.css` hold the asking and the drawing; the two pages keep only their own last step — the ask page starts a project, a project page folds it in. Extracted rather than copied, because the two would drift the way the 1568px resize helper once did. `ask.html` went from 440 lines to 194.
+
+**An item can hold files too, and owns them the way it owns its photographs.** `POST /c/{container}/{slot}/items/{index}/documents` keeps a datasheet on one item; `Item.documents` is where the reference lives, so a move takes it along, a merge unions both rows' files, a resync keeps them (a camera has nothing to say about a PDF), and deleting the item leaves the file unreferenced. `PartIndex.documentsInUse()` is the item half of the union `KeepDocuments.inUse()` asks — a project finishing says nothing about the datasheet still sitting on the chip in B7.
+
+Worth having because the part number on a chip is three millimetres wide and the pinout is not printed on it: the datasheet is the difference between a drawer that says what is in it and one that says what you can do with it. Attaching one does **not** stamp `lastVerified` — downloading a PDF at a desk is not looking in the drawer, and spending the app's one honest staleness signal on a click would be the same mistake settling up avoids.
+
+`assets/itemdocs.js` renders and wires the block, shared by `put.html` and `find.html`. A block replaces itself from the slot the server returns, because the two pages redraw differently — put.html rebuilds its list from stored state, find.html patches rows in place — and a shared piece insisting on either would be wrong on one of them.
 
 **Documents are stored, not linked.** A service manual, a schematic, a photograph of the board before it was stripped: `POST /projects/{id}/documents` keeps the file in `data/documents/` and `GET /documents/{filename}` serves it inline, because a manual is for reading at the bench rather than downloading again every time you check a resistor value. Step one of the Quad 606 plan is *download the service manual*; the point of keeping it is that step one never happens twice.
 

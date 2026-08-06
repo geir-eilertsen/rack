@@ -68,7 +68,7 @@ class MergeItemsTest {
     @Test
     void aRowFromBeforeFramesWereRecordedStillContributesTheOneItWasReadFrom() {
         Item old = new Item("AAA batteries", "older row", null, "other", 2, 0.9,
-            List.of(), List.of(), "old.jpg", null);
+            List.of(), List.of(), "old.jpg", null, List.of());
         holds(old, battery("More AAA", 4, "two.jpg"));
 
         assertThat(merge.execute(RACK, A4, 0, 1).items().get(0).seenIn())
@@ -77,8 +77,8 @@ class MergeItemsTest {
 
     @Test
     void anItemNeitherRowHasAFrameForKeepsNone() {
-        Item a = new Item("AAA", "a", null, "other", 2, 0.9, List.of(), List.of(), null, null);
-        Item b = new Item("AAA", "b", null, "other", 4, 0.9, List.of(), List.of(), null, null);
+        Item a = new Item("AAA", "a", null, "other", 2, 0.9, List.of(), List.of(), null, null, List.of());
+        Item b = new Item("AAA", "b", null, "other", 4, 0.9, List.of(), List.of(), null, null, List.of());
         holds(a, b);
 
         assertThat(merge.execute(RACK, A4, 0, 1).items().get(0).seenIn()).isNull();
@@ -87,7 +87,7 @@ class MergeItemsTest {
     @Test
     void keepsTheSurvivorsQuestionsAndAnswers() {
         Item asked = new Item("AAA batteries", "with history", null, "other", 2, 0.9, List.of("aaa"),
-            List.of(new Item.QA("are these alkaline?", "no, zinc-carbon", Instant.EPOCH)), "one.jpg", List.of("one.jpg"));
+            List.of(new Item.QA("are these alkaline?", "no, zinc-carbon", Instant.EPOCH)), "one.jpg", List.of("one.jpg"), List.of());
         holds(asked, battery("More AAA", 4, "two.jpg"));
 
         assertThat(merge.execute(RACK, A4, 0, 1).items().get(0).qa()).hasSize(1);
@@ -133,7 +133,7 @@ class MergeItemsTest {
 
     private static Item battery(String name, int qty, String frame) {
         return new Item(name, "in the drawer", null, "other", qty, 0.9, List.of(),
-            List.of(), frame, List.of(frame));
+            List.of(), frame, List.of(frame), List.of());
     }
 
     private static final class FakeIndex implements PartIndex {
@@ -163,6 +163,11 @@ class MergeItemsTest {
         @Override
         public void forget(ContainerId container) {
             slots.remove(container);
+        }
+
+        @Override
+        public Set<String> documentsInUse() {
+            return Set.of();
         }
 
         @Override

@@ -7,7 +7,7 @@ import family.eilertsen.rack.application.RunProject;
 import family.eilertsen.rack.application.SettleProject;
 import family.eilertsen.rack.application.StartProject;
 import family.eilertsen.rack.domain.model.Project;
-import family.eilertsen.rack.domain.model.ProjectDocument;
+import family.eilertsen.rack.domain.model.Document;
 import family.eilertsen.rack.domain.model.ProjectId;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -77,7 +77,7 @@ public class ProjectController {
     @DeleteMapping("/{id}")
     public void delete(@PathVariable String id) {
         ProjectId pid = new ProjectId(id);
-        List<ProjectDocument> held = one(id).documents();
+        List<Document> held = one(id).documents();
         run.delete(pid);
         docs.forget(held);
     }

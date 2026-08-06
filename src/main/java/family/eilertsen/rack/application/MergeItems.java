@@ -1,6 +1,7 @@
 package family.eilertsen.rack.application;
 
 import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.Document;
 import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
@@ -9,6 +10,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -60,7 +63,7 @@ public class MergeItems {
             qty(keep) + qty(drop),
             keep.confidence(), keep.tags(), keep.qa(),
             keep.sourcePhoto() != null ? keep.sourcePhoto() : drop.sourcePhoto(),
-            framesOf(keep, drop));
+            framesOf(keep, drop), documentsOf(keep, drop));
 
         List<Item> updated = new ArrayList<>();
         for (int i = 0; i < items.size(); i++) {
@@ -80,6 +83,19 @@ public class MergeItems {
      * back to the slot's own strip, and inventing one here would say more than
      * is known.
      */
+    /**
+     * Both rows' datasheets, the survivor's first — the same treatment their
+     * photographs get, and for the same reason: two entries for one part may have
+     * been documented from different sides, and a merge should lose neither.
+     */
+    private static List<Document> documentsOf(Item keep, Item drop) {
+        Map<String, Document> byFile = new LinkedHashMap<>();
+        for (Item item : List.of(keep, drop)) {
+            for (Document d : item.documents()) byFile.putIfAbsent(d.filename(), d);
+        }
+        return List.copyOf(byFile.values());
+    }
+
     private static List<String> framesOf(Item keep, Item drop) {
         Set<String> frames = new LinkedHashSet<>();
         addFrames(frames, keep);

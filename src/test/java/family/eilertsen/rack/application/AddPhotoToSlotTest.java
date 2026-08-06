@@ -148,7 +148,7 @@ class AddPhotoToSlotTest {
     @Test
     void appendsToWhatTheSlotAlreadyHeld() {
         Item held = new Item("old", "old", null, null, 1, 0.9, List.of(), List.of(),
-            "earlier.jpg", List.of("earlier.jpg"));
+            "earlier.jpg", List.of("earlier.jpg"), List.of());
         index.save(RACK, new Slot(A1, List.of(held), Instant.EPOCH, Instant.EPOCH));
         extractor.returns(new Extraction(item("new one"), 0), new Extraction(item("new two"), 1));
 
@@ -177,7 +177,7 @@ class AddPhotoToSlotTest {
     }
 
     private static Item item(String description) {
-        return new Item(description, description, null, null, 1, 0.9, List.of(), List.of(), null, null);
+        return new Item(description, description, null, null, 1, 0.9, List.of(), List.of(), null, null, List.of());
     }
 
     private static final class FakeImages implements ImageStore {
@@ -253,6 +253,11 @@ class AddPhotoToSlotTest {
         @Override
         public void forget(ContainerId container) {
             slots.remove(container);
+        }
+
+        @Override
+        public Set<String> documentsInUse() {
+            return Set.of();
         }
 
         @Override

@@ -214,7 +214,7 @@ class AskAboutRackTest {
     void anItemWithNoNameIsStillCitableByItsDescription() {
         // Items catalogued before the name/description split have only the one.
         index.put(RACK, slot("A1", new Item(null, "Solder lugs - small ring terminals", null,
-            "connector", 20, 0.8, List.of(), List.of(), null, null)));
+            "connector", 20, 0.8, List.of(), List.of(), null, null, List.of())));
         Map<String, List<String>> held = AskAboutRack.inventory(registry, index).held();
 
         List<AskAboutRack.Need> checked = AskAboutRack.verify(List.of(
@@ -237,7 +237,7 @@ class AskAboutRackTest {
     }
 
     private static Item item(String name, String description, int qty) {
-        return new Item(name, description, null, "other", qty, 0.9, List.of(), List.of(), null, null);
+        return new Item(name, description, null, "other", qty, 0.9, List.of(), List.of(), null, null, List.of());
     }
 
     private record FakeStore(List<Container> containers) implements ContainerStore {
@@ -276,6 +276,11 @@ class AskAboutRackTest {
         @Override
         public void forget(ContainerId container) {
             slots.remove(container);
+        }
+
+        @Override
+        public Set<String> documentsInUse() {
+            return Set.of();
         }
 
         @Override

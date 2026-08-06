@@ -3,8 +3,13 @@ package family.eilertsen.rack.domain.model;
 import java.time.Instant;
 
 /**
- * A file kept with a project: the service manual, a schematic, the photograph of
- * a board before it was stripped.
+ * A file kept with something: a service manual on a project, a datasheet on an
+ * item, a schematic, the photograph of a board before it was stripped.
+ *
+ * <p>Both a project and an item can hold these, and both hold them the same way —
+ * the owner names the file and the file sits flat in {@code data/documents/}. The
+ * same rule photographs follow, for the same reason: the thing that owns a file
+ * gets renamed, moved and deleted, and the file should not have to move with it.
  *
  * <p><strong>Stored, not linked.</strong> The app has no way to reach the
  * internet, and the model that writes the plans knows it — asked where to buy
@@ -18,10 +23,12 @@ import java.time.Instant;
  * "download the service manual", and the point of keeping it is that step one
  * never has to happen twice.
  *
- * <p>{@code filename} is the stored name, flat in {@code data/documents/} the way
- * photographs are. The project is the only thing that points at it.
+ * <p>An item's datasheet is the clearest case for keeping one at all: the part
+ * number on a chip is three millimetres wide and the pinout is not on it, so the
+ * PDF is the difference between a drawer that tells you what is in it and one
+ * that tells you what you can do with it.
  */
-public record ProjectDocument(
+public record Document(
     String filename,
     /** What it is, in the user's words. Defaults to the name of the file uploaded. */
     String title,
@@ -29,12 +36,12 @@ public record ProjectDocument(
     long size,
     Instant addedAt
 ) {
-    public ProjectDocument {
+    public Document {
         if (filename == null || filename.isBlank()) throw new IllegalArgumentException("filename is required");
         if (title == null || title.isBlank()) title = filename;
     }
 
-    public ProjectDocument retitled(String newTitle) {
-        return new ProjectDocument(filename, newTitle, contentType, size, addedAt);
+    public Document retitled(String newTitle) {
+        return new Document(filename, newTitle, contentType, size, addedAt);
     }
 }

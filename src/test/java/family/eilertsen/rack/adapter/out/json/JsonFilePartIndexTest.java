@@ -258,7 +258,7 @@ class JsonFilePartIndexTest {
         // photograph be listed by a drawer and shown by nobody.
         JsonFilePartIndex index = load();
         Item item = new Item("M4 hex bolts", "bag of fifty", null, "fastener", 50, 0.9,
-            List.of(), List.of(), "a.jpg", List.of("a.jpg", "b.jpg"));
+            List.of(), List.of(), "a.jpg", List.of("a.jpg", "b.jpg"), List.of());
         index.save(RACK, new Slot(new SlotId("B4"), List.of(item), null, null));
 
         String written = Files.readString(dataDir.resolve("rack").resolve("B4.json"), StandardCharsets.UTF_8);
@@ -297,7 +297,7 @@ class JsonFilePartIndexTest {
         // of a capped list's places on one word.
         JsonFilePartIndex index = new JsonFilePartIndex(dataDir.toString(), mapper);
         Item item = new Item("Electrical tape", "one black roll", null, "other", 1, 0.9,
-            List.of("electrical tape", "ELECTRICAL TAPE", "pvc"), List.of(), null, null);
+            List.of("electrical tape", "ELECTRICAL TAPE", "pvc"), List.of(), null, null, List.of());
         index.save(RACK, new Slot(new SlotId("A9"), List.of(item), null, null));
 
         assertThat(index.vocabulary()).containsExactly("Electrical tape", "other", "pvc");
@@ -307,7 +307,7 @@ class JsonFilePartIndexTest {
     void savedItemsKeepTheirNameAcrossAReload() throws IOException {
         JsonFilePartIndex index = load();
         Item item = new Item("M4 hex bolts", "bag of about fifty, DIN 933", null, "fastener",
-            50, 0.9, List.of("M4"), List.of(), null, null);
+            50, 0.9, List.of("M4"), List.of(), null, null, List.of());
         index.save(RACK, new Slot(new SlotId("B2"), List.of(item), null, null));
 
         Item reloaded = load().get(RACK, new SlotId("B2")).orElseThrow().items().get(0);

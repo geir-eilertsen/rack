@@ -1,10 +1,15 @@
 package family.eilertsen.rack.application;
 
+import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.Project;
-import family.eilertsen.rack.domain.model.ProjectDocument;
+import family.eilertsen.rack.domain.model.Document;
 import family.eilertsen.rack.domain.model.ProjectId;
 import family.eilertsen.rack.domain.model.ProjectNote;
+import family.eilertsen.rack.domain.model.Slot;
+import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.port.DocumentStore;
+import family.eilertsen.rack.domain.port.PartIndex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -36,10 +41,80 @@ public class KeepDocuments {
 
     private final Projects projects;
     private final DocumentStore documents;
+    private final PartIndex index;
 
-    public KeepDocuments(Projects projects, DocumentStore documents) {
+    public KeepDocuments(Projects projects, DocumentStore documents, PartIndex index) {
         this.projects = projects;
         this.documents = documents;
+        this.index = index;
+    }
+
+    /**
+     * Keeps a file on one item — a datasheet, most of the time.
+     *
+     * <p>The part number on a chip is three millimetres wide and the pinout is not
+     * printed on it, so this is the difference between a drawer that says what is
+     * in it and one that says what you can do with it.
+     */
+    public Slot attachToItem(ContainerId container, SlotId slotId, int itemIndex,
+                             byte[] bytes, String originalFilename, String contentType, String title) {
+        Slot slot = requireSlot(container, slotId);
+        Item item = requireItem(slot, itemIndex);
+        if (bytes == null || bytes.length == 0) throw new IllegalArgumentException("the document is empty");
+
+        String stored = documents.store(bytes, originalFilename, contentType);
+        Document doc = new Document(stored,
+            title == null || title.isBlank() ? cleanTitle(originalFilename) : title.strip(),
+            contentType, bytes.length, Instant.now());
+
+        List<Document> kept = new ArrayList<>(item.documents());
+        kept.add(doc);
+        return saveItem(container, slot, itemIndex, withDocuments(item, List.copyOf(kept)));
+    }
+
+    public Slot detachFromItem(ContainerId container, SlotId slotId, int itemIndex, String filename) {
+        Slot slot = requireSlot(container, slotId);
+        Item item = requireItem(slot, itemIndex);
+        if (item.documents().stream().noneMatch(d -> d.filename().equals(filename))) {
+            throw new NoSuchElementException("This item has no document " + filename);
+        }
+
+        List<Document> kept = new ArrayList<>(item.documents());
+        kept.removeIf(d -> d.filename().equals(filename));
+        Slot saved = saveItem(container, slot, itemIndex, withDocuments(item, List.copyOf(kept)));
+
+        // After the write, and against everything: the same datasheet may be on
+        // another item, or kept by a project.
+        if (!inUse().contains(filename)) documents.delete(filename);
+        return saved;
+    }
+
+    private Slot requireSlot(ContainerId container, SlotId slotId) {
+        return index.get(container, slotId).orElseThrow(() -> new NoSuchElementException(
+            "Slot has no state: " + container.value() + "/" + slotId.value()));
+    }
+
+    private static Item requireItem(Slot slot, int itemIndex) {
+        List<Item> items = slot.items() == null ? List.<Item>of() : slot.items();
+        if (itemIndex < 0 || itemIndex >= items.size()) {
+            throw new IndexOutOfBoundsException(
+                "Item index " + itemIndex + " out of range (0.." + (items.size() - 1) + ")");
+        }
+        return items.get(itemIndex);
+    }
+
+    private Slot saveItem(ContainerId container, Slot slot, int itemIndex, Item item) {
+        List<Item> items = new ArrayList<>(slot.items());
+        items.set(itemIndex, item);
+        // lastVerified untouched: attaching a datasheet is not looking in the drawer.
+        Slot saved = new Slot(slot.id(), List.copyOf(items), slot.lastVerified(), slot.printedAt());
+        index.save(container, saved);
+        return saved;
+    }
+
+    private static Item withDocuments(Item i, List<Document> docs) {
+        return new Item(i.name(), i.description(), i.partNumber(), i.category(), i.qtyEstimate(),
+            i.confidence(), i.tags(), i.qa(), i.sourcePhoto(), i.seenIn(), docs);
     }
 
     public Project attach(ProjectId id, byte[] bytes, String originalFilename, String contentType, String title) {
@@ -47,22 +122,22 @@ public class KeepDocuments {
         if (bytes == null || bytes.length == 0) throw new IllegalArgumentException("the document is empty");
 
         String stored = documents.store(bytes, originalFilename, contentType);
-        ProjectDocument doc = new ProjectDocument(stored,
+        Document doc = new Document(stored,
             title == null || title.isBlank() ? cleanTitle(originalFilename) : title.strip(),
             contentType, bytes.length, Instant.now());
 
-        List<ProjectDocument> kept = new ArrayList<>(project.documents());
+        List<Document> kept = new ArrayList<>(project.documents());
         kept.add(doc);
         return saved(project, List.copyOf(kept), ProjectNote.app("Kept a document: " + doc.title()));
     }
 
     public Project detach(ProjectId id, String filename) {
         Project project = require(id);
-        ProjectDocument going = project.documents().stream()
+        Document going = project.documents().stream()
             .filter(d -> d.filename().equals(filename)).findFirst()
             .orElseThrow(() -> new NoSuchElementException("This project has no document " + filename));
 
-        List<ProjectDocument> kept = new ArrayList<>(project.documents());
+        List<Document> kept = new ArrayList<>(project.documents());
         kept.removeIf(d -> d.filename().equals(filename));
         Project updated = saved(project, List.copyOf(kept),
             ProjectNote.app("Removed a document: " + going.title()));
@@ -76,9 +151,9 @@ public class KeepDocuments {
     public Project retitle(ProjectId id, String filename, String title) {
         Project project = require(id);
         if (title == null || title.isBlank()) throw new IllegalArgumentException("a title is required");
-        List<ProjectDocument> kept = new ArrayList<>();
+        List<Document> kept = new ArrayList<>();
         boolean found = false;
-        for (ProjectDocument d : project.documents()) {
+        for (Document d : project.documents()) {
             if (d.filename().equals(filename)) { kept.add(d.retitled(title.strip())); found = true; }
             else kept.add(d);
         }
@@ -93,8 +168,11 @@ public class KeepDocuments {
     public Set<String> inUse() {
         Set<String> used = new HashSet<>();
         for (Project p : projects.all()) {
-            for (ProjectDocument d : p.documents()) used.add(d.filename());
+            for (Document d : p.documents()) used.add(d.filename());
         }
+        // And every item's, because a project finishing says nothing about the
+        // datasheet still sitting on the chip in B7.
+        used.addAll(index.documentsInUse());
         return used;
     }
 
@@ -106,10 +184,10 @@ public class KeepDocuments {
      * at, which the boot sweep collects — the other order would leave a project
      * naming a document that is not there.
      */
-    public List<String> forget(List<ProjectDocument> orphaned) {
+    public List<String> forget(List<Document> orphaned) {
         Set<String> stillUsed = inUse();
         List<String> gone = new ArrayList<>();
-        for (ProjectDocument d : orphaned == null ? List.<ProjectDocument>of() : orphaned) {
+        for (Document d : orphaned == null ? List.<Document>of() : orphaned) {
             if (stillUsed.contains(d.filename())) continue;
             documents.delete(d.filename());
             gone.add(d.filename());
@@ -135,7 +213,7 @@ public class KeepDocuments {
             new NoSuchElementException("No such project: " + id.value()));
     }
 
-    private Project saved(Project p, List<ProjectDocument> docs, ProjectNote note) {
+    private Project saved(Project p, List<Document> docs, ProjectNote note) {
         List<ProjectNote> logLines = new ArrayList<>(p.log());
         if (note != null) logLines.add(note);
         Project updated = new Project(p.id(), p.name(), p.brief(), p.status(), p.startedAt(),

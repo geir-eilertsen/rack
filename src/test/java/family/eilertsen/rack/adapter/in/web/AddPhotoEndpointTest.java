@@ -67,7 +67,7 @@ class AddPhotoEndpointTest {
         AddPhotoToSlot addPhoto = new AddPhotoToSlot(images, extractor, index);
         ContainerController controller = new ContainerController(
             new ContainerRegistry(store), index, addPhoto,
-            null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null);
         // Match the app's snake_case output so the assertions below are the
         // wire contract the browser sees, not a MockMvc default.
         ObjectMapper mapper = new ObjectMapper()
@@ -111,7 +111,7 @@ class AddPhotoEndpointTest {
     }
 
     private static Item item(String description) {
-        return new Item(description, description, null, null, 1, 0.9, List.of(), List.of(), null, null);
+        return new Item(description, description, null, null, 1, 0.9, List.of(), List.of(), null, null, List.of());
     }
 
     private static final class FakeImages implements ImageStore {
@@ -184,6 +184,11 @@ class AddPhotoEndpointTest {
         @Override
         public void forget(ContainerId container) {
             slots.remove(container);
+        }
+
+        @Override
+        public Set<String> documentsInUse() {
+            return Set.of();
         }
 
         @Override

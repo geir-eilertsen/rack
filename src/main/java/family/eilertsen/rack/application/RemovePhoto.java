@@ -76,6 +76,6 @@ public class RemovePhoto {
 
         return new Item(item.name(), item.description(), item.partNumber(), item.category(),
             item.qtyEstimate(), item.confidence(), item.tags(), item.qa(),
-            source, remaining);
+            source, remaining, item.documents());
     }
 }

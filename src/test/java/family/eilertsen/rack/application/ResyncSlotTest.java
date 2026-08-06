@@ -151,7 +151,7 @@ class ResyncSlotTest {
         // the camera cannot redo. Only the count came out of the new photos.
         Item edited = new Item("Zener 5V1", "hand-corrected note", "BZX55C5V1", "diodes", 12, 1.0,
             List.of("project-x"), List.of(new Item.QA("what package?", "DO-35", Instant.EPOCH)),
-            "old-1.jpg", List.of("old-1.jpg"));
+            "old-1.jpg", List.of("old-1.jpg"), List.of());
         holds(edited);
 
         Slot saved = resync.apply(RACK, A1, batch("front", "label"),
@@ -286,7 +286,7 @@ class ResyncSlotTest {
 
     private static Item shotIn(Item i, String... frames) {
         return new Item(i.name(), i.description(), i.partNumber(), i.category(), i.qtyEstimate(),
-            i.confidence(), i.tags(), i.qa(), frames[0], List.of(frames));
+            i.confidence(), i.tags(), i.qa(), frames[0], List.of(frames), List.of());
     }
 
     private static List<byte[]> batch(String... markers) {
@@ -296,7 +296,7 @@ class ResyncSlotTest {
     }
 
     private static Item item(String name, String description, String partNumber, Integer qty) {
-        return new Item(name, description, partNumber, null, qty, 0.9, List.of(), List.of(), null, null);
+        return new Item(name, description, partNumber, null, qty, 0.9, List.of(), List.of(), null, null, List.of());
     }
 
     private static final class FakeImages implements ImageStore {
@@ -370,6 +370,11 @@ class ResyncSlotTest {
         @Override
         public void forget(ContainerId container) {
             slots.remove(container);
+        }
+
+        @Override
+        public Set<String> documentsInUse() {
+            return Set.of();
         }
 
         @Override

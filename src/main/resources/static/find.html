@@ -9,7 +9,9 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
+  <link rel="stylesheet" href="/assets/itemdocs.css">
   <script src="/assets/photos.js"></script>
+  <script src="/assets/itemdocs.js"></script>
   <style>
     .search { margin-bottom: 1rem; display: flex; gap: .4rem; }
     .search input { flex: 1; min-width: 0; font-size: 1.05rem; padding: .8rem 1rem; }
@@ -519,6 +521,7 @@
             '<button class="remove" title="Remove this item">Remove</button>' +
           '</div>' +
           photoStrip(it, photoUrl) +
+          rackItemDocs.render(it, { container: g.container, slot: g.slot, index: h.index }) +
           '<div class="ai">' +
             '<h4>Ask AI about this item</h4>' +
             renderQaLog(it.qa || []) +
@@ -624,6 +627,7 @@
       hits.querySelectorAll('.save').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); saveHit(b.closest('li')); }));
       hits.querySelectorAll('.remove').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); removeHit(b.closest('li')); }));
       hits.querySelectorAll('.ask-btn').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); askHit(b.closest('li')); }));
+      rackItemDocs.wire(hits);
       hits.querySelectorAll('.ai-q').forEach(inp => inp.addEventListener('click', e => e.stopPropagation()));
       hits.querySelectorAll('.merge-panel').forEach(panel => wireMergePanel(panel));
       hits.querySelectorAll('.move-panel').forEach(panel => wireMovePanel(panel));

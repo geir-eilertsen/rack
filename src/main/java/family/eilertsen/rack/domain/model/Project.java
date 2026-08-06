@@ -39,7 +39,7 @@ public record Project(
     /** What happened, oldest first. A project's memory of itself. */
     List<ProjectNote> log,
     /** Service manuals, schematics, photographs of the board before it was stripped. */
-    List<ProjectDocument> documents
+    List<Document> documents
 ) {
     public static final String PLANNING = "planning";
     public static final String SHOPPING = "shopping";

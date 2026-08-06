@@ -2,6 +2,7 @@ package family.eilertsen.rack.adapter.out.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.Document;
 import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.SearchHit;
 import family.eilertsen.rack.domain.model.Slot;
@@ -291,6 +292,20 @@ public class JsonFilePartIndex implements PartIndex {
         for (Map<SlotId, Slot> slots : byContainer.values()) {
             for (Slot slot : slots.values()) {
                 used.addAll(slot.frames());
+            }
+        }
+        return used;
+    }
+
+    @Override
+    public Set<String> documentsInUse() {
+        Set<String> used = new LinkedHashSet<>();
+        for (Map<SlotId, Slot> slots : byContainer.values()) {
+            for (Slot slot : slots.values()) {
+                if (slot.items() == null) continue;
+                for (Item item : slot.items()) {
+                    for (Document d : item.documents()) used.add(d.filename());
+                }
             }
         }
         return used;

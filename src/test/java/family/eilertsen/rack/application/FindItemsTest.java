@@ -136,7 +136,7 @@ class FindItemsTest {
     }
 
     private static SearchHit hit(String slot, int itemIndex, double score) {
-        Item item = new Item("tape", "a roll of tape", null, "other", 1, 0.9, List.of(), List.of(), null, null);
+        Item item = new Item("tape", "a roll of tape", null, "other", 1, 0.9, List.of(), List.of(), null, null, List.of());
         return new SearchHit(RACK, new SlotId(slot), itemIndex, item, score, null);
     }
 
@@ -185,6 +185,11 @@ class FindItemsTest {
         @Override
         public void forget(ContainerId container) {
             byQuery.clear();
+        }
+
+        @Override
+        public Set<String> documentsInUse() {
+            return Set.of();
         }
 
         @Override

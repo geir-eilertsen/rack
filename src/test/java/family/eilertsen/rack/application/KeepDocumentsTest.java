@@ -1,13 +1,18 @@
 package family.eilertsen.rack.application;
 
+import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.Project;
 import family.eilertsen.rack.domain.model.ProjectId;
+import family.eilertsen.rack.domain.model.Slot;
+import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.port.DocumentStore;
 import family.eilertsen.rack.domain.port.ProjectStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,7 +24,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class KeepDocumentsTest {
 
+    private static final ContainerId RACK = new ContainerId("rack");
+    private static final SlotId A1 = new SlotId("A1");
+
     private FakeDocs store;
+    private FakeIndex index;
     private Projects projects;
     private StartProject start;
     private KeepDocuments keep;
@@ -31,7 +40,8 @@ class KeepDocumentsTest {
         projects = new Projects(new FakeProjects());
         projects.load();
         start = new StartProject(projects);
-        keep = new KeepDocuments(projects, store);
+        index = new FakeIndex();
+        keep = new KeepDocuments(projects, store, index);
         sweep = new ForgetUnusedDocuments(keep, store);
     }
 
@@ -92,13 +102,77 @@ class KeepDocumentsTest {
     void deletingAProjectTakesItsDocumentsWithIt() {
         Project p = newProject("Quad 606");
         p = keep.attach(p.id(), bytes("m"), "manual.pdf", "application/pdf", null);
-        List<family.eilertsen.rack.domain.model.ProjectDocument> held = p.documents();
+        List<family.eilertsen.rack.domain.model.Document> held = p.documents();
 
         projects.remove(p.id());
         List<String> gone = keep.forget(held);
 
         assertThat(gone).hasSize(1);
         assertThat(store.all()).isEmpty();
+    }
+
+    @Test
+    void keepsADatasheetOnTheItemItDescribes() {
+        // The part number on a chip is three millimetres wide and the pinout is not
+        // printed on it, so this is the difference between a drawer that says what
+        // is in it and one that says what you can do with it.
+        index.save(RACK, slotWith(item("BC547 transistor")));
+
+        Slot saved = keep.attachToItem(RACK, A1, 0, bytes("pdf"), "BC547-datasheet.pdf",
+            "application/pdf", null);
+
+        assertThat(saved.items().get(0).documents()).singleElement().satisfies(d -> {
+            assertThat(d.title()).isEqualTo("BC547 datasheet");
+            assertThat(d.contentType()).isEqualTo("application/pdf");
+        });
+    }
+
+    @Test
+    void attachingADatasheetDoesNotClaimTheDrawerWasChecked() {
+        // last_verified means somebody looked in the drawer. Downloading a PDF at a
+        // desk is not that, and stamping it would spend the app's one honest
+        // staleness signal on a click.
+        Instant longAgo = Instant.parse("2026-01-01T00:00:00Z");
+        index.save(RACK, new Slot(A1, List.of(item("BC547 transistor")), longAgo, null));
+
+        Slot saved = keep.attachToItem(RACK, A1, 0, bytes("pdf"), "d.pdf", "application/pdf", null);
+
+        assertThat(saved.lastVerified()).isEqualTo(longAgo);
+    }
+
+    @Test
+    void anItemsDatasheetCountsAsInUseAgainstAProjectDroppingIt() {
+        // A project finishing says nothing about the datasheet still sitting on the
+        // chip in B7.
+        index.save(RACK, slotWith(item("BC547 transistor")));
+        Slot withDoc = keep.attachToItem(RACK, A1, 0, bytes("pdf"), "shared.pdf", "application/pdf", null);
+        String filename = withDoc.items().get(0).documents().get(0).filename();
+
+        assertThat(keep.inUse()).contains(filename);
+        assertThat(sweep.sweep()).doesNotContain(filename);
+        assertThat(store.all()).contains(filename);
+    }
+
+    @Test
+    void removingAnItemsDatasheetTakesTheFileWhenNothingElseHasIt() {
+        index.save(RACK, slotWith(item("BC547 transistor")));
+        Slot withDoc = keep.attachToItem(RACK, A1, 0, bytes("pdf"), "only.pdf", "application/pdf", null);
+        String filename = withDoc.items().get(0).documents().get(0).filename();
+
+        Slot after = keep.detachFromItem(RACK, A1, 0, filename);
+
+        assertThat(after.items().get(0).documents()).isEmpty();
+        assertThat(store.all()).doesNotContain(filename);
+    }
+
+    @Test
+    void refusesAnItemIndexThatIsNotThere() {
+        index.save(RACK, slotWith(item("BC547 transistor")));
+
+        assertThatThrownBy(() -> keep.attachToItem(RACK, A1, 4, bytes("p"), "d.pdf", "application/pdf", null))
+            .isInstanceOf(IndexOutOfBoundsException.class);
+        assertThatThrownBy(() -> keep.detachFromItem(RACK, A1, 0, "absent.pdf"))
+            .isInstanceOf(NoSuchElementException.class);
     }
 
     @Test
@@ -145,6 +219,14 @@ class KeepDocumentsTest {
         assertThat(bare.documents()).isEmpty();
     }
 
+    private static Slot slotWith(Item... items) {
+        return new Slot(A1, List.of(items), Instant.now(), null);
+    }
+
+    private static Item item(String name) {
+        return new Item(name, name, null, "other", 1, 0.9, List.of(), List.of(), null, null, List.of());
+    }
+
     private Project newProject(String name) {
         return start.execute(new StartProject.Request(name, null, List.of(), List.of(), List.of()));
     }
@@ -179,6 +261,68 @@ class KeepDocumentsTest {
         @Override
         public void delete(String filename) {
             files.remove(filename);
+        }
+    }
+
+    /** Real enough to answer documentsInUse, which is what the sweep leans on. */
+    private static final class FakeIndex implements family.eilertsen.rack.domain.port.PartIndex {
+        private final Map<family.eilertsen.rack.domain.model.ContainerId,
+            Map<family.eilertsen.rack.domain.model.SlotId,
+                family.eilertsen.rack.domain.model.Slot>> slots = new LinkedHashMap<>();
+
+        @Override
+        public java.util.Optional<family.eilertsen.rack.domain.model.Slot> get(
+                family.eilertsen.rack.domain.model.ContainerId c,
+                family.eilertsen.rack.domain.model.SlotId s) {
+            return java.util.Optional.ofNullable(slots.getOrDefault(c, Map.of()).get(s));
+        }
+
+        @Override
+        public void save(family.eilertsen.rack.domain.model.ContainerId c,
+                         family.eilertsen.rack.domain.model.Slot s) {
+            slots.computeIfAbsent(c, k -> new LinkedHashMap<>()).put(s.id(), s);
+        }
+
+        @Override
+        public java.util.Collection<family.eilertsen.rack.domain.model.Slot> all(
+                family.eilertsen.rack.domain.model.ContainerId c) {
+            return List.copyOf(slots.getOrDefault(c, Map.of()).values());
+        }
+
+        @Override
+        public void forget(family.eilertsen.rack.domain.model.ContainerId c) {
+            slots.remove(c);
+        }
+
+        @Override
+        public java.util.Set<String> photosInUse() {
+            return java.util.Set.of();
+        }
+
+        @Override
+        public java.util.Set<String> documentsInUse() {
+            java.util.Set<String> used = new java.util.LinkedHashSet<>();
+            for (Map<family.eilertsen.rack.domain.model.SlotId,
+                     family.eilertsen.rack.domain.model.Slot> byId : slots.values()) {
+                for (family.eilertsen.rack.domain.model.Slot s : byId.values()) {
+                    for (family.eilertsen.rack.domain.model.Item i : s.items()) {
+                        for (family.eilertsen.rack.domain.model.Document d : i.documents()) {
+                            used.add(d.filename());
+                        }
+                    }
+                }
+            }
+            return used;
+        }
+
+        @Override
+        public List<family.eilertsen.rack.domain.model.SearchHit> searchByKeyword(String query) {
+            return List.of();
+        }
+
+        @Override
+        public java.util.Set<String> vocabulary() {
+            return java.util.Set.of();
         }
     }
 

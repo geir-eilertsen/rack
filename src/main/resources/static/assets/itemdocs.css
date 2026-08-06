@@ -1,0 +1,19 @@
+/* Files on an item, on both pages that show one. */
+.itemdocs { margin-top: .75rem; padding-top: .6rem; border-top: 1px solid var(--border); }
+.itemdocs h4 { margin: 0 0 .35rem; font-size: .78rem; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+.itemdocs .dlist { list-style: none; padding: 0; margin: 0 0 .5rem; }
+.itemdocs .dlist li { display: flex; gap: .5rem; align-items: center; padding: .3rem 0;
+  border-top: 1px solid var(--border); font-size: .88rem; }
+.itemdocs .dlist li:first-child { border-top: none; }
+.itemdocs .dlist a { flex: 1; min-width: 0; color: var(--primary-hover); font-weight: 600;
+  text-decoration: none; overflow-wrap: anywhere; }
+.itemdocs .dlist a:hover { text-decoration: underline; }
+.itemdocs .dsz { flex: 0 0 auto; font-size: .78rem; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+.itemdocs .ddrop { flex: 0 0 auto; background: transparent; border: none; color: var(--error);
+  font-size: 1rem; line-height: 1; cursor: pointer; padding: .15rem .3rem; }
+.itemdocs .dnone { margin: 0 0 .5rem; font-size: .85rem; color: var(--muted); }
+.itemdocs .dadd { display: inline-flex; cursor: pointer; padding: .3rem .6rem; font-size: .82rem; }
+.itemdocs .dstatus { margin-left: .5rem; font-size: .82rem; color: var(--muted); }
+.itemdocs .dstatus.err { color: var(--error); }
