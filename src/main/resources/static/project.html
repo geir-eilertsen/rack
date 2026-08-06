@@ -60,40 +60,63 @@
        was the same fact printed nineteen times and the parts lost among it. */
     .group { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
       box-shadow: var(--shadow); margin-bottom: .75rem; overflow: hidden; }
-    .group > .gh { display: flex; gap: .5rem; align-items: baseline; padding: .7rem .9rem;
-      border-bottom: 1px solid var(--border); background: var(--primary-soft); }
-    .group > .gh .gn { font-weight: 700; font-size: .95rem; flex: 1; min-width: 0; }
+    /* Baseline alignment, not centre: a <select> has no useful baseline, and
+       aligning one against text puts it a couple of pixels low in every browser
+       and differently in each. flex-wrap so a long supplier name pushes the count
+       and the button onto their own line instead of squashing them. */
+    .group > .gh { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;
+      padding: .65rem .9rem; border-bottom: 1px solid var(--border); background: var(--primary-soft); }
+    .group > .gh .gn { font-weight: 700; font-size: .95rem; flex: 1 1 12rem; min-width: 0; }
     .group > .gh .gc { font-size: .8rem; color: var(--muted); white-space: nowrap; }
     .group.here > .gh { background: var(--success-soft); }
     .plines { list-style: none; padding: 0; margin: 0; }
     .plines > li { padding: .6rem .9rem; border-top: 1px solid var(--border); }
     .plines > li:first-child { border-top: none; }
-    .plines > li.is-used { opacity: .6; }
-    .pl-top { display: flex; gap: .55rem; align-items: baseline; }
-    .qty { flex: 0 0 auto; font-family: var(--font-mono); font-weight: 700; font-size: .85rem;
-      color: var(--primary-hover); min-width: 1.9rem; text-align: right; font-variant-numeric: tabular-nums; }
-    .pl-name { flex: 1; min-width: 0; font-weight: 600; font-size: .95rem; }
-    .pl-sub { margin: .2rem 0 0 2.45rem; font-size: .82rem; color: var(--muted); }
+    .plines > li.is-used { opacity: .55; }
+
+    /* Text on the left, controls on the right, and nothing aligned by a magic
+       number. The sub-line and the caveat used to be pushed across by a 2.45rem
+       margin chosen to clear a fixed-width quantity column — which was wrong on
+       every row that had no quantity, and there are eight of those. */
+    .pl-row { display: flex; gap: .6rem; align-items: flex-start; }
+    .pl-body { flex: 1; min-width: 0; }
+    .pl-act { flex: 0 0 auto; display: flex; gap: .3rem; align-items: center; }
+    .pl-name { font-weight: 600; font-size: .95rem; overflow-wrap: anywhere; }
+    /* Inline, so a row with no quantity is not indented past an empty column. */
+    .qty { font-family: var(--font-mono); font-weight: 700; color: var(--primary-hover);
+      font-variant-numeric: tabular-nums; margin-right: .15rem; }
+    .pl-sub { margin: .2rem 0 0; font-size: .82rem; color: var(--muted); overflow-wrap: anywhere; }
     .pl-sub .code { font-family: var(--font-mono); color: var(--success); }
     .pl-sub .term { font-family: var(--font-mono); }
     .pl-sub a { color: var(--primary-hover); font-family: var(--font-mono); font-weight: 700; text-decoration: none; }
     .pl-sub a:hover { text-decoration: underline; }
     /* A 250-character caveat is worth keeping and not worth reading twenty times. */
-    .pl-why { margin: .25rem 0 0 2.45rem; font-size: .82rem; }
+    .pl-why { margin: .3rem 0 0; font-size: .82rem; }
     .pl-why summary { cursor: pointer; color: var(--primary-hover); width: fit-content; }
     .pl-why[open] summary { margin-bottom: .2rem; }
-    .pl-why p { margin: 0; color: var(--muted); }
-    .pstate { flex: 0 0 auto; font-family: inherit; font-size: .78rem; padding: .22rem .4rem;
+    .pl-why p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+    .pstate { font-family: inherit; font-size: .78rem; padding: .25rem .4rem; max-width: 6.5rem;
       border: 1px solid var(--border); border-radius: var(--radius-sm);
       background: var(--bg); color: var(--muted); }
-    .used { flex: 0 0 auto; width: 3.4rem; font-family: inherit; font-size: .78rem; padding: .22rem .35rem;
+    .used { width: 3.4rem; font-family: inherit; font-size: .78rem; padding: .25rem .35rem;
       border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); color: inherit; }
     .gh .btn { padding: .25rem .55rem; font-size: .78rem; }
+    /* Below this the controls will not fit beside a part name worth reading, so
+       they go under it, right-aligned, rather than crushing the text to a column. */
+    @media (max-width: 30rem) {
+      .pl-row { flex-wrap: wrap; }
+      .pl-body { flex: 1 1 100%; }
+      .pl-act { margin-left: auto; }
+    }
 
     .log { list-style: none; padding: 0; margin: 0; font-size: .88rem; }
     .log li { padding: .4rem 0; border-top: 1px solid var(--border); display: flex; gap: .6rem; }
     .log li:first-child { border-top: none; }
-    .log .at { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+    /* A fixed column, so "today" and "12 days ago" do not start the text at two
+       different places down the same list. */
+    .log .at { flex: 0 0 5.5rem; color: var(--muted); font-variant-numeric: tabular-nums;
+      font-size: .82rem; }
+    .log .tx { flex: 1; min-width: 0; overflow-wrap: anywhere; }
     .log li.user .tx { font-weight: 600; }
     .notebox { display: flex; gap: .5rem; margin: .75rem 0 0; }
     .notebox input { flex: 1; min-width: 0; font-size: .95rem; padding: .55rem .75rem; }
@@ -286,23 +309,28 @@
         x.search ? '<span class="term">' + esc(x.search) + '</span>' : ''
       ].filter(Boolean).join(' · ');
       return '<li' + (x.status === 'used' ? ' class="is-used"' : '') + '>'
-        + '<div class="pl-top">'
-          + '<span class="qty">' + (x.qty ? esc(x.qty) + '×' : '') + '</span>'
-          + '<span class="pl-name">' + esc(x.part) + '</span>'
-          + '<select class="pstate" data-part="' + i + '" aria-label="Part state">'
-            + states.map(s => '<option value="' + s + '"' + (s === x.status ? ' selected' : '') + '>'
-                + s.replace('_', ' ') + '</option>').join('')
-          + '</select>'
-          // Only asked for once it matters: how many were used is the number that
-          // settles up, and it is not knowable before the job is done.
-          + (x.status === 'used'
-              ? '<input class="used" type="number" min="0" inputmode="numeric" data-used="' + i + '"'
-                + ' value="' + (x.used_qty == null ? '' : x.used_qty) + '" placeholder="qty" aria-label="Quantity used">'
-              : '')
-        + '</div>'
-        + (sub ? '<div class="pl-sub">' + sub + '</div>' : '')
-        + (x.note ? '<details class="pl-why"><summary>why / caveats</summary><p>' + esc(x.note) + '</p></details>' : '')
-        + '</li>';
+        + '<div class="pl-row">'
+          + '<div class="pl-body">'
+            + '<div class="pl-name">'
+              + (x.qty ? '<span class="qty">' + esc(x.qty) + '×</span>' : '')
+              + esc(x.part) + '</div>'
+            + (sub ? '<div class="pl-sub">' + sub + '</div>' : '')
+            + (x.note ? '<details class="pl-why"><summary>why / caveats</summary><p>'
+                + esc(x.note) + '</p></details>' : '')
+          + '</div>'
+          + '<div class="pl-act">'
+            + '<select class="pstate" data-part="' + i + '" aria-label="Part state">'
+              + states.map(s => '<option value="' + s + '"' + (s === x.status ? ' selected' : '') + '>'
+                  + s.replace('_', ' ') + '</option>').join('')
+            + '</select>'
+            // Only asked for once it matters: how many were used is the number
+            // that settles up, and it is not knowable before the job is done.
+            + (x.status === 'used'
+                ? '<input class="used" type="number" min="0" inputmode="numeric" data-used="' + i + '"'
+                  + ' value="' + (x.used_qty == null ? '' : x.used_qty) + '" placeholder="qty" aria-label="Quantity used">'
+                : '')
+          + '</div>'
+        + '</div></li>';
     }
 
     function stepRow(s, i) {
