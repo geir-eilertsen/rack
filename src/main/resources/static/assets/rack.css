@@ -333,7 +333,7 @@ label.field {
   color: #fff;
   border-color: var(--primary);
 }
-.slots-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: .3rem; }
+.slots-grid { display: grid; grid-template-columns: repeat(var(--slot-cols, 5), minmax(0, 1fr)); gap: .3rem; }
 .slot-btn {
   padding: .55rem 0;
   text-align: center;

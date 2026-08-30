@@ -163,6 +163,80 @@
     }));
   }
 
+  // ---- keeping what came back ----------------------------------------------
+  //
+  // An answer is one model call over every item in the rack and a plan is a
+  // couple of minutes and several cents. Both used to live in a variable and
+  // nowhere else, so a refresh spent them again — and on a project page so did
+  // ticking a step, because every save redraws the page from the server, and so
+  // did following one of the answer's own drawer links and coming back.
+  //
+  // Kept in the browser rather than on the project, because this is a proposal
+  // under review: taking it in is what makes it the project's, and a second copy
+  // on the server would be the same parts written twice with nothing to say
+  // which of them was meant. The cost is that it does not follow you to another
+  // device — the same trade the pending photo strip already makes.
+  const HELD = 'rack.advice.';
+
+  function remember(key, held) {
+    const row = JSON.stringify({ ...held, at: new Date().toISOString() });
+    try {
+      localStorage.setItem(HELD + key, row);
+    } catch (e) {
+      // Out of room. The answers for other jobs are the ones worth losing.
+      sweep(HELD + key);
+      try { localStorage.setItem(HELD + key, row); } catch (e2) { /* this page still has it */ }
+    }
+  }
+
+  function recall(key) {
+    try {
+      const row = localStorage.getItem(HELD + key);
+      return row ? JSON.parse(row) : null;
+    } catch (e) {
+      return null;   // storage refused, or half a row: ask again
+    }
+  }
+
+  function forget(key) {
+    try { localStorage.removeItem(HELD + key); } catch (e) { /* nothing to undo */ }
+  }
+
+  function sweep(keep) {
+    try {
+      for (const k of Object.keys(localStorage)) {
+        if (k.startsWith(HELD) && k !== keep) localStorage.removeItem(k);
+      }
+    } catch (e) { /* nothing to sweep */ }
+  }
+
+  /** Minutes, because an answer from before lunch is not one from a moment ago. */
+  function ago(iso) {
+    const ms = Date.now() - new Date(iso).getTime();
+    if (!(ms >= 0)) return 'just now';
+    const mins = Math.floor(ms / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + (mins === 1 ? ' minute ago' : ' minutes ago');
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + (hours === 1 ? ' hour ago' : ' hours ago');
+    const days = Math.floor(hours / 24);
+    return days === 1 ? 'yesterday' : days + ' days ago';
+  }
+
+  /**
+   * When it was worked out, said on the answer itself.
+   *
+   * The only thing worse than losing an answer to a refresh is showing an old
+   * one as though it were current: the drawers move underneath it, and this
+   * answer's whole claim is that it read them.
+   */
+  function keptNote(at) {
+    return at
+      ? '<p class="kept">Worked out ' + esc(ago(at)) + ' and kept since — the drawers may have '
+        + 'moved. Ask again for a fresh reading.</p>'
+      : '';
+  }
+
   // One listener for every copy button on the page, present and future.
   document.addEventListener('click', async e => {
     const btn = e.target.closest('[data-copy]');
@@ -183,6 +257,7 @@
   });
 
   window.rackAdvice = {
-    esc, ask, plan, gaps, shoppingLine, renderAnswer, renderPlan, partsFrom, stepsFrom
+    esc, ask, plan, gaps, shoppingLine, renderAnswer, renderPlan, partsFrom, stepsFrom,
+    remember, recall, forget, ago, keptNote
   };
 })();

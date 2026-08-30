@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/assets/rack.css">
   <link rel="stylesheet" href="/assets/itemdocs.css">
   <script src="/assets/photos.js"></script>
+  <script src="/assets/slots.js"></script>
   <script src="/assets/itemdocs.js"></script>
   <style>
     .current { list-style: none; padding: 0; margin: .5rem 0 0; }
@@ -743,6 +744,7 @@
 
       function drawSlots(c, filled) {
         slotsHost.innerHTML = '';
+        window.rackSlots.shape(slotsHost, c.slots);
         (c.slots || []).forEach(sid => {
           const isCurrent = selectedContainer && c.id === selectedContainer.id && sid === selectedSlot;
           const btn = document.createElement('button');
@@ -1384,6 +1386,7 @@
 
     function renderSlotPicker(slots, filledSet) {
       slotsEl.innerHTML = '';
+      window.rackSlots.shape(slotsEl, slots);
       slots.forEach(sid => {
         const btn = document.createElement('button');
         btn.type = 'button';

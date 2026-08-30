@@ -10,6 +10,7 @@
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
   <script src="/assets/photos.js"></script>
+  <script src="/assets/slots.js"></script>
 </head>
 <body>
   <div class="container">
@@ -140,6 +141,7 @@
           if (res.ok) filled = new Set((await res.json()).filter(s => s.item_count > 0).map(s => s.slot));
         } catch (e) { /* an unshaded grid still navigates */ }
         slotsHost.innerHTML = '';
+        window.rackSlots.shape(slotsHost, c.slots);
         (c.slots || []).forEach(sid => {
           const b = document.createElement('button');
           b.type = 'button';

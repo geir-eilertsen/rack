@@ -6,6 +6,9 @@
     .summary p { margin: 0; }
     .summary .considered { margin-top: .6rem; font-size: .8rem; color: var(--muted); }
 
+    /* An answer drawn back from the last visit says so, above itself. */
+    .kept { margin: 0 0 .8rem; font-size: .82rem; color: var(--muted); }
+
     .needs { list-style: none; padding: 0; margin: 0; }
     .need { padding: .85rem 1rem; border: 1px solid var(--border); border-radius: var(--radius);
       margin-bottom: .6rem; background: var(--card); box-shadow: var(--shadow); }
