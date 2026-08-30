@@ -56,9 +56,10 @@ class AskAboutRackTest {
         AskAboutRack.Inventory inventory = AskAboutRack.inventory(registry, index);
 
         assertThat(inventory.lines()).hasSize(4);
-        assertThat(inventory.lines().get(0))
-            .startsWith("rack/A1 | 220uF 100V capacitor | radial electrolytic")
-            .contains(" | 4 | ");
+        // By content rather than by position: containers are listed by name, so
+        // which one comes first is a fact about the names and not about this.
+        assertThat(inventory.lines()).anyMatch(l ->
+            l.startsWith("rack/A1 | 220uF 100V capacitor | radial electrolytic") && l.contains(" | 4 | "));
         // Both containers, not just the first one asked about.
         assertThat(inventory.lines()).anyMatch(l -> l.startsWith("lab/1 | Heat sink compound"));
     }

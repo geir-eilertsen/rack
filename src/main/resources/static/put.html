@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/assets/itemdocs.css">
   <script src="/assets/photos.js"></script>
   <script src="/assets/slots.js"></script>
+  <script src="/assets/route.js"></script>
   <script src="/assets/itemdocs.js"></script>
   <style>
     .current { list-style: none; padding: 0; margin: .5rem 0 0; }
@@ -182,9 +183,23 @@
   </div>
 
   <script>
-    const params = new URLSearchParams(location.search);
-    const preC = params.get('c');
-    const preS = params.get('s');
+    // Which drawer is open is in the address: #<container>/<slot>. A printed QR
+    // sticker says ?c=&s= and always will, so a query is read once and rewritten
+    // into the hash rather than being a second form the page has to maintain.
+    const opened = openedFromAddress();
+    const preC = opened.container;
+    const preS = opened.slot;
+
+    function openedFromAddress() {
+      const at = rackRoute.path();
+      if (at.length) return { container: at[0], slot: at[1] || null };
+      const query = new URLSearchParams(location.search);
+      const container = query.get('c');
+      const slot = query.get('s');
+      if (container) rackRoute.go(rackRoute.join([container, slot]), { replace: true });
+      rackRoute.dropQuery();
+      return { container, slot };
+    }
 
     const title = document.getElementById('title');
     const slotHeader = document.getElementById('slotHeader');
@@ -252,6 +267,9 @@
     // against the list and once to be applied. Holding the photos in memory is
     // what lets the second call carry the identical frames — the proposal's
     // frame indexes point into this array and mean nothing without it.
+    // Set while the page is applying an address it did not write, so restoring
+    // a drawer from the URL does not write the same drawer back.
+    let following = false;
     let resyncMode = false;
     let resyncProposal = null;
     let slotItemCount = 0;
@@ -276,7 +294,50 @@
         }
       }
       refreshUiForSelection();
+      syncAddress({ replace: true });
       await adoptHandover();
+    }
+
+    // Back, Forward, or an address typed by hand: the page follows the URL
+    // rather than the URL following the page, so the two cannot disagree.
+    rackRoute.onChange(async () => {
+      const at = rackRoute.path();
+      const c = at.length ? containers.find(x => x.id === at[0]) : null;
+      // An undivided container's one place is chosen by choosing the container,
+      // so that is the slot the address is asking for even when it names none.
+      const slot = !c ? null
+        : isDivided(c) ? ((c.slots || []).includes(at[1]) ? at[1] : null)
+        : ((c.slots || [])[0] || null);
+      if (c === selectedContainer && slot === selectedSlot) return;
+      following = true;
+      try {
+        // Re-picking the container is also how a slot is let go of: it is the
+        // one path that clears the selection and redraws the picker.
+        if (!c) clearSelection();
+        else if (c !== selectedContainer || (!slot && selectedSlot)) await selectContainer(c, true);
+        if (slot && slot !== selectedSlot) selectSlot(slot, true);
+      } finally {
+        following = false;
+      }
+    });
+
+    /** Back to nothing chosen — the state the page opens in when the address names no drawer. */
+    function clearSelection() {
+      selectedContainer = null;
+      selectedSlot = null;
+      document.querySelectorAll('.container-btn').forEach(el => el.classList.remove('selected'));
+      slotsLabel.hidden = true;
+      slotsLegend.hidden = true;
+      slotsEl.innerHTML = '';
+      refreshUiForSelection();
+    }
+
+    /** Writes the open drawer into the address. Silent while the page is following it. */
+    function syncAddress(options) {
+      if (following) return;
+      if (!selectedContainer) return rackRoute.go('', options);
+      const slot = isDivided(selectedContainer) ? selectedSlot : null;
+      rackRoute.go(rackRoute.join([selectedContainer.id, slot]), options);
     }
 
     // A photograph taken from the front page arrives here rather than being
@@ -1357,6 +1418,7 @@
         slotsLabel.hidden = true;
         slotsLegend.hidden = true;
         slotsEl.innerHTML = '';
+        syncAddress({ replace: !refreshUi });
         if (refreshUi) {
           updateManualFileBtn();
           refreshUiForSelection();
@@ -1366,6 +1428,7 @@
       slotsLabel.hidden = false;
       slotsLegend.hidden = false;
       renderSlotPicker(c.slots || [], new Set());
+      syncAddress({ replace: !refreshUi });
       if (refreshUi) {
         updateManualFileBtn();
         refreshUiForSelection();
@@ -1400,6 +1463,7 @@
 
     function selectSlot(sid, userDriven) {
       selectedSlot = sid;
+      syncAddress({ replace: !userDriven });
       slotsEl.querySelectorAll('.slot-btn').forEach(el => el.classList.toggle('selected', el.dataset.slot === sid));
       updateManualFileBtn();
       if (userDriven) refreshUiForSelection();

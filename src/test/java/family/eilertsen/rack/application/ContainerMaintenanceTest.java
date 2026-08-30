@@ -180,6 +180,28 @@ class ContainerMaintenanceTest {
             .isInstanceOf(NoSuchElementException.class);
     }
 
+    @Test
+    void listsContainersByNameRatherThanByWhenTheyWereRegistered() {
+        FakeStore late = new FakeStore(List.of(
+            new Container(new ContainerId("rack"), "Skuffereol", ContainerLayout.grid(2, 2), 1.0f, "drawer"),
+            new Container(new ContainerId("lab"), "Elektronikklab", ContainerLayout.linear(2, ""), 1.0f, "drawer")));
+        ContainerRegistry sorted = new ContainerRegistry(late);
+
+        assertThat(sorted.all()).extracting(c -> c.id().value()).containsExactly("lab", "rack");
+    }
+
+    /** A rename is a change to the name on the front, so it changes where the container is read. */
+    @Test
+    void renamingMovesAContainerInTheListingAndOnDisk() {
+        registry.add(new Container(new ContainerId("attic"), "Attic box", ContainerLayout.linear(1, ""), 1.0f, "box"));
+        assertThat(registry.all()).extracting(c -> c.id().value()).containsExactly("attic", "bin");
+
+        update.execute(new ContainerId("attic"), new UpdateContainer.Fields("Zinc bin", null, null));
+
+        assertThat(registry.all()).extracting(c -> c.id().value()).containsExactly("bin", "attic");
+        assertThat(store.saved).extracting(c -> c.id().value()).containsExactly("bin", "attic");
+    }
+
     private static Item item(String description) {
         return new Item(description, description, null, null, null, 0.9, List.of(), List.of(), null, null, List.of());
     }

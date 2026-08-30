@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/assets/rack.css">
   <script src="/assets/photos.js"></script>
   <script src="/assets/slots.js"></script>
+  <script src="/assets/route.js"></script>
 </head>
 <body>
   <div class="container">
@@ -119,19 +120,34 @@
         // screen rather than something to open first.
         if (containers.length === 1) {
           jump.open = true;
-          pickContainer(containers[0], containersHost.firstChild);
+          pickContainer(containers[0], containersHost.firstChild, { replace: true });
         }
+        follow();
       }).catch(() => {});
 
-      async function pickContainer(c, btn) {
+      // The opened container is in the address, so Back closes it again and a
+      // reload comes back to the drawers you were looking at.
+      rackRoute.onChange(follow);
+
+      function follow() {
+        const at = rackRoute.path();
+        const c = at.length ? containers.find(x => x.id === at[0]) : null;
+        if (!c) return;
+        const btn = [...containersHost.children].find(el => el.textContent === (c.name || c.id));
+        jump.open = true;
+        pickContainer(c, btn, { silent: true });
+      }
+
+      async function pickContainer(c, btn, options) {
         containersHost.querySelectorAll('.container-btn')
           .forEach(el => el.classList.toggle('selected', el === btn));
         // One storage space is not a choice. Tapping the box opens the box,
         // rather than offering a grid of one button to press next.
         if ((c.slots || []).length <= 1) {
-          location.href = '/put.html?c=' + encodeURIComponent(c.id);
+          location.href = rackRoute.slotHref(c.id);
           return;
         }
+        if (!(options && options.silent)) rackRoute.go(rackRoute.join([c.id]), options);
         slotsLabel.hidden = false;
         legend.hidden = false;
         slotsHost.innerHTML = '<span style="font-size:.8rem;color:var(--muted)">Loading…</span>';
@@ -148,7 +164,7 @@
           b.className = 'slot-btn' + (filled.has(sid) ? ' filled' : '');
           b.textContent = sid;
           b.addEventListener('click', () => {
-            location.href = '/put.html?c=' + encodeURIComponent(c.id) + '&s=' + encodeURIComponent(sid);
+            location.href = rackRoute.slotHref(c.id, sid);
           });
           slotsHost.appendChild(b);
         });

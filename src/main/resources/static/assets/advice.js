@@ -62,8 +62,7 @@
       + (x.why ? '<p class="why">' + esc(x.why) + '</p>' : '')
       + (found.length
           ? '<ul class="found">' + found.map(f =>
-              '<li><a href="/put.html?c=' + encodeURIComponent(f.container)
-                + '&s=' + encodeURIComponent(f.slot) + '">'
+              '<li><a href="' + rackRoute.slotHref(f.container, f.slot) + '">'
                 + esc(f.container) + ' · ' + esc(f.slot) + '</a>'
               + '<span class="what">' + esc(f.item || '')
               + (f.note ? ' — ' + esc(f.note) : '') + '</span></li>').join('')
@@ -117,8 +116,8 @@
       + (s.detail ? '<p class="detail">' + esc(s.detail) + '</p>' : '')
       + (uses.length
           ? '<ul class="uses">' + uses.map(u =>
-              '<li>Uses <a href="/put.html?c=' + encodeURIComponent(u.container)
-              + '&s=' + encodeURIComponent(u.slot) + '">' + esc(u.container) + ' · ' + esc(u.slot)
+              '<li>Uses <a href="' + rackRoute.slotHref(u.container, u.slot)
+              + '">' + esc(u.container) + ' · ' + esc(u.slot)
               + '</a> — ' + esc(u.item || '') + '</li>').join('') + '</ul>'
           : '')
       + '</li>';

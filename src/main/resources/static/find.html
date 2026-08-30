@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/assets/itemdocs.css">
   <script src="/assets/photos.js"></script>
   <script src="/assets/slots.js"></script>
+  <script src="/assets/route.js"></script>
   <script src="/assets/itemdocs.js"></script>
   <style>
     .search { margin-bottom: 1rem; display: flex; gap: .4rem; }
@@ -140,9 +141,8 @@
     // them in place rather than re-rendering, which would reset a take in flight.
     function relabelContainers() {
       hits.querySelectorAll('.group .loc a').forEach(a => {
-        const params = new URLSearchParams((a.getAttribute('href') || '').split('?')[1] || '');
-        const c = params.get('c');
-        if (c) a.textContent = containerName(c) + ' · ' + params.get('s');
+        const at = rackRoute.readSlotHref(a.getAttribute('href'));
+        if (at.container) a.textContent = containerName(at.container) + ' · ' + at.slot;
       });
     }
 
@@ -172,6 +172,31 @@
       recentEl.hidden = !recentEl.children.length || !!q.value.trim();
     }
 
+    // A search is a thing you can send somebody, so the query is in the address:
+    // #q=BC547. Typing rewrites the entry it is already on — twelve keystrokes
+    // are one search, not twelve places you went — and submitting adds one,
+    // because that is the search you meant.
+    function rememberInAddress(options) {
+      rackRoute.go(q.value.trim() ? 'q=' + encodeURIComponent(q.value.trim()) : '', options);
+    }
+
+    // Back, Forward, or a link somebody sent: the box follows the address.
+    rackRoute.onChange(() => {
+      const query = rackRoute.params().get('q') || '';
+      if (query === q.value.trim()) return;
+      q.value = query;
+      showRecent();
+      runSearch();
+    });
+
+    // A query in the address is a search, and running it is what the address asked for.
+    (function openAddressedSearch() {
+      const query = rackRoute.params().get('q');
+      if (!query) return;
+      q.value = query;
+      runSearch();
+    })();
+
     // Typing searches; submitting says you meant it. Only what you submit is
     // remembered — a pause between keystrokes was never evidence of intent.
     go.addEventListener('click', submit);
@@ -185,6 +210,7 @@
       clearTimeout(debounce);
       clearTimeout(smartDebounce);
       q.blur();                                  // let the results have the screen
+      rememberInAddress();
       runSearch();
       remember(query);
     }
@@ -204,7 +230,7 @@
       showRecent();
       clearTimeout(debounce);
       clearTimeout(smartDebounce);
-      debounce = setTimeout(runSearch, 250);
+      debounce = setTimeout(() => { rememberInAddress({ replace: true }); runSearch(); }, 250);
     });
 
     // Two passes. The first is pure keyword matching — no model call, so it can
@@ -401,6 +427,7 @@
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const result = await res.json();
         q.value = result.query || '';        // leave the reading behind to edit
+        rememberInAddress({ replace: true });
         renderResult(result);
         if (window.rackUsage) rackUsage.refresh();
       } catch (e) {
@@ -447,7 +474,7 @@
 
     function renderGroup(g) {
       const location = placeName(g.container, g.slot);
-      const putUrl = '/put.html?c=' + encodeURIComponent(g.container) + '&s=' + encodeURIComponent(g.slot);
+      const putUrl = rackRoute.slotHref(g.container, g.slot);
       const staleBadge = staleBadgeIfNeeded(g.lastVerified);
       const itemsHtml = g.hits.map(h => renderHitItem(h, g)).join('');
       return '<li class="group">' +

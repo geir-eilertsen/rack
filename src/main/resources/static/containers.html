@@ -9,6 +9,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
+  <script src="/assets/route.js"></script>
   <style>
     .cbox { padding: 1.1rem 1.15rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); margin-bottom: .75rem; }
     .cbox h3 { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
@@ -136,10 +137,25 @@
         pageStatus.textContent = containers.length ? '' : 'No containers yet. Register one to get started.';
         pageStatus.className = containers.length ? 'status' : 'status empty';
         containers.forEach(c => listEl.appendChild(card(c)));
+        follow();
       } catch (e) {
         pageStatus.className = 'status error';
         pageStatus.textContent = 'Failed to load containers: ' + e.message;
       }
+    }
+
+    // Back, Forward, or a link straight to a container's labels: the list
+    // follows the address rather than the address trailing the list.
+    rackRoute.onChange(follow);
+
+    function follow() {
+      const at = rackRoute.path();
+      const cards = [...listEl.children];
+      const target = cards.find(el => el.dataset.container === at[0]);
+      cards.forEach(el => { if (el !== target) el.showPanel(null); });
+      if (!target) return;
+      target.showPanel(at[1] === 'labels' || at[1] === 'edit' ? at[1] : null);
+      if (at[1]) target.scrollIntoView({ block: 'nearest' });
     }
 
     function card(c) {
@@ -226,7 +242,7 @@
           ? c.slots.length + ' ' + plural(word)
           : 'one place, undivided';
         q('.c-scale').textContent = c.label_scale;
-        q('.c-put').href = '/put.html?c=' + encodeURIComponent(c.id);
+        q('.c-put').href = rackRoute.slotHref(c.id);
         q('.c-name-input').value = c.name || '';
         q('.c-scale-input').value = c.label_scale;
         q('.c-word-input').value = c.slot_label || '';
@@ -303,18 +319,26 @@
         return params.toString();
       }
 
-      q('.c-toggle-labels').addEventListener('click', async () => {
-        editPanel.hidden = true;
-        labelsPanel.hidden = !labelsPanel.hidden;
-        if (!labelsPanel.hidden) {
+      // Which panel is open is in the address — #rack/labels — so a reload comes
+      // back to the sheet you were counting stickers for rather than to the top
+      // of the list, and Back closes the panel instead of leaving the page.
+      el.dataset.container = c.id;
+      el.showPanel = async (which) => {
+        labelsPanel.hidden = which !== 'labels';
+        editPanel.hidden = which !== 'edit';
+        if (which === 'labels') {
           try { await refreshLabelCounts(); } catch (e) { fail('Failed to load label status: ' + e.message); }
         }
-      });
+      };
 
-      q('.c-toggle-edit').addEventListener('click', () => {
-        labelsPanel.hidden = true;
-        editPanel.hidden = !editPanel.hidden;
-      });
+      function toggle(which, panel) {
+        const next = panel.hidden ? which : null;
+        el.showPanel(next);
+        rackRoute.go(rackRoute.join([c.id, next]));
+      }
+
+      q('.c-toggle-labels').addEventListener('click', () => toggle('labels', labelsPanel));
+      q('.c-toggle-edit').addEventListener('click', () => toggle('edit', editPanel));
 
       allBox.addEventListener('change', () => refreshLabelCounts().catch(() => {}));
 

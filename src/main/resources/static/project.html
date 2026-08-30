@@ -196,6 +196,7 @@
     <div class="status" id="status"></div>
   </div>
 
+  <script src="/assets/route.js"></script>
   <script src="/assets/usage.js"></script>
   <script src="/assets/project.js"></script>
   <script src="/assets/advice.js"></script>
@@ -203,7 +204,26 @@
     const esc = rackProject.esc;
     const page = document.getElementById('page');
     const status = document.getElementById('status');
-    const id = new URLSearchParams(location.search).get('p');
+    // Which project is open is in the address: #quad-606. A link made before
+    // this said ?p=, and one may be sitting in somebody's messages, so a query
+    // is read once and rewritten rather than kept as a second form.
+    const id = projectFromAddress();
+
+    function projectFromAddress() {
+      const at = rackRoute.path();
+      if (at.length) return at[0];
+      const named = new URLSearchParams(location.search).get('p');
+      if (named) rackRoute.go(rackRoute.join([named]), { replace: true });
+      rackRoute.dropQuery();
+      return named;
+    }
+
+    // A different project in the address is a different page — everything on
+    // screen belongs to this one — so the page is fetched again rather than
+    // patched into being another project.
+    rackRoute.onChange(() => {
+      if ((rackRoute.path()[0] || null) !== id) location.reload();
+    });
     let project = null;
 
     if (!id) page.innerHTML = '<p class="empty">No project named in the address.</p>';
@@ -450,7 +470,7 @@
     function partLine(x, i) {
       const states = ['in_stock', 'to_buy', 'ordered', 'arrived', 'used'];
       const where = (x.from || []).map(f =>
-        '<a href="/put.html?c=' + encodeURIComponent(f.container) + '&s=' + encodeURIComponent(f.slot)
+        '<a href="' + rackRoute.slotHref(f.container, f.slot)
         + '">' + esc(f.container) + ' · ' + esc(f.slot) + '</a>'
         + (f.item ? ' ' + esc(f.item) : '')).join(' &nbsp; ');
       const sub = [
@@ -492,8 +512,8 @@
         + (s.detail ? '<div class="d">' + esc(s.detail) + '</div>' : '')
         + ((s.uses || []).length
             ? '<ul class="uses">' + s.uses.map(u =>
-                '<li>Uses <a href="/put.html?c=' + encodeURIComponent(u.container) + '&s='
-                + encodeURIComponent(u.slot) + '">' + esc(u.container) + ' · ' + esc(u.slot) + '</a>'
+                '<li>Uses <a href="' + rackRoute.slotHref(u.container, u.slot)
+                + '">' + esc(u.container) + ' · ' + esc(u.slot) + '</a>'
                 + (u.item ? ' — ' + esc(u.item) : '') + '</li>').join('') + '</ul>'
             : '')
         + '<div class="stepnote"><textarea data-note="' + i + '" rows="1" placeholder="Note — what you found, what you changed">'
@@ -768,8 +788,8 @@
         out.innerHTML =
           (changes.length
             ? '<table><thead><tr><th>Drawer</th><th>Item</th><th>Now</th><th>Used</th><th>Left</th></tr></thead><tbody>'
-              + changes.map(c => '<tr><td><a href="/put.html?c=' + encodeURIComponent(c.container)
-                  + '&s=' + encodeURIComponent(c.slot) + '">' + esc(c.container) + ' · ' + esc(c.slot) + '</a></td>'
+              + changes.map(c => '<tr><td><a href="' + rackRoute.slotHref(c.container, c.slot)
+                  + '">' + esc(c.container) + ' · ' + esc(c.slot) + '</a></td>'
                   + '<td>' + esc(c.item) + '</td><td class="n">' + c.before + '</td>'
                   + '<td class="n">−' + c.used + '</td><td class="n">' + c.after + '</td></tr>').join('')
               + '</tbody></table>'

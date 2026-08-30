@@ -33,8 +33,13 @@ public class ContainerRegistry {
         return Optional.ofNullable(byId.get(id));
     }
 
+    /** Every container, in the order a person reads them: by name. See {@link Container#BY_NAME}. */
     public Collection<Container> all() {
-        return List.copyOf(byId.values());
+        return ordered();
+    }
+
+    private List<Container> ordered() {
+        return byId.values().stream().sorted(Container.BY_NAME).toList();
     }
 
     public synchronized void add(Container c) {
@@ -42,23 +47,23 @@ public class ContainerRegistry {
             throw new IllegalArgumentException("Container already registered: " + c.id().value());
         }
         byId.put(c.id(), c);
-        store.saveAll(List.copyOf(byId.values()));
+        store.saveAll(ordered());
     }
 
-    /** Replaces an existing container in place, keeping its position in the listing. */
+    /** Replaces an existing container. A rename moves it in the listing, which is sorted by name. */
     public synchronized void update(Container c) {
         if (!byId.containsKey(c.id())) {
             throw new NoSuchElementException("Unknown container: " + c.id().value());
         }
         byId.put(c.id(), c);
-        store.saveAll(List.copyOf(byId.values()));
+        store.saveAll(ordered());
     }
 
     public synchronized void remove(ContainerId id) {
         if (byId.remove(id) == null) {
             throw new NoSuchElementException("Unknown container: " + id.value());
         }
-        store.saveAll(List.copyOf(byId.values()));
+        store.saveAll(ordered());
     }
 
     private static Container defaultRack() {
