@@ -22,6 +22,10 @@ class LabelSheetTest {
         new Container(new ContainerId("lab"), "Lab", ContainerLayout.linear(11, ""), 1.0f, "drawer");
     private static final Container BIN =
         new Container(new ContainerId("bin"), "Bin", ContainerLayout.linear(6, "b"), 0.4f, "drawer");
+    private static final Container GARAGE =
+        new Container(new ContainerId("garasje-box-1"), "Garasje box 1", ContainerLayout.linear(1, ""), 1.0f, "Box");
+    private static final Container CELLAR =
+        new Container(new ContainerId("kjellerbod-box-1"), "Kjellerbod box 1", ContainerLayout.linear(1, ""), 1.0f, "Box");
 
     @Test
     void fullScaleLabelsGetOnePhysicalLabelEach() {
@@ -179,6 +183,39 @@ class LabelSheetTest {
                 .as("content width for %s", id)
                 .isLessThanOrEqualTo(LabelSheet.stickerWidth());
         }
+    }
+
+    @Test
+    void aBoxWithOneSlotIsLabelledWithItsName() {
+        // "1" is the name of a compartment a plastic box has not got. The label has
+        // to say which box it is stuck to, which is the container's own name.
+        LabelSheet.Label label = new LabelSheet.Label(GARAGE, new SlotId("1"));
+
+        assertThat(LabelSheet.text(label)).isEqualTo("Garasje box 1");
+        assertThat(LabelSheet.widthOf(label)).isLessThanOrEqualTo(LabelSheet.stickerWidth());
+        assertThat(LabelSheet.heightOf(label)).isLessThanOrEqualTo(LabelSheet.stickerHeight());
+    }
+
+    @Test
+    void aDividedContainerIsStillLabelledBySlot() {
+        assertThat(LabelSheet.text(new LabelSheet.Label(LAB, new SlotId("7")))).isEqualTo("7");
+    }
+
+    @Test
+    void aNameWrapsRatherThanShrinkingToNothing() {
+        // On one line beside a full-size QR "Kjellerbod box 1" sets at 6pt; over two
+        // it sets at 10, which is the difference between a label and a smudge.
+        LabelSheet.Label label = new LabelSheet.Label(CELLAR, new SlotId("1"));
+
+        assertThat(LabelSheet.linesOf(label)).containsExactly("Kjellerbod", "box 1");
+        assertThat(LabelSheet.fontSizeOf(label)).isGreaterThan(9f);
+    }
+
+    @Test
+    void aNamelessBoxFallsBackToTheSlotItHas() {
+        Container plain = new Container(new ContainerId("box"), null, ContainerLayout.linear(1, ""), 1.0f, "slot");
+
+        assertThat(LabelSheet.text(new LabelSheet.Label(plain, new SlotId("1")))).isEqualTo("1");
     }
 
     @Test

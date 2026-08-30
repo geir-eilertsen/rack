@@ -44,6 +44,18 @@ final class LabelSheet {
     private static final float PADDING_1X = 2 * MM;
     private static final float FONT_SIZE_1X = 40f;
 
+    // Type set beside the QR. Lines are spaced at 1.15em, which is tight enough that
+    // two of them still read as one label rather than as two.
+    private static final float LINE_SPACING = 1.15f;
+    // Helvetica-Bold caps are 0.718em. Centring the block on its cap height rather
+    // than its em box is what puts a single line where a single line always sat.
+    private static final float CAP_HEIGHT = 0.72f;
+    // Width is estimated rather than measured, at 0.75em a character: Helvetica-Bold
+    // caps top out at 0.722em, so the estimate errs wide, and erring wide costs a
+    // column rather than causing an overlap.
+    private static final float EM_PER_CHAR = 0.75f;
+    private static final float MIN_FONT_SIZE = 5f;
+
     /** One label position on the sheet. Carrying the container per-label lets a single sheet span containers. */
     record Label(Container container, SlotId slot) {}
 
@@ -64,42 +76,121 @@ final class LabelSheet {
         return QR_SIZE_1X * scale + 2 * PADDING_1X * scale;
     }
 
-    /**
-     * Horizontal room one label needs: QR, then the slot id beside it. The text is estimated at 0.75em per
-     * character rather than measured — Helvetica-Bold caps top out at 0.722em, so this errs wide, and erring
-     * wide only ever costs a column, never an overlap.
-     */
+    /** Horizontal room one label needs: QR, then its words beside it, wrapped as they will be drawn. */
     private static float contentWidth(Label label) {
         float scale = scaleOf(label);
         float padding = PADDING_1X * scale;
-        float text = label.slot().value().length() * 0.75f * fontSize(label);
-        return padding + QR_SIZE_1X * scale + padding + text + padding;
+        Type type = layout(label);
+        return padding + QR_SIZE_1X * scale + padding + widest(type.lines(), type.size()) + padding;
     }
 
     /**
-     * The type size, shrunk when the id will not otherwise fit beside its QR.
+     * What the sticker says.
      *
-     * <p>At scale 1.0 a 30mm QR and 40pt type leave room for two characters on a 63.5mm sticker; "E12" wants
-     * 67.8mm and "Box1" 78.3mm, and both used to be drawn anyway, running off the edge. The QR is the part
-     * that has to work — its module size is already the floor on how small a label can go — so it keeps its
-     * size and the type gives way.
+     * <p>A container with a single slot has no subdivisions at all, so its label is the name of
+     * the box — "Garasje box 1" rather than "1", which is the name of a compartment it has not
+     * got and told you nothing standing in front of it. A divided container is labelled by the
+     * slot, because that is the part you are looking for once you are there.
      */
-    private static float fontSize(Label label) {
+    static String text(Label label) {
+        Container container = label.container();
+        if (container.slots().size() > 1) return label.slot().value();
+        return container.name() == null || container.name().isBlank()
+            ? label.slot().value()
+            : container.name();
+    }
+
+    /** The type on one label: the words as they are drawn, and the size they are drawn at. */
+    private record Type(List<String> lines, float size) {}
+
+    /** What is left across the sticker once the QR and the padding around it have taken theirs. */
+    private static float textRoom(Label label) {
+        float scale = scaleOf(label);
+        float padding = PADDING_1X * scale;
+        return LABEL_W - (padding + QR_SIZE_1X * scale + padding + padding);
+    }
+
+    /**
+     * Sets the words beside the QR, shrinking and wrapping them until they fit.
+     *
+     * <p>At scale 1.0 a 30mm QR and 40pt type leave room for two characters on a 63.5mm sticker;
+     * "E12" wants 67.8mm and "Box1" 78.3mm, and both used to be drawn anyway, running off the
+     * edge. The QR is the part that has to work — its module size is already the floor on how
+     * small a label can go — so it keeps its size and the type gives way.
+     *
+     * <p>Names wrap where ids cannot: "Kjellerbod box 1" on one line sets at 6pt beside a full
+     * QR, and over two lines at 10. So the size is stepped down until a wrapping fits both the
+     * width and the QR's height, and then solved exactly for that wrapping — the step decides
+     * where the lines break, the arithmetic decides how big the type is.
+     */
+    private static Type layout(Label label) {
         float scale = scaleOf(label);
         float wanted = FONT_SIZE_1X * scale;
-        int length = label.slot().value().length();
-        if (length == 0) return wanted;
+        float room = textRoom(label);
+        float qr = QR_SIZE_1X * scale;
+        String text = text(label);
+        if (text.isBlank()) return new Type(List.of(""), wanted);
 
-        float padding = PADDING_1X * scale;
-        float room = LABEL_W - (padding + QR_SIZE_1X * scale + padding + padding);
-        float needed = length * 0.75f * wanted;
-        // A hair under, so float arithmetic cannot land a shrunk label a
-        // rounding error over the edge it was shrunk to fit inside.
-        return needed <= room ? wanted : Math.max(room / (length * 0.75f) * 0.999f, 0f);
+        for (float size = wanted; size >= MIN_FONT_SIZE; size -= 0.5f) {
+            List<String> lines = wrap(text, size, room);
+            float widest = widest(lines, size);
+            float height = blockHeight(lines.size(), size);
+            if (widest <= 0) return new Type(lines, wanted);
+            if (widest > room || height > qr) continue;
+            float exact = Math.min(size * room / widest, size * qr / height);
+            // A hair under, so float arithmetic cannot land a fitted label a
+            // rounding error over the edge it was fitted inside.
+            return new Type(lines, Math.min(wanted, exact * 0.999f));
+        }
+        // One word with nowhere to break it — a long slot id — gives way as it always has.
+        float em = text.length() * EM_PER_CHAR;
+        return new Type(List.of(text), Math.max(room / em * 0.999f, 0f));
+    }
+
+    /** Greedy wrap: words go on the current line while they fit, and a word too wide gets a line to itself. */
+    private static List<String> wrap(String text, float size, float room) {
+        List<String> lines = new ArrayList<>();
+        String line = "";
+        for (String word : text.strip().split("\\s+")) {
+            if (word.isEmpty()) continue;
+            String candidate = line.isEmpty() ? word : line + " " + word;
+            if (!line.isEmpty() && textWidth(candidate, size) > room) {
+                lines.add(line);
+                line = word;
+            } else {
+                line = candidate;
+            }
+        }
+        if (!line.isEmpty()) lines.add(line);
+        return lines.isEmpty() ? List.of("") : List.copyOf(lines);
+    }
+
+    private static float textWidth(String text, float size) {
+        return text.length() * EM_PER_CHAR * size;
+    }
+
+    private static float widest(List<String> lines, float size) {
+        float widest = 0;
+        for (String line : lines) widest = Math.max(widest, textWidth(line, size));
+        return widest;
+    }
+
+    /** Cap height of the first line plus a line's spacing for each one after it. */
+    private static float blockHeight(int lines, float size) {
+        return (lines - 1) * size * LINE_SPACING + size * CAP_HEIGHT;
     }
 
     /** One label's spot inside a sticker, as offsets right and down from the sticker's top-left corner. */
     record Placed(Label label, float dx, float dy) {}
+
+    // Exposed so tests can assert what a sticker says and how big it is set.
+    static List<String> linesOf(Label label) {
+        return layout(label).lines();
+    }
+
+    static float fontSizeOf(Label label) {
+        return layout(label).size();
+    }
 
     // Exposed so tests can assert the packing never overlaps or overflows a sticker.
     static float widthOf(Label label) {
@@ -188,9 +279,9 @@ final class LabelSheet {
                         // Offsets run right and down from the sticker's top-left corner.
                         for (Placed placed : positions.get(posIdx++)) {
                             float scale = scaleOf(placed.label());
-                            drawLabel(doc, cs, font, placed.label().container(), placed.label().slot(), baseUrl,
+                            drawLabel(doc, cs, font, placed.label(), baseUrl,
                                 x + placed.dx(), y + LABEL_H - placed.dy(),
-                                QR_SIZE_1X * scale, PADDING_1X * scale, fontSize(placed.label()));
+                                QR_SIZE_1X * scale, PADDING_1X * scale);
                         }
                     }
                 }
@@ -204,21 +295,27 @@ final class LabelSheet {
 
     /** {@code top} is the upper edge of this label's band within the L7160 slot, not the slot's own baseline. */
     private static void drawLabel(PDDocument doc, PDPageContentStream cs, PDType1Font font,
-                                   Container container, SlotId slot, String baseUrl,
-                                   float x, float top, float qrSize, float padding, float fontSize) throws IOException {
-        String url = baseUrl + "/put.html?c=" + container.id().value() + "&s=" + slot.value();
+                                   Label label, String baseUrl,
+                                   float x, float top, float qrSize, float padding) throws IOException {
+        String url = baseUrl + "/put.html?c=" + label.container().id().value() + "&s=" + label.slot().value();
 
         PDImageXObject qr = qrImage(doc, url);
         // Anchor content to the top-left of the band so trimming small labels is easy.
         float qrTop = top - padding;
         cs.drawImage(qr, x + padding, qrTop - qrSize, qrSize, qrSize);
 
+        Type type = layout(label);
         float textX = x + padding + qrSize + padding;
-        float textY = qrTop - qrSize / 2 - fontSize / 3;
+        // The block is centred on the QR's middle, so one line sits where one line
+        // always sat and two straddle it evenly.
+        float blockTop = qrTop - qrSize / 2 + blockHeight(type.lines().size(), type.size()) / 2;
         cs.beginText();
-        cs.setFont(font, fontSize);
-        cs.newLineAtOffset(textX, textY);
-        cs.showText(slot.value());
+        cs.setFont(font, type.size());
+        cs.newLineAtOffset(textX, blockTop - type.size() * CAP_HEIGHT);
+        for (int i = 0; i < type.lines().size(); i++) {
+            if (i > 0) cs.newLineAtOffset(0, -type.size() * LINE_SPACING);
+            cs.showText(type.lines().get(i));
+        }
         cs.endText();
     }
 
