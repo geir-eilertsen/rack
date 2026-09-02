@@ -40,15 +40,12 @@
           <input type="file" accept="image/*" capture="environment" multiple id="addPhoto" hidden>
         </label>
       </li>
-      <!-- Asking what a job needs used to be its own card here. It is help with a
-           project, so it belongs on a project, and having both meant two doors to
-           the same room with the front one leading nowhere you could come back to. -->
-      <li>
-        <a class="card" href="/projects.html">
-          <h2>Projects</h2>
-          <p id="projectsHint">A job of work, tracked from what it needs to putting the lid back on.</p>
-        </a>
-      </li>
+      <!-- Projects is hidden, not removed. Asking what a job needs used to be its
+           own card here; it is help with a project, so it moved onto one, and now
+           the door itself is off the hub. /projects.html, /project.html and
+           /ask.html still answer, and every endpoint behind them still works — so
+           a bookmark keeps working and nothing already stored is stranded.
+           Putting the feature back is putting this card back. -->
       <!-- For when you know where you are going and the QR label is on the other
            side of the room. Opens in place rather than leading somewhere: the
            picker is the whole errand. -->
