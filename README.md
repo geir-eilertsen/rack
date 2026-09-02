@@ -39,7 +39,7 @@ echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
 docker compose up -d
 ```
 
-Open <http://localhost:8080>. It comes up with one container already there — a 5×12 rack of drawers, A1 to E12 — so the first thing you can do is open a drawer, photograph what's in it, and watch it get written down. Rename that rack, or add a cupboard or a plastic box, under **Containers**.
+Open <http://localhost:8123>. It comes up with one container already there — a 5×12 rack of drawers, A1 to E12 — so the first thing you can do is open a drawer, photograph what's in it, and watch it get written down. Rename that rack, or add a cupboard or a plastic box, under **Containers**.
 
 Everything it knows lands in `data/` beside the compose file, and that is the only copy — no database, nothing kept in the image. Back it up by copying the folder.
 
@@ -48,7 +48,7 @@ Two settings, both optional, both go in `.env`:
 | | |
 |---|---|
 | `RACK_PUBLIC_BASE_URL` | What the QR codes on printed labels point at. Set it **before** printing any, or the stickers have to be reprinted. |
-| `RACK_PORT` | Host port, `8080` by default. `127.0.0.1:8080` keeps it off the network — rack has no login of its own, so anything more public wants a reverse proxy in front. |
+| `RACK_PORT` | Host port, `8123` by default. `127.0.0.1:8123` keeps it off the network — rack has no login of its own, so anything more public wants a reverse proxy in front. |
 
 Update with `docker compose pull && docker compose up -d`. Every published image is also tagged `sha-<commit>`, so `RACK_TAG=sha-05a0ca6` pins a machine to a known one.
 

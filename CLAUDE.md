@@ -22,7 +22,7 @@ Config: `ANTHROPIC_API_KEY` env var feeds `spring.ai.anthropic.api-key`. `RACK_D
 
 ```
 docker build -t rack:local .
-docker run --rm -p 8080:8080 -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY rack:local
+docker run --rm -p 8123:8123 -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY rack:local
 ```
 
 Multi-stage build (Maven + JDK → JRE-only runtime). The app boots without an `ANTHROPIC_API_KEY` (the Anthropic autoconfig only requires it on first call, not at bean construction), but `/identify` will 500 without one.
@@ -52,7 +52,7 @@ RACK_TAG=sha-abc1234 docker compose up -d        # pin, or roll back
 
 **Set `RACK_PUBLIC_BASE_URL` before printing anything.** It is what the QR on every sticker encodes, and a label printed against the wrong base is a sticker that has to be peeled off and reprinted. Everything else in `.env` has a working default.
 
-`RACK_PORT` defaults to `8080` on all interfaces. Behind a reverse proxy on the same host, `RACK_PORT=127.0.0.1:8080` keeps it off the LAN — the app has no authentication of its own and never has had; the proxy in front of it is the whole of the access control.
+The image listens on **8123** (`SERVER_PORT` in the Dockerfile; `./mvnw spring-boot:run` from a checkout is still 8080). `RACK_PORT` defaults to `8123` on all interfaces. Behind a reverse proxy on the same host, `RACK_PORT=127.0.0.1:8123` keeps it off the LAN — the app has no authentication of its own and never has had; the proxy in front of it is the whole of the access control.
 
 ## Model choice
 

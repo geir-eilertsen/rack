@@ -13,8 +13,8 @@ services:
     restart: unless-stopped
     ports:
       # Left side is the host port. Behind a reverse proxy that terminates TLS,
-      # 127.0.0.1:8080:8080 keeps it off the LAN; the app has no auth of its own.
-      - "${RACK_PORT:-8080}:8080"
+      # 127.0.0.1:8123:8123 keeps it off the LAN; the app has no auth of its own.
+      - "${RACK_PORT:-8123}:8123"
     volumes:
       # Load-bearing: slot JSON, photographs and archived label sheets live here
       # and are the only copy. A container started without it comes up with an
@@ -30,8 +30,8 @@ services:
       RACK_SHOPPING_REGION: ${RACK_SHOPPING_REGION:-Norway}
     healthcheck:
       # /hello proves Spring started. It does not prove the data mount is right —
-      # check `docker compose exec rack curl -s localhost:8080/c` for that.
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/hello"]
+      # check `docker compose exec rack curl -s localhost:8123/c` for that.
+      test: ["CMD", "curl", "-fsS", "http://localhost:8123/hello"]
       interval: 30s
       timeout: 3s
       start_period: 20s
