@@ -30,24 +30,38 @@ Two mitigations, both load-bearing:
 1. Updating a drawer is tap, scan, shoot, done. No forms.
 2. Every slot carries a `last_verified` date, surfaced in search results, so you can see when the data was last real.
 
-## Running it
+## Getting started
+
+Docker, and an [Anthropic API key](https://console.anthropic.com/settings/keys). No checkout, no JDK — the image is on Docker Hub.
+
+```sh
+mkdir rack && cd rack
+curl -O https://raw.githubusercontent.com/geir-eilertsen/rack/main/compose.yaml
+echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
+docker compose up -d
+```
+
+Open <http://localhost:8080>. It comes up with one container already there — a 5×12 rack of drawers, A1 to E12 — so the first thing you can do is open a drawer, photograph what's in it, and watch it get written down. Rename that rack, or add a cupboard or a plastic box, under **Containers**.
+
+Everything it knows lands in `data/` beside the compose file, and that is the only copy — no database, nothing kept in the image. Back it up by copying the folder.
+
+Two settings, both optional, both go in `.env`:
+
+| | |
+|---|---|
+| `RACK_PUBLIC_BASE_URL` | What the QR codes on printed labels point at. Set it **before** printing any, or the stickers have to be reprinted. |
+| `RACK_PORT` | Host port, `8080` by default. `127.0.0.1:8080` keeps it off the network — rack has no login of its own, so anything more public wants a reverse proxy in front. |
+
+Update with `docker compose pull && docker compose up -d`. Every published image is also tagged `sha-<commit>`, so `RACK_TAG=sha-05a0ca6` pins a machine to a known one.
+
+## From source
 
 ```sh
 ./mvnw spring-boot:run                  # http://localhost:8080
 ./mvnw test
 ```
 
-```sh
-docker build -t rack:local .
-docker run --rm -p 8080:8080 \
-  -v "$PWD/data:/app/data" \
-  -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
-  rack:local
-```
-
-`ANTHROPIC_API_KEY` is the only required setting. `RACK_DATA_DIR` moves the data directory; `RACK_PUBLIC_BASE_URL` is what the QR codes point at. The app boots without an API key — it just can't read a photo until it has one.
-
-**The `-v` mount is load-bearing.** Slot state, photos and archived label sheets live in `data/` and are the only copy.
+`ANTHROPIC_API_KEY` is the only required setting; `RACK_DATA_DIR` moves the data directory. The app boots without a key — it just can't read a photograph until it has one.
 
 ## How it's built
 
