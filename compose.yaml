@@ -1,0 +1,38 @@
+# Running rack on a host that is not the build box: pull the published image,
+# keep the data directory beside this file.
+#
+#   cp .env.example .env      # then fill in ANTHROPIC_API_KEY
+#   docker compose up -d
+#
+# Update:   docker compose pull && docker compose up -d
+# Rollback: RACK_TAG=sha-abc1234 docker compose up -d   (or pin it in .env)
+services:
+  rack:
+    image: geireilertsen/rack:${RACK_TAG:-latest}
+    container_name: rack
+    restart: unless-stopped
+    ports:
+      # Left side is the host port. Behind a reverse proxy that terminates TLS,
+      # 127.0.0.1:8080:8080 keeps it off the LAN; the app has no auth of its own.
+      - "${RACK_PORT:-8080}:8080"
+    volumes:
+      # Load-bearing: slot JSON, photographs and archived label sheets live here
+      # and are the only copy. A container started without it comes up with an
+      # empty index and writes new state inside the container.
+      - ./data:/app/data
+    environment:
+      # No default: /identify and the rest of the model calls 500 without it,
+      # and failing at `up` is better than failing at the first photograph.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      # The base the printed QR labels encode. A label printed against the wrong
+      # base is a sticker that has to be reprinted, so set it before printing.
+      RACK_PUBLIC_BASE_URL: ${RACK_PUBLIC_BASE_URL:-}
+      RACK_SHOPPING_REGION: ${RACK_SHOPPING_REGION:-Norway}
+    healthcheck:
+      # /hello proves Spring started. It does not prove the data mount is right —
+      # check `docker compose exec rack curl -s localhost:8080/c` for that.
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/hello"]
+      interval: 30s
+      timeout: 3s
+      start_period: 20s
+      retries: 3

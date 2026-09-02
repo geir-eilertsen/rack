@@ -13,3 +13,6 @@ target/
 
 .claude/
 data/
+.env
+.env.*
+!.env.example

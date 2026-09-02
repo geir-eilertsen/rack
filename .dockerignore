@@ -8,3 +8,7 @@ data
 *.md
 Dockerfile
 .dockerignore
+.github
+compose.yaml
+.env
+.env.example

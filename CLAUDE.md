@@ -27,6 +27,33 @@ docker run --rm -p 8080:8080 -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY rack:local
 
 Multi-stage build (Maven + JDK → JRE-only runtime). The app boots without an `ANTHROPIC_API_KEY` (the Anthropic autoconfig only requires it on first call, not at bean construction), but `/identify` will 500 without one.
 
+The image packages with `-DskipTests`, so a build is not a test run — `./mvnw test` and the publish workflow are where the tests happen.
+
+### Publishing to Docker Hub
+
+`.github/workflows/publish.yml` runs `./mvnw test`, then builds and pushes `geireilertsen/rack` on every push to `main` and on any `v*` tag. Two repository secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a hub.docker.com access token, not the password).
+
+Tags published: `latest` on main, `sha-<short>` always, and `<version>` plus `<major>.<minor>` when a `v*` tag is pushed. **`sha-` is the one to pin a host to**, because it names a commit — `latest` names whatever main happened to be that morning, and a host that only ever pulls `latest` cannot say what it is running.
+
+`linux/amd64` only. Adding `linux/arm64` to `platforms:` is a one-line change, and costs a QEMU emulation pass, so it waits until there is an ARM host to run it on.
+
+### Running it on another host
+
+`compose.yaml` pulls that image; it is for a second host, not for this box — the deploy skill still builds `rack:local` here, and `container_name: rack` means a stray `docker compose up` on the build box collides with the live container rather than starting a second copy of it.
+
+```
+cp .env.example .env      # fill in ANTHROPIC_API_KEY
+docker compose up -d
+docker compose pull && docker compose up -d      # update
+RACK_TAG=sha-abc1234 docker compose up -d        # pin, or roll back
+```
+
+**The bind mount is the whole of the state.** `./data` beside the compose file holds slot JSON, photographs, documents and archived label sheets, and is the only copy — there is no database to dump and nothing in the image to fall back on. Moving an installation is `rsync -a data/` and nothing else; backing one up is the same.
+
+**Set `RACK_PUBLIC_BASE_URL` before printing anything.** It is what the QR on every sticker encodes, and a label printed against the wrong base is a sticker that has to be peeled off and reprinted. Everything else in `.env` has a working default.
+
+`RACK_PORT` defaults to `8080` on all interfaces. Behind a reverse proxy on the same host, `RACK_PORT=127.0.0.1:8080` keeps it off the LAN — the app has no authentication of its own and never has had; the proxy in front of it is the whole of the access control.
+
 ## Model choice
 
 Three calls, three answers — all under `rack.ai` in `application.yml`, each overridable by env var. A single shared model makes the cheapest acceptable choice the ceiling for the most important call, so each names its own.
