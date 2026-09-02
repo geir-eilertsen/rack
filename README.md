@@ -4,8 +4,6 @@ A small-parts inventory you build by taking photographs.
 
 Open a drawer, photograph what's in it, and a vision model writes down what it sees. Everything becomes searchable — by part number, by a half-remembered description, or by holding the part up to the camera when you can't name it at all.
 
-Live at <https://rack.apalveien5.eilertsen.family/> (behind a home-network reverse proxy).
-
 ## The problem it solves
 
 Sixty drawers of components, and the only index is your memory of which one holds the 100K resistors. Cataloguing them by hand is the kind of chore that gets abandoned three drawers in, so this asks for a photograph instead of a form.
