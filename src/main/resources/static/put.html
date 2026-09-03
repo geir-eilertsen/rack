@@ -804,9 +804,7 @@
       }
 
       function drawSlots(c, filled) {
-        slotsHost.innerHTML = '';
-        window.rackSlots.shape(slotsHost, c.slots);
-        (c.slots || []).forEach(sid => {
+        window.rackSlots.render(slotsHost, c.slots, sid => {
           const isCurrent = selectedContainer && c.id === selectedContainer.id && sid === selectedSlot;
           const btn = document.createElement('button');
           btn.type = 'button';
@@ -815,7 +813,7 @@
           btn.disabled = isCurrent;
           if (isCurrent) btn.title = 'current slot';
           btn.addEventListener('click', ev => { ev.stopPropagation(); pickSlot(sid, btn); });
-          slotsHost.appendChild(btn);
+          return btn;
         });
       }
 
@@ -1448,16 +1446,14 @@
     }
 
     function renderSlotPicker(slots, filledSet) {
-      slotsEl.innerHTML = '';
-      window.rackSlots.shape(slotsEl, slots);
-      slots.forEach(sid => {
+      window.rackSlots.render(slotsEl, slots, sid => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'slot-btn' + (filledSet && filledSet.has(sid) ? ' filled' : '');
         btn.textContent = sid;
         btn.dataset.slot = sid;
         btn.addEventListener('click', () => selectSlot(sid, true));
-        slotsEl.appendChild(btn);
+        return btn;
       });
     }
 

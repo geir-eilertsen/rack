@@ -153,9 +153,7 @@
           const res = await fetch('/c/' + encodeURIComponent(c.id) + '/summary');
           if (res.ok) filled = new Set((await res.json()).filter(s => s.item_count > 0).map(s => s.slot));
         } catch (e) { /* an unshaded grid still navigates */ }
-        slotsHost.innerHTML = '';
-        window.rackSlots.shape(slotsHost, c.slots);
-        (c.slots || []).forEach(sid => {
+        window.rackSlots.render(slotsHost, c.slots, sid => {
           const b = document.createElement('button');
           b.type = 'button';
           b.className = 'slot-btn' + (filled.has(sid) ? ' filled' : '');
@@ -163,7 +161,7 @@
           b.addEventListener('click', () => {
             location.href = rackRoute.slotHref(c.id, sid);
           });
-          slotsHost.appendChild(b);
+          return b;
         });
         hint.textContent = 'Tap a ' + (c.slot_label || 'slot') + ' in ' + (c.name || c.id) + ' to open it.';
       }

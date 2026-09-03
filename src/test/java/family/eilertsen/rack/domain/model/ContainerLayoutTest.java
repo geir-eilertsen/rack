@@ -63,4 +63,37 @@ class ContainerLayoutTest {
             ContainerLayout.linear(3, "b"));
     }
 
+
+    @Test
+    void gridCanStartItsNumberingPartWayDown() {
+        assertEquals(List.of(new SlotId("A5"), new SlotId("B5")),
+            ContainerLayout.grid(2, 1, ContainerLayout.COLUMN_LETTERS, 5));
+    }
+
+    @Test
+    void sectionsConcatenateIntoOneFlatList() {
+        List<SlotId> slots = ContainerLayout.sections(List.of(
+            ContainerLayout.grid(6, 4),
+            ContainerLayout.grid(2, 1, ContainerLayout.COLUMN_LETTERS, 5)));
+
+        assertEquals(26, slots.size());
+        assertEquals(new SlotId("F1"), slots.get(5));
+        assertEquals(new SlotId("A2"), slots.get(6));
+        assertEquals(new SlotId("A5"), slots.get(24));
+        assertEquals(new SlotId("B5"), slots.get(25));
+    }
+
+    @Test
+    void twoSlotsWithOneIdIsRefused() {
+        // Not a shape to notice later: a second A1 is a drawer that cannot be
+        // addressed, and one of the two would be unreachable.
+        assertThrows(IllegalArgumentException.class, () -> ContainerLayout.sections(List.of(
+            ContainerLayout.grid(2, 1),
+            ContainerLayout.grid(2, 1))));
+    }
+
+    @Test
+    void sectionsOfNothingIsNotAContainer() {
+        assertThrows(IllegalArgumentException.class, () -> ContainerLayout.sections(List.of()));
+    }
 }

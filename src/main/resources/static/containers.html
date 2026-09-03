@@ -37,6 +37,9 @@
     #registerBox > summary { cursor: pointer; font-family: var(--font-display); font-size: 1.05rem; }
     #registerBox > summary:hover { color: var(--primary-hover); }
     #registerBox[open] > summary { margin-bottom: .5rem; }
+    .band { display: grid; grid-template-columns: 1fr 1fr auto; gap: .5rem; align-items: end; margin-bottom: .5rem; }
+    .band .drop { padding: .45rem .6rem; }
+    .band-ids { font-family: var(--font-mono); font-size: .8rem; color: var(--muted); margin: .1rem 0 .6rem; overflow-wrap: anywhere; }
     fieldset { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .5rem 1rem 1rem; margin: .75rem 0 0; background: var(--bg); }
     legend { font-size: .75rem; color: var(--muted); padding: 0 .35rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
   </style>
@@ -81,6 +84,7 @@
         <select id="regKind">
           <option value="grid">Grid (columns × rows, labelled A1, B1, C1, ...)</option>
           <option value="linear">Linear (numbered 1 to N, optional prefix)</option>
+          <option value="sections">Bands (rows of different widths — small drawers over large)</option>
         </select>
 
         <fieldset id="regGrid">
@@ -109,6 +113,14 @@
               <input id="regPrefix" type="text" placeholder="e.g. b for b1, b2, ...">
             </div>
           </div>
+        </fieldset>
+
+        <fieldset id="regSections" hidden>
+          <legend>Bands</legend>
+          <p class="hint">A cabinet of mixed drawer sizes is a band of small drawers and then a band of large ones. Each band is as wide as it is; the numbering runs on down the front, so every place has its own id and the picker draws each band at its own width.</p>
+          <div id="bandList"></div>
+          <div class="btn-row"><button class="btn drop" id="addBand" type="button">+ Add band</button></div>
+          <p class="band-ids" id="bandIds"></p>
         </fieldset>
 
         <label class="field" for="regWord">What is one of its places called?</label>
@@ -475,19 +487,75 @@
     regKind.addEventListener('change', () => {
       document.getElementById('regGrid').hidden = regKind.value !== 'grid';
       document.getElementById('regLinear').hidden = regKind.value !== 'linear';
+      document.getElementById('regSections').hidden = regKind.value !== 'sections';
     });
 
+    // Bands: a cabinet with six small drawers across over a pair of large ones is
+    // two bands, and the ids it will get are shown as they are typed — a layout is
+    // fixed once registered, so it is worth seeing before it is.
+    const bandList = document.getElementById('bandList');
+    const bandIds = document.getElementById('bandIds');
+
+    function addBand(cols, rows) {
+      const row = document.createElement('div');
+      row.className = 'band';
+      row.innerHTML =
+        '<div><label class="field">Across</label><input class="b-cols" type="number" min="1" max="26" value="' + cols + '"></div>' +
+        '<div><label class="field">Down</label><input class="b-rows" type="number" min="1" max="30" value="' + rows + '"></div>' +
+        '<button class="btn drop b-drop" type="button" title="Remove this band">×</button>';
+      row.querySelector('.b-drop').addEventListener('click', () => {
+        if (bandList.children.length > 1) row.remove();
+        paintBandIds();
+      });
+      row.querySelectorAll('input').forEach(i => i.addEventListener('input', paintBandIds));
+      bandList.appendChild(row);
+      paintBandIds();
+    }
+
+    function bands() {
+      return [...bandList.querySelectorAll('.band')].map(row => ({
+        kind: 'grid',
+        cols: parseInt(row.querySelector('.b-cols').value, 10),
+        rows: parseInt(row.querySelector('.b-rows').value, 10)
+      }));
+    }
+
+    // The same reckoning the server does: columns lettered from A in every band,
+    // row numbers running on so no two places share an id.
+    function paintBandIds() {
+      const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      let first = 1;
+      const parts = [];
+      let total = 0;
+      for (const b of bands()) {
+        if (!(b.cols > 0 && b.rows > 0 && b.cols <= 26)) { bandIds.textContent = ''; return; }
+        const last = first + b.rows - 1;
+        const from = 'A' + first;
+        const to = LETTERS[b.cols - 1] + last;
+        parts.push(from === to ? to : from + '…' + to);
+        total += b.cols * b.rows;
+        first = last + 1;
+      }
+      bandIds.textContent = parts.join(', then ') + ' — ' + total + ' places';
+    }
+
+    document.getElementById('addBand').addEventListener('click', () => addBand(2, 1));
+    addBand(6, 4);
+    addBand(2, 1);
+
     regSubmit.addEventListener('click', async () => {
-      const grid = regKind.value === 'grid';
+      const kind = regKind.value;
+      const grid = kind === 'grid';
       const body = {
         id: regId.value.trim(),
         name: regName.value.trim(),
         layout: {
-          kind: regKind.value,
+          kind: kind,
           cols: grid ? parseInt(document.getElementById('regCols').value, 10) : null,
           rows: grid ? parseInt(document.getElementById('regRows').value, 10) : null,
-          count: grid ? null : parseInt(document.getElementById('regCount').value, 10),
-          prefix: grid ? null : (document.getElementById('regPrefix').value.trim() || null)
+          count: kind === 'linear' ? parseInt(document.getElementById('regCount').value, 10) : null,
+          prefix: kind === 'linear' ? (document.getElementById('regPrefix').value.trim() || null) : null,
+          sections: kind === 'sections' ? bands() : null
         },
         label_scale: parseFloat(document.getElementById('regScale').value),
         slot_label: document.getElementById('regWord').value.trim(),

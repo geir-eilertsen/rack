@@ -143,12 +143,69 @@ class ContainerMaintenanceTest {
     @Test
     void registersWithALocationAlreadySet() {
         Container c = new RegisterContainer(registry).execute(new RegisterContainer.Request(
-            "loft-box", "Loft box", new RegisterContainer.LayoutSpec("linear", null, null, 4, "b"),
+            "loft-box", "Loft box", new RegisterContainer.LayoutSpec("linear", null, null, 4, "b", null, null),
             1.0f, "compartment", "Loft, by the hatch", null));
 
         assertThat(c.location()).isEqualTo("Loft, by the hatch");
         assertThat(c.notes()).isNull();
         assertThat(registry.get(new ContainerId("loft-box")).orElseThrow().location()).isEqualTo("Loft, by the hatch");
+    }
+
+    @Test
+    void registersACabinetOfMixedDrawerSizes() {
+        // Four bands of six small drawers over one band of two large ones. The
+        // bands letter their columns from A alike and carry the row numbering on,
+        // so the large pair is A5 B5 — unique, and a row of its own when the shape
+        // is read back off the ids.
+        Container c = new RegisterContainer(registry).execute(new RegisterContainer.Request(
+            "cabinet", "Skuffeskap", new RegisterContainer.LayoutSpec("sections", null, null, null, null, null,
+                List.of(new RegisterContainer.LayoutSpec("grid", 6, 4, null, null, null, null),
+                        new RegisterContainer.LayoutSpec("grid", 2, 1, null, null, null, null))),
+            0.4f, "drawer", "Garasje", null));
+
+        assertThat(c.slots()).hasSize(26);
+        assertThat(c.slots().subList(0, 6)).containsExactly(
+            new SlotId("A1"), new SlotId("B1"), new SlotId("C1"),
+            new SlotId("D1"), new SlotId("E1"), new SlotId("F1"));
+        assertThat(c.slots().subList(24, 26)).containsExactly(new SlotId("A5"), new SlotId("B5"));
+    }
+
+    @Test
+    void aBandMayNameItsOwnColumns() {
+        Container c = new RegisterContainer(registry).execute(new RegisterContainer.Request(
+            "cab2", "Cabinet", new RegisterContainer.LayoutSpec("sections", null, null, null, null, null,
+                List.of(new RegisterContainer.LayoutSpec("grid", 2, 1, null, null, "AB", null),
+                        new RegisterContainer.LayoutSpec("grid", 2, 1, null, null, "LM", null))),
+            1.0f, "drawer", null, null));
+
+        assertThat(c.slots()).containsExactly(
+            new SlotId("A1"), new SlotId("B1"), new SlotId("L2"), new SlotId("M2"));
+    }
+
+    @Test
+    void twoSectionsThatWouldShareASlotIdAreRefused() {
+        RegisterContainer register = new RegisterContainer(registry);
+        RegisterContainer.Request req = new RegisterContainer.Request(
+            "clash", "Clash", new RegisterContainer.LayoutSpec("sections", null, null, null, null, null,
+                List.of(new RegisterContainer.LayoutSpec("linear", null, null, 2, "b", null, null),
+                        new RegisterContainer.LayoutSpec("linear", null, null, 2, "b", null, null))),
+            1.0f, null, null, null);
+
+        assertThatThrownBy(() -> register.execute(req))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("b1");
+    }
+
+    @Test
+    void aSectionCannotHoldSections() {
+        RegisterContainer register = new RegisterContainer(registry);
+        RegisterContainer.LayoutSpec nested = new RegisterContainer.LayoutSpec("sections", null, null, null, null, null,
+            List.of(new RegisterContainer.LayoutSpec("grid", 2, 1, null, null, null, null)));
+        RegisterContainer.Request req = new RegisterContainer.Request(
+            "deep", "Deep", new RegisterContainer.LayoutSpec("sections", null, null, null, null, null, List.of(nested)),
+            1.0f, null, null, null);
+
+        assertThatThrownBy(() -> register.execute(req)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
