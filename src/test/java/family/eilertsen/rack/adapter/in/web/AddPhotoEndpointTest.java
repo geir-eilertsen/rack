@@ -53,7 +53,7 @@ class AddPhotoEndpointTest {
         ContainerStore store = new ContainerStore() {
             @Override
             public List<Container> loadAll() {
-                return List.of(new Container(RACK, "Rack", ContainerLayout.grid(2, 2), 1.0f, "drawer"));
+                return List.of(new Container(RACK, "Rack", ContainerLayout.grid(2, 2), 1.0f, "drawer", null, null));
             }
 
             @Override

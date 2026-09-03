@@ -22,7 +22,8 @@ public class RegisterContainer {
         String name = req.name() == null || req.name().isBlank() ? id.value() : req.name().trim();
         List<SlotId> slots = expand(req.layout());
         Container c = new Container(id, name, slots, Container.validLabelScale(req.labelScale()),
-            Container.validSlotLabel(req.slotLabel()));
+            Container.validSlotLabel(req.slotLabel()),
+            Container.validLocation(req.location()), Container.validNotes(req.notes()));
         registry.add(c);
         return c;
     }
@@ -49,7 +50,8 @@ public class RegisterContainer {
         if (!cond) throw new IllegalArgumentException(message);
     }
 
-    public record Request(String id, String name, LayoutSpec layout, Float labelScale, String slotLabel) {}
+    public record Request(String id, String name, LayoutSpec layout, Float labelScale, String slotLabel,
+                          String location, String notes) {}
 
     public record LayoutSpec(String kind, Integer cols, Integer rows, Integer count, String prefix) {}
 }

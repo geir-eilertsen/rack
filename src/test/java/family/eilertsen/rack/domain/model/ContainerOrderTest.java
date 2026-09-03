@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class ContainerOrderTest {
 
     private static Container named(String id, String name) {
-        return new Container(new ContainerId(id), name, ContainerLayout.linear(1, ""), 1.0f, "slot");
+        return new Container(new ContainerId(id), name, ContainerLayout.linear(1, ""), 1.0f, "slot", null, null);
     }
 
     private static List<String> sorted(Container... containers) {

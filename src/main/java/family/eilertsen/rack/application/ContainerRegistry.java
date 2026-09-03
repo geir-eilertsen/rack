@@ -68,6 +68,6 @@ public class ContainerRegistry {
 
     private static Container defaultRack() {
         return new Container(new ContainerId("rack"), "Parts rack",
-            ContainerLayout.grid(5, 12), 1.0f, "drawer");
+            ContainerLayout.grid(5, 12), 1.0f, "drawer", null, null);
     }
 }

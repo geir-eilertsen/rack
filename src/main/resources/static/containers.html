@@ -10,12 +10,17 @@
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
   <script src="/assets/route.js"></script>
+  <script src="/assets/places.js"></script>
   <style>
     .cbox { padding: 1.1rem 1.15rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); margin-bottom: .75rem; }
     .cbox h3 { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+    .cwhere { font-size: .85rem; margin: .1rem 0 .2rem; }
     .cmeta { font-size: .8rem; color: var(--muted); }
     .cmeta code { font-family: var(--font-mono); }
     .cstats { font-size: .9rem; margin: .5rem 0 .85rem; color: var(--text); }
+    /* A note is written in lines, so it is shown in the lines it was written in. */
+    .cnotes { font-size: .85rem; color: var(--muted); margin: 0 0 .85rem; white-space: pre-wrap; }
+    .cbox textarea { min-height: 4.5rem; resize: vertical; }
     .counts { font-size: .9rem; margin-bottom: .4rem; }
     .num { font-weight: 700; color: var(--primary-hover); font-family: var(--font-mono); }
     .panel { margin-top: .85rem; padding-top: .85rem; border-top: 1px solid var(--border); }
@@ -49,6 +54,12 @@
     <h1>Containers</h1>
     <p class="subtitle">Every rack, bin, and shelf you've registered. Print its labels, rename it, or retire it.</p>
 
+    <!-- Locations already in use, offered to every location box on the page.
+         Typing something new is still the way a location gets created; this is
+         only so the second container in the garage is put there by picking
+         rather than by being typed again slightly differently. -->
+    <datalist id="knownPlaces"></datalist>
+
     <div id="list"></div>
     <div class="status" id="pageStatus"></div>
 
@@ -57,6 +68,10 @@
       <div class="register-body">
         <label class="field" for="regName">Name</label>
         <input id="regName" type="text" placeholder="e.g. Small parts bin">
+
+        <label class="field" for="regWhere">Where is it?</label>
+        <input id="regWhere" type="text" maxlength="120" list="knownPlaces" placeholder="e.g. garage, north wall" autocomplete="off">
+        <p class="hint">Optional. The index says which drawer; this is what says which room. Places already in use are offered as you type. Notes can be added later, under Edit.</p>
 
         <label class="field" for="regId">ID (URL-safe)</label>
         <input id="regId" type="text" placeholder="e.g. small-bin" pattern="[a-z][a-z0-9\-]{0,31}">
@@ -113,6 +128,26 @@
     const listEl = document.getElementById('list');
     const pageStatus = document.getElementById('pageStatus');
 
+    const placesEl = document.getElementById('knownPlaces');
+
+    // Rebuilt from the list just fetched rather than from the shared cache,
+    // because this is the page where a location is created and its own copy is
+    // the fresher one.
+    function paintPlaces(containers) {
+      placesEl.innerHTML = '';
+      rackPlaces.locations(containers).forEach(addPlace);
+    }
+
+    /** A location saved on one card is offerable on the next without a refetch. */
+    function addPlace(text) {
+      if (!text) return;
+      const already = [...placesEl.options].some(o => o.value.toLowerCase() === text.toLowerCase());
+      if (already) return;
+      const option = document.createElement('option');
+      option.value = text;
+      placesEl.appendChild(option);
+    }
+
     init();
 
     // "box" and "shelf" are the ones a naive + "s" gets wrong, and they are
@@ -137,6 +172,7 @@
         pageStatus.textContent = containers.length ? '' : 'No containers yet. Register one to get started.';
         pageStatus.className = containers.length ? 'status' : 'status empty';
         containers.forEach(c => listEl.appendChild(card(c)));
+        paintPlaces(containers);
         follow();
       } catch (e) {
         pageStatus.className = 'status error';
@@ -163,8 +199,10 @@
       el.className = 'cbox';
       el.innerHTML =
         '<h3 class="c-name"></h3>' +
+        '<p class="cwhere c-where" hidden></p>' +
         '<div class="cmeta"><code class="c-id"></code> · <span class="c-slots"></span> · label scale <span class="c-scale"></span>×</div>' +
         '<div class="cstats">Loading…</div>' +
+        '<p class="cnotes c-notes" hidden></p>' +
         '<div class="btn-row">' +
           '<a class="btn c-put">Add an item</a>' +
           '<button class="btn c-toggle-labels" type="button">Labels</button>' +
@@ -202,7 +240,11 @@
               '<input type="number" class="c-scale-input" min="0.1" max="2" step="0.05">' +
             '</div>' +
           '</div>' +
-          '<p class="hint">1.0 fills the full L7160 label. Try 0.4 for small drawers — content shrinks so you can trim smaller. The id and slot layout are fixed once registered.</p>' +
+          '<label class="field">Where is it?</label>' +
+          '<input type="text" class="c-where-input" maxlength="120" list="knownPlaces" placeholder="e.g. garage, north wall" autocomplete="off">' +
+          '<label class="field">Notes</label>' +
+          '<textarea class="c-notes-input" maxlength="2000" placeholder="What it is for, what its slot ids mean, which of two identical boxes this is."></textarea>' +
+          '<p class="hint">1.0 fills the full L7160 label. Try 0.4 for small drawers — content shrinks so you can trim smaller. Empty the location or the notes to clear them. The id and slot layout are fixed once registered.</p>' +
           '<div class="btn-row"><button class="btn primary c-save" type="button">Save changes</button></div>' +
           '<div class="danger-zone">' +
             '<button class="btn danger block c-delete" type="button" disabled>Delete this container</button>' +
@@ -246,8 +288,19 @@
         q('.c-name-input').value = c.name || '';
         q('.c-scale-input').value = c.label_scale;
         q('.c-word-input').value = c.slot_label || '';
+        // Only shown when there is something to show: a card that reads
+        // "Location: —" tells you nothing and costs a line on every container.
+        show(q('.c-where'), c.location);
+        show(q('.c-notes'), c.notes);
+        q('.c-where-input').value = c.location || '';
+        q('.c-notes-input').value = c.notes || '';
         // Nothing to name when the container is the place.
         q('.c-word-field').hidden = c.slots.length <= 1;
+      }
+
+      function show(el, text) {
+        el.textContent = text || '';
+        el.hidden = !text;
       }
 
       async function refreshStats() {
@@ -364,7 +417,9 @@
         const body = {
           name: q('.c-name-input').value,
           label_scale: parseFloat(q('.c-scale-input').value),
-          slot_label: q('.c-word-input').value.trim()
+          slot_label: q('.c-word-input').value.trim(),
+          location: q('.c-where-input').value,
+          notes: q('.c-notes-input').value
         };
         note('Saving…');
         try {
@@ -374,7 +429,9 @@
             body: JSON.stringify(body)
           });
           if (!res.ok) throw new Error(await errorText(res));
-          paint(await res.json());
+          const saved = await res.json();
+          paint(saved);
+          addPlace(saved.location);
           ok('Saved.');
         } catch (e) {
           fail('Failed: ' + e.message);
@@ -433,7 +490,8 @@
           prefix: grid ? null : (document.getElementById('regPrefix').value.trim() || null)
         },
         label_scale: parseFloat(document.getElementById('regScale').value),
-        slot_label: document.getElementById('regWord').value.trim()
+        slot_label: document.getElementById('regWord').value.trim(),
+        location: document.getElementById('regWhere').value
       };
       regStatus.className = 'status';
       regStatus.textContent = 'Registering…';
@@ -446,6 +504,7 @@
         regStatus.textContent = '"' + c.name + '" registered — ' + c.slots.length + ' slots.';
         regName.value = '';
         regId.value = '';
+        document.getElementById('regWhere').value = '';
         regIdEdited = false;
         await init();
       } catch (e) {

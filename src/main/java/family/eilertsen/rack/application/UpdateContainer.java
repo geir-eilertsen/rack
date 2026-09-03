@@ -7,7 +7,8 @@ import org.springframework.stereotype.Service;
 import java.util.NoSuchElementException;
 
 /**
- * Edits the parts of a container that carry no data: its display name and label scale.
+ * Edits the parts of a container that carry no data: what it is called, where it is,
+ * whatever else is worth writing down about it, and how big its labels print.
  * The slot list is deliberately immutable here — reshaping a container would orphan slots that hold items.
  */
 @Service
@@ -37,11 +38,22 @@ public class UpdateContainer {
             ? existing.slotLabel()
             : Container.validSlotLabel(fields.slotLabel());
 
-        Container updated = new Container(id, name, existing.slots(), scale, slotLabel);
+        // Absent means unchanged; blank means cleared. A name has no third state —
+        // every container has one — but a location it turns out you were wrong about
+        // is better empty than wrong, so emptying the box is how you say so.
+        String location = fields.location() == null
+            ? existing.location()
+            : Container.validLocation(fields.location());
+
+        String notes = fields.notes() == null
+            ? existing.notes()
+            : Container.validNotes(fields.notes());
+
+        Container updated = new Container(id, name, existing.slots(), scale, slotLabel, location, notes);
         registry.update(updated);
         return updated;
     }
 
-    /** Absent (null) fields are left as they are. */
-    public record Fields(String name, Float labelScale, String slotLabel) {}
+    /** Absent (null) fields are left as they are; a blank location or note clears it. */
+    public record Fields(String name, Float labelScale, String slotLabel, String location, String notes) {}
 }

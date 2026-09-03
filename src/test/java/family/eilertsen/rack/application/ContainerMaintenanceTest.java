@@ -37,7 +37,7 @@ class ContainerMaintenanceTest {
 
     @BeforeEach
     void setUp() {
-        store = new FakeStore(List.of(new Container(BIN, "Small bin", ContainerLayout.linear(3, "b"), 0.4f, "drawer")));
+        store = new FakeStore(List.of(new Container(BIN, "Small bin", ContainerLayout.linear(3, "b"), 0.4f, "drawer", null, null)));
         index = new FakeIndex();
         registry = new ContainerRegistry(store);
         update = new UpdateContainer(registry);
@@ -48,7 +48,7 @@ class ContainerMaintenanceTest {
     void renamesWithoutTouchingSlots() {
         Container before = registry.get(BIN).orElseThrow();
 
-        Container after = update.execute(BIN, new UpdateContainer.Fields("Resistor bin", null, null));
+        Container after = update.execute(BIN, new UpdateContainer.Fields("Resistor bin", null, null, null, null));
 
         assertThat(after.name()).isEqualTo("Resistor bin");
         assertThat(after.slots()).isEqualTo(before.slots());
@@ -58,7 +58,7 @@ class ContainerMaintenanceTest {
 
     @Test
     void changesLabelScaleWithoutTouchingName() {
-        Container after = update.execute(BIN, new UpdateContainer.Fields(null, 1.0f, null));
+        Container after = update.execute(BIN, new UpdateContainer.Fields(null, 1.0f, null, null, null));
 
         assertThat(after.labelScale()).isEqualTo(1.0f);
         assertThat(after.name()).isEqualTo("Small bin");
@@ -66,15 +66,15 @@ class ContainerMaintenanceTest {
 
     @Test
     void rejectsBlankNameAndOutOfRangeScale() {
-        assertThatThrownBy(() -> update.execute(BIN, new UpdateContainer.Fields("  ", null, null)))
+        assertThatThrownBy(() -> update.execute(BIN, new UpdateContainer.Fields("  ", null, null, null, null)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("blank");
 
-        assertThatThrownBy(() -> update.execute(BIN, new UpdateContainer.Fields(null, 0f, null)))
+        assertThatThrownBy(() -> update.execute(BIN, new UpdateContainer.Fields(null, 0f, null, null, null)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("labelScale");
 
-        assertThatThrownBy(() -> update.execute(BIN, new UpdateContainer.Fields(null, 2.5f, null)))
+        assertThatThrownBy(() -> update.execute(BIN, new UpdateContainer.Fields(null, 2.5f, null, null, null)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("labelScale");
 
@@ -82,8 +82,78 @@ class ContainerMaintenanceTest {
     }
 
     @Test
+    void recordsWhereItIsAndWhatIsWorthKnowingAboutIt() {
+        Container after = update.execute(BIN,
+            new UpdateContainer.Fields(null, null, null, "  Garage, north wall  ", "Ex-fishing tackle box.\nb1 is the deep one."));
+
+        assertThat(after.location()).isEqualTo("Garage, north wall");
+        assertThat(after.notes()).isEqualTo("Ex-fishing tackle box.\nb1 is the deep one.");
+        assertThat(after.name()).isEqualTo("Small bin");
+        assertThat(after.slots()).hasSize(3);
+    }
+
+    @Test
+    void leavesLocationAndNotesAloneWhenTheyAreNotSent() {
+        update.execute(BIN, new UpdateContainer.Fields(null, null, null, "Loft", "Screws only."));
+
+        Container after = update.execute(BIN, new UpdateContainer.Fields("Screw bin", null, null, null, null));
+
+        assertThat(after.location()).isEqualTo("Loft");
+        assertThat(after.notes()).isEqualTo("Screws only.");
+    }
+
+    /** A location you turn out to be wrong about is better empty than wrong. */
+    @Test
+    void clearsLocationAndNotesWhenSentBlank() {
+        update.execute(BIN, new UpdateContainer.Fields(null, null, null, "Loft", "Screws only."));
+
+        Container after = update.execute(BIN, new UpdateContainer.Fields(null, null, null, "", "   "));
+
+        assertThat(after.location()).isNull();
+        assertThat(after.notes()).isNull();
+    }
+
+    @Test
+    void rejectsALocationLongerThanALine() {
+        assertThatThrownBy(() -> update.execute(BIN,
+            new UpdateContainer.Fields(null, null, null, "x".repeat(Container.MAX_LOCATION + 1), null)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("location");
+
+        assertThatThrownBy(() -> update.execute(BIN,
+            new UpdateContainer.Fields(null, null, null, null, "x".repeat(Container.MAX_NOTES + 1))))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("notes");
+
+        assertThat(registry.get(BIN).orElseThrow().location()).isNull();
+    }
+
+    /**
+     * A container stored before either field existed has neither, and reads as
+     * unknown rather than failing to load — no migrations, per the storage model.
+     */
+    @Test
+    void aContainerStoredWithoutEitherFieldStillLoads() {
+        Container stored = registry.get(BIN).orElseThrow();
+
+        assertThat(stored.location()).isNull();
+        assertThat(stored.notes()).isNull();
+    }
+
+    @Test
+    void registersWithALocationAlreadySet() {
+        Container c = new RegisterContainer(registry).execute(new RegisterContainer.Request(
+            "loft-box", "Loft box", new RegisterContainer.LayoutSpec("linear", null, null, 4, "b"),
+            1.0f, "compartment", "Loft, by the hatch", null));
+
+        assertThat(c.location()).isEqualTo("Loft, by the hatch");
+        assertThat(c.notes()).isNull();
+        assertThat(registry.get(new ContainerId("loft-box")).orElseThrow().location()).isEqualTo("Loft, by the hatch");
+    }
+
+    @Test
     void updatingAnUnknownContainerFails() {
-        assertThatThrownBy(() -> update.execute(new ContainerId("nope"), new UpdateContainer.Fields("x", null, null)))
+        assertThatThrownBy(() -> update.execute(new ContainerId("nope"), new UpdateContainer.Fields("x", null, null, null, null)))
             .isInstanceOf(NoSuchElementException.class);
     }
 
@@ -154,7 +224,7 @@ class ContainerMaintenanceTest {
     @Test
     void listsOccupiedSlotsInLayoutOrderNotAlphabetically() {
         ContainerId shelf = new ContainerId("shelf");
-        store.saveAll(List.of(new Container(shelf, "Shelf", ContainerLayout.linear(12, ""), 1.0f, "drawer")));
+        store.saveAll(List.of(new Container(shelf, "Shelf", ContainerLayout.linear(12, ""), 1.0f, "drawer", null, null)));
         DeleteContainer deleteShelf = new DeleteContainer(new ContainerRegistry(store), index,
             new ForgetUnusedPhotos(index, new NoImages()));
         index.put(shelf, new Slot(new SlotId("11"), List.of(item("a")), null, null));
@@ -183,8 +253,8 @@ class ContainerMaintenanceTest {
     @Test
     void listsContainersByNameRatherThanByWhenTheyWereRegistered() {
         FakeStore late = new FakeStore(List.of(
-            new Container(new ContainerId("rack"), "Skuffereol", ContainerLayout.grid(2, 2), 1.0f, "drawer"),
-            new Container(new ContainerId("lab"), "Elektronikklab", ContainerLayout.linear(2, ""), 1.0f, "drawer")));
+            new Container(new ContainerId("rack"), "Skuffereol", ContainerLayout.grid(2, 2), 1.0f, "drawer", null, null),
+            new Container(new ContainerId("lab"), "Elektronikklab", ContainerLayout.linear(2, ""), 1.0f, "drawer", null, null)));
         ContainerRegistry sorted = new ContainerRegistry(late);
 
         assertThat(sorted.all()).extracting(c -> c.id().value()).containsExactly("lab", "rack");
@@ -193,10 +263,10 @@ class ContainerMaintenanceTest {
     /** A rename is a change to the name on the front, so it changes where the container is read. */
     @Test
     void renamingMovesAContainerInTheListingAndOnDisk() {
-        registry.add(new Container(new ContainerId("attic"), "Attic box", ContainerLayout.linear(1, ""), 1.0f, "box"));
+        registry.add(new Container(new ContainerId("attic"), "Attic box", ContainerLayout.linear(1, ""), 1.0f, "box", null, null));
         assertThat(registry.all()).extracting(c -> c.id().value()).containsExactly("attic", "bin");
 
-        update.execute(new ContainerId("attic"), new UpdateContainer.Fields("Zinc bin", null, null));
+        update.execute(new ContainerId("attic"), new UpdateContainer.Fields("Zinc bin", null, null, null, null));
 
         assertThat(registry.all()).extracting(c -> c.id().value()).containsExactly("bin", "attic");
         assertThat(store.saved).extracting(c -> c.id().value()).containsExactly("bin", "attic");

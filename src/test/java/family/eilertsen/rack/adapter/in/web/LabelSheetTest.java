@@ -19,13 +19,13 @@ class LabelSheetTest {
     private static final String BASE = "https://rack.example";
 
     private static final Container LAB =
-        new Container(new ContainerId("lab"), "Lab", ContainerLayout.linear(11, ""), 1.0f, "drawer");
+        new Container(new ContainerId("lab"), "Lab", ContainerLayout.linear(11, ""), 1.0f, "drawer", null, null);
     private static final Container BIN =
-        new Container(new ContainerId("bin"), "Bin", ContainerLayout.linear(6, "b"), 0.4f, "drawer");
+        new Container(new ContainerId("bin"), "Bin", ContainerLayout.linear(6, "b"), 0.4f, "drawer", null, null);
     private static final Container GARAGE =
-        new Container(new ContainerId("garasje-box-1"), "Garasje box 1", ContainerLayout.linear(1, ""), 1.0f, "Box");
+        new Container(new ContainerId("garasje-box-1"), "Garasje box 1", ContainerLayout.linear(1, ""), 1.0f, "Box", null, null);
     private static final Container CELLAR =
-        new Container(new ContainerId("kjellerbod-box-1"), "Kjellerbod box 1", ContainerLayout.linear(1, ""), 1.0f, "Box");
+        new Container(new ContainerId("kjellerbod-box-1"), "Kjellerbod box 1", ContainerLayout.linear(1, ""), 1.0f, "Box", null, null);
 
     @Test
     void fullScaleLabelsGetOnePhysicalLabelEach() {
@@ -213,7 +213,7 @@ class LabelSheetTest {
 
     @Test
     void aNamelessBoxFallsBackToTheSlotItHas() {
-        Container plain = new Container(new ContainerId("box"), null, ContainerLayout.linear(1, ""), 1.0f, "slot");
+        Container plain = new Container(new ContainerId("box"), null, ContainerLayout.linear(1, ""), 1.0f, "slot", null, null);
 
         assertThat(LabelSheet.text(new LabelSheet.Label(plain, new SlotId("1")))).isEqualTo("1");
     }

@@ -8,9 +8,30 @@ public record Container(
     String name,
     List<SlotId> slots,
     float labelScale,
-    String slotLabel
+    String slotLabel,
+    /**
+     * Where the thing physically is — "garage, north wall", "under the stairs".
+     * Free text rather than a room chosen from a list: a list of rooms is one more
+     * thing that has to be kept true, and the half of an answer that does the work
+     * ("north wall") is the half no list has a field for. The index says which
+     * drawer; this is the only thing that says which room to walk to. Absent from
+     * every container registered before it existed, which reads as unknown.
+     */
+    String location,
+    /**
+     * Anything else worth knowing about the container itself — what it is for, what
+     * its slot ids mean, which of two identical boxes this is. About the box, not
+     * about what is in it: an item's own text is where a part is described.
+     */
+    String notes
 ) {
     public static final float MAX_LABEL_SCALE = 2.0f;
+
+    /** A place is a phrase, not a paragraph — it sets on one line of a card. */
+    public static final int MAX_LOCATION = 120;
+
+    /** A note about a box. Generous, and a bound rather than a budget. */
+    public static final int MAX_NOTES = 2000;
 
     /**
      * The order a person reads a list of containers in: by the name on the front,
@@ -29,6 +50,11 @@ public record Container(
 
     public Container {
         slotLabel = validSlotLabel(slotLabel);
+        // Normalised but not length-checked on the way in. A stored value that is
+        // somehow too long should render badly, not stop every container loading:
+        // containers.json is one file, so a throw here is the whole shelf at once.
+        location = trimmedOrNull(location);
+        notes = trimmedOrNull(notes);
     }
 
     /**
@@ -86,6 +112,36 @@ public record Container(
         String x = a.replaceFirst("^0+(?=.)", "");
         String y = b.replaceFirst("^0+(?=.)", "");
         return x.length() != y.length() ? Integer.compare(x.length(), y.length()) : x.compareTo(y);
+    }
+
+    /**
+     * Validates a location coming in from outside. Blank clears it, which is how the
+     * edit panel says "I do not know where this is any more" — unlike a name, which a
+     * container must have. Length is checked here rather than in the constructor, for
+     * the same reason {@link #validLabelScale} is.
+     */
+    public static String validLocation(String value) {
+        return checked(value, MAX_LOCATION, "location");
+    }
+
+    /** As {@link #validLocation}, for the longer free text. Blank clears it. */
+    public static String validNotes(String value) {
+        return checked(value, MAX_NOTES, "notes");
+    }
+
+    private static String checked(String value, int max, String field) {
+        String text = trimmedOrNull(value);
+        if (text != null && text.length() > max) {
+            throw new IllegalArgumentException(field + " is longer than " + max + " characters");
+        }
+        return text;
+    }
+
+    /** Blank and absent are the same statement about a field nobody has filled in. */
+    private static String trimmedOrNull(String value) {
+        if (value == null) return null;
+        String text = value.strip();
+        return text.isEmpty() ? null : text;
     }
 
     /**

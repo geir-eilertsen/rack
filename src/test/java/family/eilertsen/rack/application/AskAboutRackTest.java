@@ -40,8 +40,8 @@ class AskAboutRackTest {
     void setUp() {
         index = new FakeIndex();
         registry = new ContainerRegistry(new FakeStore(List.of(
-            new Container(RACK, "Skuffereol", ContainerLayout.grid(2, 2), 1.0f, "drawer"),
-            new Container(LAB, "Lab", ContainerLayout.linear(3, null), 1.0f, "shelf"))));
+            new Container(RACK, "Skuffereol", ContainerLayout.grid(2, 2), 1.0f, "drawer", null, null),
+            new Container(LAB, "Lab", ContainerLayout.linear(3, null), 1.0f, "shelf", null, null))));
     }
 
     @Test

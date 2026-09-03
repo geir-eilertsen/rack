@@ -10,6 +10,17 @@
       c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  // A checklist cites a drawer, which answers "which drawer" and not "which
+  // room". Started as the file loads: the answer is wanted once a model call
+  // has come back, which is seconds away at the earliest.
+  rackPlaces.load();
+
+  /** " — garage, north wall", or nothing for a container nobody has placed. */
+  function where(containerId) {
+    const text = rackPlaces.where(containerId);
+    return text ? '<span class="where">' + esc(text) + '</span>' : '';
+  }
+
   async function post(url, body) {
     const res = await fetch(url, {
       method: 'POST',
@@ -64,6 +75,7 @@
           ? '<ul class="found">' + found.map(f =>
               '<li><a href="' + rackRoute.slotHref(f.container, f.slot) + '">'
                 + esc(f.container) + ' · ' + esc(f.slot) + '</a>'
+              + where(f.container)
               + '<span class="what">' + esc(f.item || '')
               + (f.note ? ' — ' + esc(f.note) : '') + '</span></li>').join('')
             + '</ul>'
@@ -118,7 +130,7 @@
           ? '<ul class="uses">' + uses.map(u =>
               '<li>Uses <a href="' + rackRoute.slotHref(u.container, u.slot)
               + '">' + esc(u.container) + ' · ' + esc(u.slot)
-              + '</a> — ' + esc(u.item || '') + '</li>').join('') + '</ul>'
+              + '</a> — ' + esc(u.item || '') + where(u.container) + '</li>').join('') + '</ul>'
           : '')
       + '</li>';
   }

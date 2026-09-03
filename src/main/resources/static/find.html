@@ -13,6 +13,7 @@
   <script src="/assets/photos.js"></script>
   <script src="/assets/slots.js"></script>
   <script src="/assets/route.js"></script>
+  <script src="/assets/places.js"></script>
   <script src="/assets/itemdocs.js"></script>
   <style>
     .search { margin-bottom: 1rem; display: flex; gap: .4rem; }
@@ -27,6 +28,9 @@
     .hits { list-style: none; padding: 0; margin: 0; }
     .group { padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: .75rem; background: var(--card); box-shadow: var(--shadow); }
     .group .loc { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .35rem; }
+    /* The room to walk to. The drawer id above is precise and says nothing
+       about where in the house it is. */
+    .group .where { font-size: .8rem; color: var(--muted); margin: -.25rem 0 .4rem; }
     .group .loc a { color: var(--primary-hover); font-weight: 700; text-decoration: none; font-family: var(--font-mono); font-size: 1.05rem; }
     .group .loc a:hover { text-decoration: underline; }
     .group ul.items { list-style: none; padding: 0; margin: .6rem 0 0; }
@@ -131,19 +135,27 @@
     let smartController = null;
     let debounce = null;
     let smartDebounce = null;
-    let containers = [];
-    fetch('/c')
-      .then(r => r.ok ? r.json() : [])
-      .then(list => { containers = list; relabelContainers(); })
-      .catch(() => {});
+    rackPlaces.load().then(relabelContainers);
 
-    // If results landed before /c did, the cards fell back to the key. Relabel
-    // them in place rather than re-rendering, which would reset a take in flight.
+    // If results landed before /c did, the cards fell back to the key and had no
+    // location to show. Relabel them in place rather than re-rendering, which
+    // would reset a take in flight.
     function relabelContainers() {
-      hits.querySelectorAll('.group .loc a').forEach(a => {
+      hits.querySelectorAll('.group').forEach(group => {
+        const a = group.querySelector('.loc a');
+        if (!a) return;
         const at = rackRoute.readSlotHref(a.getAttribute('href'));
-        if (at.container) a.textContent = containerName(at.container) + ' · ' + at.slot;
+        if (!at.container) return;
+        a.textContent = placeName(at.container, at.slot);
+        paintWhere(group.querySelector('.where'), at.container);
       });
+    }
+
+    function paintWhere(el, containerId) {
+      if (!el) return;
+      const text = rackPlaces.where(containerId);
+      el.textContent = text;
+      el.hidden = !text;
     }
 
     // The same drawers get hunted over and over — batteries, heat shrink, that
@@ -303,25 +315,9 @@
 
     function stockKey(container, slot, index) { return container + '/' + slot + '/' + index; }
 
-    // Containers are keyed by a short id ("rack") but named by their owner
-    // ("Skuffereol"). The key belongs in URLs; the name belongs on screen.
-
-    // What a container's owner calls one of its subdivisions, and whether it has
-    // any: a container with a single slot is itself the place.
-    function containerOf(id) { return containers.find(c => c.id === id); }
-
-    // Where a thing is. A container with one storage space is the whole answer;
-    // appending its lone slot id would read as "Plastboks 1 · 1".
-    function placeName(containerId, slot) {
-      const c = containerOf(containerId);
-      return isDivided(c) ? containerName(containerId) + ' · ' + slot : containerName(containerId);
-    }
-    function isDivided(c) { return !!(c && (c.slots || []).length > 1); }
-
-    function containerName(id) {
-      const c = containers.find(c => c.id === id);
-      return (c && c.name) ? c.name : id;
-    }
+    // Naming a place is the same question here, on a project's checklist and on
+    // the capture page, so it is answered in one file. See assets/places.js.
+    const placeName = (containerId, slot) => rackPlaces.place(containerId, slot);
 
 
     function seedStock(results) {
@@ -477,8 +473,12 @@
       const putUrl = rackRoute.slotHref(g.container, g.slot);
       const staleBadge = staleBadgeIfNeeded(g.lastVerified);
       const itemsHtml = g.hits.map(h => renderHitItem(h, g)).join('');
+      // Hidden rather than absent, so relabelContainers can fill it in when /c
+      // lands after the results do.
+      const where = rackPlaces.where(g.container);
       return '<li class="group">' +
         '<div class="loc"><a href="' + putUrl + '">' + esc(location) + '</a>' + staleBadge + '</div>' +
+        '<div class="where"' + (where ? '' : ' hidden') + '>' + esc(where) + '</div>' +
         '<ul class="items">' + itemsHtml + '</ul>' +
       '</li>';
     }
@@ -738,7 +738,7 @@
 
       function drawContainers() {
         containersHost.innerHTML = '';
-        containers.forEach(c => {
+        rackPlaces.list().forEach(c => {
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'container-btn';
