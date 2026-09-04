@@ -93,11 +93,11 @@ public class FindCompanions {
      *                  own to keep out of the listing
      */
     public Result execute(Item item, ContainerId container, SlotId slot) {
-        if (item == null || blank(item.name())) return new Result(null, List.of(), List.of());
+        if (item == null || blank(item.name())) return new Result(null, List.of(), List.of(), List.of());
 
         Ref self = container == null || slot == null ? null : indexOf(item, container, slot);
         Listing listing = listing(self);
-        if (listing.lines.isEmpty()) return new Result(item.name(), List.of(), List.of());
+        if (listing.lines.isEmpty()) return new Result(item.name(), List.of(), List.of(), List.of());
 
         return result(item, citedFor(List.of(item), listing).get(0), listing, self, container, slot);
     }
@@ -116,7 +116,7 @@ public class FindCompanions {
         int n = 0;
         for (Item item : items) {
             if (item == null || blank(item.name()) || cited.isEmpty()) {
-                results.add(new Result(item == null ? null : item.name(), List.of(), List.of()));
+                results.add(new Result(item == null ? null : item.name(), List.of(), List.of(), List.of()));
             } else {
                 results.add(result(item, cited.get(n++), listing, null, null, null));
             }
@@ -127,6 +127,7 @@ public class FindCompanions {
     private Result result(Item item, List<Cited> cited, Listing listing, Ref self, ContainerId container, SlotId slot) {
         List<Found> elsewhere = new ArrayList<>();
         List<Found> here = new ArrayList<>();
+        List<Found> alike = new ArrayList<>();
         for (Cited c : cited) {
             Found found = resolve(c, listing);
             if (found == null) continue;
@@ -134,10 +135,10 @@ public class FindCompanions {
                 && found.index() == self.index) continue;
             boolean sameSlot = container != null && slot != null
                 && found.container().equals(container) && found.slot().equals(slot);
-            List<Found> into = sameSlot ? here : elsewhere;
+            List<Found> into = c.kind() == Companion.Kind.SAME_KIND ? alike : sameSlot ? here : elsewhere;
             if (into.size() < MAX && into.stream().noneMatch(f -> samePlace(f, found))) into.add(found);
         }
-        return new Result(item.name(), List.copyOf(elsewhere), List.copyOf(here));
+        return new Result(item.name(), List.copyOf(elsewhere), List.copyOf(here), List.copyOf(alike));
     }
 
     /** Citations per item, in the items' order; only the items not already answered cost a call. */
@@ -157,9 +158,17 @@ public class FindCompanions {
             for (Companion c : finder.find(subjects, listing.lines)) {
                 Entry entry = listing.byRef.get(c.ref());
                 if (entry == null || c.subject() < 0 || c.subject() >= unanswered.size()) continue;    // invented
+                Cited cited = new Cited(c.ref(), entry.item.name(), c.kind(), c.why());
+                if (c.kind() == Companion.Kind.SAME_KIND) {
+                    // Where it would be filed alongside: a drawer suggestion
+                    // rather than a move, and no stronger a claim than the
+                    // keyword pass makes, so it is not put to the model again.
+                    fresh.get(unanswered.get(c.subject())).add(cited);
+                    continue;
+                }
                 claims.add(new Claim(subjects.get(c.subject()), line(null, entry.item), c.why()));
                 claimedFor.add(unanswered.get(c.subject()));
-                claimed.add(new Cited(c.ref(), entry.item.name(), c.why()));
+                claimed.add(cited);
             }
             // Second opinion, pair by pair. Picked out of a listing of a hundred
             // and fifty lines, "small coil spring for Elco switch" was the pair
@@ -275,14 +284,15 @@ public class FindCompanions {
     private record Listing(List<String> lines, Map<String, Entry> byRef, String fingerprint) {}
 
     /** A citation as remembered: by the name it was made under, so a move does not strand it. */
-    private record Cited(String ref, String name, String why) {}
+    private record Cited(String ref, String name, Companion.Kind kind, String why) {}
 
     /** One thing the subject belongs with, where it is, and why. */
     public record Found(ContainerId container, SlotId slot, int index, Item item, String why, Instant lastVerified) {}
 
     /**
-     * The name asked about, what it belongs with elsewhere ({@code hits}) and
-     * what is already beside it ({@code together}).
+     * The name asked about, what it belongs with elsewhere ({@code hits}), what
+     * is already beside it ({@code together}), and what it is the same kind of
+     * thing as ({@code alike}) — where it would be filed alongside.
      */
-    public record Result(String query, List<Found> hits, List<Found> together) {}
+    public record Result(String query, List<Found> hits, List<Found> together, List<Found> alike) {}
 }

@@ -412,6 +412,8 @@ One request, not two: the server already widened per item, and there is nothing 
 
 The name is searched at all now — before, only the part number and tags were, so the best label on the item was the one thing the lookup ignored.
 
+**And the model, shown the listing, says where the same kind of thing already is.** "Samsung 16GB microSDHC" found nothing: the keyword pass could not get past the brand and the capacity to the drawer of Transcend and SanDisk cards, the expander saw a word the rack already used ("microSDHC") and declined to widen, and its tags may only corroborate. The filing call to `FindCompanions` already asks the model for a verdict on every candidate, and *same kind* is one of the verdicts — so those citations come back as `alike`, and `SuggestSlot` scores their drawer at `LIKENESS` (9, about a name match on three words) with the cited item as the reason. Same call, no extra cost, and it is the model reading every description rather than a search matching words. Not put to the model a second time the way a pair is: a drawer suggestion is no stronger a claim than the keyword pass makes.
+
 **A name or part number anchors a slot; a tag only corroborates one.** A tag is a single generic word, so "every word must match" can't discipline it: photographing a roll of tape scored the resistor drawer 66 on the tag `tape` alone, because twenty-two resistors come on tape reels. A tag can raise a slot the name already found and can't put one in the list by itself, so an item with neither name nor part number — barely an identification — suggests nothing rather than guessing from its tags.
 
 ### What a thing belongs with

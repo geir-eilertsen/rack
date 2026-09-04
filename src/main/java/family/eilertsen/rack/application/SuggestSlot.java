@@ -24,6 +24,18 @@ public class SuggestSlot {
 
     private static final int TOP_N = 5;
 
+    /**
+     * What a drawer scores for holding something the model called the same
+     * kind of thing as the photographed one. Read off the whole listing with
+     * every description in view, so it is worth about what a name match on
+     * three words is — enough to put a drawer on the list by itself, which is
+     * what "Samsung 16GB microSDHC" needed: the keyword pass could not get
+     * past the brand and the capacity to the drawer of Transcend and SanDisk
+     * cards, and the expander saw a word the rack already used and declined
+     * to widen.
+     */
+    static final double LIKENESS = 9.0;
+
     private final PartExtractor extractor;
     private final FindItems find;
     private final FindCompanions companions;
@@ -60,21 +72,33 @@ public class SuggestSlot {
             }
         }
 
+        // Filing is the moment a pair gets split: a charger filed by likeness
+        // goes in with the other chargers, and the phone it belongs to stays
+        // where it was. So the drawer holding the counterpart is offered here,
+        // beside the drawers holding the same kind of thing. Not yet filed, so
+        // there is no slot of its own to leave out. The same call also says
+        // what the thing is the same kind of as, with every description in
+        // view, which is a drawer suggestion in its own right.
+        List<FindCompanions.Result> goesWith = new ArrayList<>();
+        for (FindCompanions.Result found : companions.executeAll(extracted)) {
+            if (!found.hits().isEmpty()) goesWith.add(found);
+            for (FindCompanions.Found like : found.alike()) {
+                Key k = new Key(like.container(), like.slot());
+                Bucket b = buckets.computeIfAbsent(k, key -> new Bucket(key, like.lastVerified()));
+                b.score += LIKENESS;
+                if (!containsItem(b.matches, like.item())) b.matches.add(like.item());
+            }
+            if (!found.alike().isEmpty()) {
+                log.info("Suggest: \"{}\" is the same kind as {}", found.query(),
+                    found.alike().stream().map(f -> f.container().value() + "/" + f.slot().value() + " " + f.item().name()).toList());
+            }
+        }
+
         List<Suggestion> suggestions = buckets.values().stream()
             .sorted(Comparator.comparingDouble((Bucket b) -> -b.score))
             .limit(TOP_N)
             .map(b -> new Suggestion(b.key.container, b.key.slot, b.score, b.matches, b.lastVerified))
             .toList();
-
-        // Filing is the moment a pair gets split: a charger filed by likeness
-        // goes in with the other chargers, and the phone it belongs to stays
-        // where it was. So the drawer holding the counterpart is offered here,
-        // beside the drawers holding the same kind of thing. Not yet filed, so
-        // there is no slot of its own to leave out.
-        List<FindCompanions.Result> goesWith = new ArrayList<>();
-        for (FindCompanions.Result found : companions.executeAll(extracted)) {
-            if (!found.hits().isEmpty()) goesWith.add(found);
-        }
 
         log.info("Suggest: {} suggestion(s) {}", suggestions.size(),
             suggestions.stream().map(sg -> sg.container().value() + "/" + sg.slot().value()).toList());

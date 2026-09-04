@@ -51,6 +51,24 @@ class SuggestSlotTest {
     }
 
     @Test
+    void aDrawerTheModelSaysHoldsTheSameKindOfThingIsSuggestedWhenNoWordMatched() {
+        // "Samsung 16GB microSDHC": the keyword pass cannot get past the brand
+        // and the capacity to the drawer of Transcend and SanDisk cards, and
+        // the expander saw a word the rack already used and declined to
+        // widen. The model, shown the listing, says which drawer.
+        extractor.returns(item("Samsung 16GB microSDHC", null, List.of("microSD")));
+        index.put(LAB, new Slot(new SlotId("6"), List.of(
+            new Item("Transcend 8GB microSD", "microSDHC card", null, "storage", 1, 0.9, List.of(), List.of(), null, null, List.of())), null, null));
+        finder.cites(new Companion(0, "lab/6#0", Companion.Kind.SAME_KIND, "another microSD card"));
+
+        SuggestSlot.Result result = suggest.execute(List.of(new byte[]{1}));
+
+        assertThat(result.suggestions()).extracting(SuggestSlot.Suggestion::slot).containsExactly(new SlotId("6"));
+        assertThat(result.suggestions().get(0).matches()).extracting(Item::name).containsExactly("Transcend 8GB microSD");
+        assertThat(result.companions()).isEmpty();
+    }
+
+    @Test
     void saysWhichItemThePhotographedThingBelongsWithAndWhere() {
         // A charger filed by likeness goes in with the other chargers, and the
         // phone it belongs to stays where it was — filing is where a pair gets
@@ -59,7 +77,7 @@ class SuggestSlotTest {
         index.hits("phone charger", hit("1", 9));
         index.put(LAB, new Slot(new SlotId("7"), List.of(
             new Item("Phone", "old Android", null, "electronics", 1, 0.9, List.of(), List.of(), null, null, List.of())), null, null));
-        finder.cites(new Companion(0, "lab/7#0", "charges it"));
+        finder.cites(new Companion(0, "lab/7#0", Companion.Kind.PAIR, "charges it"));
 
         SuggestSlot.Result result = suggest.execute(List.of(new byte[]{1}));
 

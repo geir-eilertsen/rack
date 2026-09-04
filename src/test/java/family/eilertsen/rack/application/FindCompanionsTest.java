@@ -54,7 +54,7 @@ class FindCompanionsTest {
         Item pi = item("Raspberry Pi 4", "single-board computer, USB-C power");
         index.put(LAB, slot("11", pi));
         index.put(CELLAR, slot("3", item("Paper towels", "kitchen roll")));
-        finder.cites(new Companion(0, "lab/11#0", "powers it over USB-C"));
+        finder.cites(new Companion(0, "lab/11#0", Companion.Kind.PAIR, "powers it over USB-C"));
 
         FindCompanions.Result result = companions.execute(item("USB-C power supply", "5.1V 3A"), null, null);
 
@@ -86,7 +86,7 @@ class FindCompanionsTest {
     void aReferenceTheListingDoesNotHaveIsNotBelieved() {
         // The model is not permitted to furnish this rack from memory.
         index.put(LAB, slot("1", item("Phone", "old Android")));
-        finder.cites(new Companion(0, "lab/9#0", "charges it"), new Companion(0, "nonsense", ""), new Companion(0, "lab/1#0", "charges it"));
+        finder.cites(new Companion(0, "lab/9#0", Companion.Kind.PAIR, "charges it"), new Companion(0, "nonsense", Companion.Kind.PAIR, ""), new Companion(0, "lab/1#0", Companion.Kind.PAIR, "charges it"));
 
         FindCompanions.Result result = companions.execute(item("Phone charger", "micro-USB"), null, null);
 
@@ -101,7 +101,7 @@ class FindCompanionsTest {
         Item charger = item("Panasonic Lumix battery charger", "for DMW-BCF10 battery");
         index.put(LAB, slot("11", camera, charger));
         index.put(CELLAR, slot("1", item("Spare DMW-BCF10 battery", "camera battery")));
-        finder.cites(new Companion(0, "lab/11#0", "charges its battery"), new Companion(0, "cellar/1#0", "the battery it charges"));
+        finder.cites(new Companion(0, "lab/11#0", Companion.Kind.PAIR, "charges its battery"), new Companion(0, "cellar/1#0", Companion.Kind.PAIR, "the battery it charges"));
 
         FindCompanions.Result result = companions.execute(charger, LAB, new SlotId("11"));
 
@@ -113,7 +113,7 @@ class FindCompanionsTest {
     void aGeneralPurposeChargerBelongsWithEverythingItServes() {
         index.put(LAB, slot("1", item("Pixel 7", "phone, USB-C"), item("Kindle", "e-reader, USB-C")));
         index.put(CELLAR, slot("2", item("Steam Deck", "USB-C PD")));
-        finder.cites(new Companion(0, "lab/1#0", "charges it"), new Companion(0, "lab/1#1", "charges it"), new Companion(0, "cellar/2#0", "charges it at 45W"));
+        finder.cites(new Companion(0, "lab/1#0", Companion.Kind.PAIR, "charges it"), new Companion(0, "lab/1#1", Companion.Kind.PAIR, "charges it"), new Companion(0, "cellar/2#0", Companion.Kind.PAIR, "charges it at 45W"));
 
         FindCompanions.Result result = companions.execute(item("65W USB-C charger", "GaN, PD"), null, null);
 
@@ -123,7 +123,7 @@ class FindCompanionsTest {
     @Test
     void theSameQuestionOverTheSameRackIsAskedOnce() {
         index.put(LAB, slot("11", item("Raspberry Pi 4", "single-board computer")));
-        finder.cites(new Companion(0, "lab/11#0", "powers it"));
+        finder.cites(new Companion(0, "lab/11#0", Companion.Kind.PAIR, "powers it"));
         Item psu = item("USB-C power supply", "5.1V 3A");
 
         companions.execute(psu, null, null);
@@ -144,7 +144,7 @@ class FindCompanionsTest {
         assertThat(finder.calls).isEqualTo(1);
 
         index.put(CELLAR, slot("2", item("Sony Ericsson mobile phone", "clamshell")));
-        finder.cites(new Companion(0, "cellar/2#0", "the phone it charges"));
+        finder.cites(new Companion(0, "cellar/2#0", Companion.Kind.PAIR, "the phone it charges"));
 
         FindCompanions.Result result = companions.execute(charger, null, null);
 
@@ -160,7 +160,7 @@ class FindCompanionsTest {
         Item outlet = item("ELKO dual USB wall outlet", "flush-mount, two USB-A ports");
         index.put(LAB, slot("1", outlet));
         index.put(CELLAR, slot("2", item("small coil spring for Elco switch", "compression spring"), item("5V 2A USB charger", "wall wart")));
-        finder.cites(new Companion(0, "cellar/2#0", "spring for the switch inside"), new Companion(0, "cellar/2#1", "plugs into its USB port"));
+        finder.cites(new Companion(0, "cellar/2#0", Companion.Kind.PAIR, "spring for the switch inside"), new Companion(0, "cellar/2#1", Companion.Kind.PAIR, "plugs into its USB port"));
         finder.rejects("small coil spring for Elco switch");
 
         FindCompanions.Result result = companions.execute(outlet, LAB, new SlotId("1"));
@@ -178,7 +178,7 @@ class FindCompanionsTest {
         // listing is most of each prompt.
         index.put(LAB, slot("11", item("Raspberry Pi 4", "single-board computer")));
         index.put(CELLAR, slot("3", item("Panasonic Lumix DMC-FS11", "compact camera")));
-        finder.cites(new Companion(1, "cellar/3#0", "charges its battery"), new Companion(0, "lab/11#0", "powers it"));
+        finder.cites(new Companion(1, "cellar/3#0", Companion.Kind.PAIR, "charges its battery"), new Companion(0, "lab/11#0", Companion.Kind.PAIR, "powers it"));
 
         List<FindCompanions.Result> results = companions.executeAll(List.of(
             item("USB-C power supply", "5.1V 3A"),
@@ -191,6 +191,19 @@ class FindCompanionsTest {
         assertThat(results.get(0).hits()).extracting(f -> f.item().name()).containsExactly("Raspberry Pi 4");
         assertThat(results.get(1).hits()).extracting(f -> f.item().name()).containsExactly("Panasonic Lumix DMC-FS11");
         assertThat(results.get(2).hits()).isEmpty();
+    }
+
+    @Test
+    void whatItIsTheSameKindOfThingAsComesBackApartAndIsNotPutToTheModelAgain() {
+        // Where it would be filed alongside — a drawer suggestion, not a move.
+        index.put(LAB, slot("A6", item("Transcend 8GB microSD", "microSDHC card"), item("SanDisk microSD adapter", "SD adapter")));
+        finder.cites(new Companion(0, "lab/A6#0", Companion.Kind.SAME_KIND, "another microSD card"));
+
+        FindCompanions.Result result = companions.execute(item("Samsung 16GB microSDHC", "class 6"), null, null);
+
+        assertThat(result.alike()).extracting(f -> f.item().name()).containsExactly("Transcend 8GB microSD");
+        assertThat(result.hits()).isEmpty();
+        assertThat(finder.claims).isNull();
     }
 
     @Test

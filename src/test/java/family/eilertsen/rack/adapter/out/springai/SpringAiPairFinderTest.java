@@ -11,11 +11,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SpringAiPairFinderTest {
 
     @Test
-    void keepsOnlyWhatTheModelCalledAPair() {
+    void keepsWhatTheModelCalledAPairOrTheSameKindAndDropsTheMerelyRelated() {
         // Sonnet cited the ceiling rose beside a USB wall outlet and wrote
         // "merely related, not a pair" in the reason. The verdict is where it
         // gets to say so.
-        List<Companion> kept = SpringAiPairFinder.pairs(Arrays.asList(
+        List<Companion> kept = SpringAiPairFinder.companions(Arrays.asList(
             new SpringAiPairFinder.Cited("S1", "lab/11#0", "pair", "powers it"),
             new SpringAiPairFinder.Cited("S1", "lab/11#10", "same kind", "another 5V USB supply"),
             new SpringAiPairFinder.Cited("S2", "box01/Box1#3", "related", "same wiring installation"),
@@ -25,8 +25,9 @@ class SpringAiPairFinderTest {
             null), 2);
 
         assertThat(kept).containsExactly(
-            new Companion(0, "lab/11#0", "powers it"),
-            new Companion(1, "lab/6#2", "the cable it was made for"));
+            new Companion(0, "lab/11#0", Companion.Kind.PAIR, "powers it"),
+            new Companion(0, "lab/11#10", Companion.Kind.SAME_KIND, "another 5V USB supply"),
+            new Companion(1, "lab/6#2", Companion.Kind.PAIR, "the cable it was made for"));
     }
 
     @Test
@@ -43,9 +44,9 @@ class SpringAiPairFinderTest {
 
     @Test
     void aLoneSubjectNeedNotBeNamed() {
-        List<Companion> kept = SpringAiPairFinder.pairs(List.of(
+        List<Companion> kept = SpringAiPairFinder.companions(List.of(
             new SpringAiPairFinder.Cited(null, "lab/11#0", "pair", "powers it")), 1);
 
-        assertThat(kept).containsExactly(new Companion(0, "lab/11#0", "powers it"));
+        assertThat(kept).containsExactly(new Companion(0, "lab/11#0", Companion.Kind.PAIR, "powers it"));
     }
 }

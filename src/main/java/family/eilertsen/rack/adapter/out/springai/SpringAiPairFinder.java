@@ -47,11 +47,17 @@ public class SpringAiPairFinder implements PairFinder {
         - Consider only entries from the list, by their exact reference.
         - Give every candidate you consider a verdict, and be strict about it:
           "pair" — one is not much use without the other, made for it or
-          serving it; "same kind" — another charger, cable, adapter or
-          computer like this one, which is never a pair; "related" — same
-          category, same hobby, same brand, plugs into the same socket, but
-          neither needs the other. Only "pair" will be kept, so a candidate
-          you would talk yourself out of belongs under one of the other two.
+          serving it; "same kind" — another of the same thing, which is never
+          a pair; "related" — same category, same hobby, same brand, plugs
+          into the same socket, but neither needs the other. A candidate you
+          would talk yourself out of as a pair belongs under one of the other
+          two.
+        - "same kind" is also asked for on its own account: it says where the
+          subject would be filed alongside. For each subject, cite up to five
+          entries that are the same kind of thing — a microSD card is the
+          same kind as another microSD card whatever the brand, capacity or
+          speed class; a 100nF capacitor is the same kind as a 220nF one; a
+          Torx bit is the same kind as a Phillips bit. Prefer the closest.
         - A brand in common is not a pair. A spare part or component belongs
           only with the exact product it fits, and only when that product is
           the other entry: a spring for a light switch is not the pair of a
@@ -129,7 +135,7 @@ public class SpringAiPairFinder implements PairFinder {
 
         try {
             List<Cited> cited = mapper.readValue(SpringAi.json(reply), new TypeReference<>() {});
-            return pairs(cited, subjects.size());
+            return companions(cited, subjects.size());
         } catch (Exception e) {
             log.warn("Pair lookup returned non-JSON for {}: {}", subjects, reply);
             return List.of();
@@ -181,21 +187,31 @@ public class SpringAiPairFinder implements PairFinder {
     record Verdict(Integer claim, Boolean pair, String why) {}
 
     /**
-     * Only what the model called a pair. Asked for citations alone, Sonnet
+     * What the model called a pair, and what it called the same kind; what it
+     * called merely related is dropped. Asked for citations alone, Sonnet
      * cited the ceiling rose beside a USB wall outlet and wrote "merely
      * related, not a pair" in the reason — it knew, and the format gave it no
      * way to say so. A verdict per candidate is that way.
      */
-    static List<Companion> pairs(List<Cited> cited, int subjects) {
+    static List<Companion> companions(List<Cited> cited, int subjects) {
         List<Companion> companions = new ArrayList<>();
         for (Cited c : cited) {
             if (c == null || c.ref() == null || c.ref().isBlank()) continue;
-            if (c.verdict() == null || !c.verdict().strip().equalsIgnoreCase("pair")) continue;
+            Companion.Kind kind = kindOf(c.verdict());
+            if (kind == null) continue;
             int subject = subjectIndex(c.subject(), subjects);
             if (subject < 0) continue;
-            companions.add(new Companion(subject, c.ref().strip(), c.why() == null ? "" : c.why().strip()));
+            companions.add(new Companion(subject, c.ref().strip(), kind, c.why() == null ? "" : c.why().strip()));
         }
         return List.copyOf(companions);
+    }
+
+    private static Companion.Kind kindOf(String verdict) {
+        if (verdict == null) return null;
+        String v = verdict.strip().toLowerCase(java.util.Locale.ROOT).replaceAll("[\\s_-]+", " ");
+        if (v.equals("pair")) return Companion.Kind.PAIR;
+        if (v.equals("same kind")) return Companion.Kind.SAME_KIND;
+        return null;
     }
 
     /** "S1" is the first subject; one subject may be cited without saying which. */
