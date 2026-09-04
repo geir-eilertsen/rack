@@ -300,6 +300,11 @@ class ResyncSlotTest {
     }
 
     private static final class FakeImages implements ImageStore {
+        @Override
+        public byte[] thumbnail(String filename, int maxEdge) {
+            return read(filename);
+        }
+
         private final List<String> stored = new ArrayList<>();
         private final List<String> deleted = new ArrayList<>();
 

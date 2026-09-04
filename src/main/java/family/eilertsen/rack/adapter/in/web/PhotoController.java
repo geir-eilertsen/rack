@@ -7,6 +7,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -27,11 +28,26 @@ public class PhotoController {
         this.images = images;
     }
 
+    /**
+     * Two thumbnail sizes and no more, so the cache on disk holds two files
+     * per photograph rather than one per pixel width a page ever asked for:
+     * 160 for a 48px thumbnail on a 3× screen, 320 for an 84px strip frame.
+     */
+    static final int SMALL = 160;
+    static final int LARGE = 320;
+
+    /**
+     * {@code ?w=} asks for a thumbnail no longer than that on its longer side.
+     * A phone decodes every image at the size it was sent, and a drawer of
+     * twenty items with full photographs for thumbnails was twenty full
+     * photographs in memory — which the camera app needs next.
+     */
     @GetMapping("/photos/{filename}")
-    public ResponseEntity<byte[]> photo(@PathVariable String filename) {
+    public ResponseEntity<byte[]> photo(@PathVariable String filename,
+                                        @RequestParam(name = "w", required = false) Integer width) {
         byte[] bytes;
         try {
-            bytes = images.read(filename);
+            bytes = width == null ? images.read(filename) : images.thumbnail(filename, edge(width));
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         } catch (UncheckedIOException e) {
@@ -43,6 +59,10 @@ public class PhotoController {
             // so a phone re-opening a drawer should not fetch them again.
             .cacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePrivate().immutable())
             .body(bytes);
+    }
+
+    static int edge(int width) {
+        return width <= SMALL ? SMALL : LARGE;
     }
 
     private static MediaType mediaType(String filename) {

@@ -4,6 +4,16 @@ import family.eilertsen.rack.domain.port.ImageStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.FileAlreadyExistsException;
@@ -11,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -23,9 +34,23 @@ public class FilesystemImageStore implements ImageStore {
     /** One folder for the whole rack: a frame belongs to what it shows, not to a drawer. */
     private final Path photoDir;
 
+    /**
+     * Scaled copies, beside the photographs rather than among them: {@link #all}
+     * lists the photo folder, and a thumbnail is not a photograph nothing
+     * points at. {@code thumbs/<edge>/<filename>.jpg}, made on first request
+     * and kept — the bytes never change under a name, so neither does the
+     * thumbnail. Deleted with the photograph, and swept at boot for any
+     * photograph that went while the app was not running.
+     */
+    private final Path thumbDir;
+
     public FilesystemImageStore(@Value("${rack.data-dir}") String dataDir) throws IOException {
-        this.photoDir = Path.of(dataDir).toAbsolutePath().resolve("photos");
+        Path data = Path.of(dataDir).toAbsolutePath();
+        this.photoDir = data.resolve("photos");
+        this.thumbDir = data.resolve("thumbs");
         Files.createDirectories(this.photoDir);
+        Files.createDirectories(this.thumbDir);
+        sweepThumbnails();
     }
 
     @Override
@@ -63,6 +88,71 @@ public class FilesystemImageStore implements ImageStore {
     }
 
     @Override
+    public byte[] thumbnail(String filename, int maxEdge) {
+        Path cached = thumbDir.resolve(String.valueOf(maxEdge)).resolve(resolve(filename).getFileName() + ".jpg");
+        try {
+            if (Files.exists(cached)) return Files.readAllBytes(cached);
+            byte[] original = read(filename);
+            byte[] scaled = scale(original, maxEdge);
+            if (scaled == null) return original;
+            Files.createDirectories(cached.getParent());
+            Path tmp = cached.resolveSibling(cached.getFileName() + ".tmp");
+            Files.write(tmp, scaled);
+            Files.move(tmp, cached, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return scaled;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** Null for anything ImageIO cannot read — HEIC, WebP — so the original is served as it was. */
+    static byte[] scale(byte[] original, int maxEdge) throws IOException {
+        BufferedImage source = ImageIO.read(new ByteArrayInputStream(original));
+        if (source == null) return null;
+        double factor = Math.min(1.0, (double) maxEdge / Math.max(source.getWidth(), source.getHeight()));
+        int width = Math.max(1, (int) Math.round(source.getWidth() * factor));
+        int height = Math.max(1, (int) Math.round(source.getHeight() * factor));
+        // RGB regardless of what came in: a JPEG writer has no alpha to keep.
+        BufferedImage target = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = target.createGraphics();
+        try {
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g.drawImage(source, 0, 0, width, height, null);
+        } finally {
+            g.dispose();
+        }
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
+        try (ImageOutputStream stream = ImageIO.createImageOutputStream(out)) {
+            writer.setOutput(stream);
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionQuality(0.8f);
+            writer.write(null, new IIOImage(target, null, null), param);
+        } finally {
+            writer.dispose();
+        }
+        return out.toByteArray();
+    }
+
+    /** Thumbnails of photographs that are no longer there. */
+    private void sweepThumbnails() throws IOException {
+        Set<String> photos = Set.copyOf(all());
+        try (Stream<Path> sizes = Files.list(thumbDir)) {
+            for (Path size : sizes.filter(Files::isDirectory).toList()) {
+                try (Stream<Path> thumbs = Files.list(size)) {
+                    for (Path thumb : thumbs.filter(Files::isRegularFile).toList()) {
+                        String name = thumb.getFileName().toString();
+                        String photo = name.endsWith(".jpg") ? name.substring(0, name.length() - 4) : name;
+                        if (!photos.contains(photo)) Files.deleteIfExists(thumb);
+                    }
+                }
+            }
+        }
+    }
+
+    @Override
     public List<String> all() {
         if (!Files.isDirectory(photoDir)) return List.of();
         try (Stream<Path> files = Files.list(photoDir)) {
@@ -80,6 +170,11 @@ public class FilesystemImageStore implements ImageStore {
     public void delete(String filename) {
         try {
             Files.deleteIfExists(resolve(filename));
+            try (Stream<Path> sizes = Files.list(thumbDir)) {
+                for (Path size : sizes.filter(Files::isDirectory).toList()) {
+                    Files.deleteIfExists(size.resolve(filename + ".jpg"));
+                }
+            }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

@@ -414,6 +414,11 @@ class ContainerMaintenanceTest {
     /** The sweep needs a store; nothing here is about photographs on disk. */
     private static final class NoImages implements family.eilertsen.rack.domain.port.ImageStore {
         @Override
+        public byte[] thumbnail(String filename, int maxEdge) {
+            return read(filename);
+        }
+
+        @Override
         public String store(byte[] image, String contentType) {
             return "x.jpg";
         }

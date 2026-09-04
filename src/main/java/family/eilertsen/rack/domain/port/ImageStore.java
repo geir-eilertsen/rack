@@ -20,6 +20,16 @@ public interface ImageStore {
 
     byte[] read(String filename);
 
+    /**
+     * The same photograph, no longer than {@code maxEdge} pixels on its longer
+     * side, as a JPEG. A phone decodes every image it shows at the size it was
+     * sent, so a drawer of twenty items with full photographs for thumbnails
+     * is twenty full photographs in memory — and the camera app needs that
+     * memory next. Falls back to the original bytes for a format it cannot
+     * scale.
+     */
+    byte[] thumbnail(String filename, int maxEdge);
+
     /** Every photograph held, so the ones nothing points at any more can be found. */
     List<String> all();
 

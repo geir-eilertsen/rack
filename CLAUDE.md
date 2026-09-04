@@ -174,6 +174,8 @@ The old key is inert rather than migrated, per the no-migrations rule: `fail-on-
 
 `GET /photos/{filename}` serves them flat, and the filename is validated as a bare name: one folder for the whole rack means a `../` would walk out of the data directory rather than merely into the next drawer.
 
+**Small images are served small.** `?w=160` and `?w=320` (anything else rounds to one of the two) return a JPEG no longer than that on its longer side, made with ImageIO on first request and kept under `data/thumbs/<edge>/` — beside the photographs rather than among them, because `all()` lists the photo folder and a thumbnail is not a photograph nothing points at. A phone decodes every image at the size it was sent, so a drawer of twenty items whose 48px thumbnails were the full 1568px photographs was twenty full photographs in memory, and the camera app wanted that memory next: phones started reporting low memory while photographing. Item thumbnails ask for 160, strip frames for 320, and the link behind each still opens the photograph. A thumbnail goes with its photograph on delete and strays are swept at boot; a format ImageIO cannot read (HEIC, WebP) is served as it was. The client-side resize also releases its decoded bitmap and canvas as soon as the JPEG exists rather than when the collector gets round to it.
+
 **Deleting a frame is a question about the whole rack, not one slot.** `PartIndex.photosInUse()` is the union of what every item names, and every path that can orphan a file asks it before removing anything — the frames one drawer is finished with may be the only picture another drawer's item has.
 
 - `JsonFilePartIndex` walks `data/<container>/*.json` at startup into `Map<ContainerId, Map<SlotId, Slot>>`.

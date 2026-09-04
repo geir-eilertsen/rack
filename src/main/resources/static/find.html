@@ -503,7 +503,7 @@
         ordered.map(fn =>
           '<a class="frame' + (fn === source ? ' source' : '') + '" href="' + urlOf(fn) +
             '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
-            '<img src="' + urlOf(fn) + '" alt="" loading="lazy">' +
+            '<img src="' + urlOf(fn) + '?w=320" alt="" loading="lazy">' +
             (fn === source ? '<span class="badge">read from this</span>' : '') +
           '</a>').join('') +
       '</div></div>';
@@ -515,13 +515,19 @@
       return '/photos/' + encodeURIComponent(fn);
     }
 
+    // A phone decodes every image at the size it was sent, so a small image
+    // is served small; the link behind it still opens the photograph.
+    function thumbUrl(fn, w) {
+      return photoUrl(fn) + '?w=' + w;
+    }
+
     function renderHitItem(h, g) {
       const it = h.item || {};
       const tags = (it.tags || []).map(t => '<span class="tag">' + esc(t) + '</span>').join('');
       const qty = it.qty_estimate == null ? 1 : it.qty_estimate;
       const tagsCsv = (it.tags || []).join(', ');
       const thumb = it.source_photo
-        ? '<a href="' + photoUrl(it.source_photo) + '" target="_blank" onclick="event.stopPropagation()"><img class="thumb" src="' + photoUrl(it.source_photo) + '" alt=""></a>'
+        ? '<a href="' + photoUrl(it.source_photo) + '" target="_blank" onclick="event.stopPropagation()"><img class="thumb" src="' + thumbUrl(it.source_photo, 160) + '" alt="" loading="lazy"></a>'
         : '<div class="thumb-placeholder" title="no photo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg></div>';
       return '<li data-container="' + esc(g.container) + '" data-slot="' + esc(g.slot) + '" data-index="' + h.index + '">' +
         '<div class="row">' +

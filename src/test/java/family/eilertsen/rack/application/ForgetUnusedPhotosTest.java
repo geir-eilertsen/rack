@@ -98,6 +98,11 @@ class ForgetUnusedPhotosTest {
     }
 
     private static final class FakeImages implements ImageStore {
+        @Override
+        public byte[] thumbnail(String filename, int maxEdge) {
+            return read(filename);
+        }
+
         private final List<String> files = new ArrayList<>();
 
         void holds(String... names) {

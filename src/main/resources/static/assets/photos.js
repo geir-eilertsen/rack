@@ -12,13 +12,18 @@
   async function resize(file, maxDim = 1568, quality = 0.85) {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
-    if (scale >= 1 && file.size < 3_000_000) return file;
+    if (scale >= 1 && file.size < 3_000_000) { bitmap.close(); return file; }
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(bitmap.width * scale);
     canvas.height = Math.round(bitmap.height * scale);
     canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    return new Promise(resolve => canvas.toBlob(
-      b => resolve(new File([b], 'photo.jpg', { type: 'image/jpeg' })), 'image/jpeg', quality));
+    // The decoded camera frame is tens of megabytes and the camera app wants
+    // that memory back for the next shot: release it now rather than when the
+    // collector gets round to it, and the canvas the moment its JPEG exists.
+    bitmap.close();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+    canvas.width = canvas.height = 0;
+    return new File([blob], 'photo.jpg', { type: 'image/jpeg' });
   }
 
   function readAsDataUrl(file) {

@@ -3,6 +3,10 @@ package family.eilertsen.rack.adapter.out.filesystem;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +21,52 @@ class FilesystemImageStoreTest {
 
     @TempDir
     Path dataDir;
+
+    @Test
+    void aThumbnailIsNoLongerThanAskedOnItsLongerSideAndIsKeptForNextTime() throws IOException {
+        FilesystemImageStore store = new FilesystemImageStore(dataDir.toString());
+        String name = store.store(jpeg(1600, 1200), "image/jpeg");
+
+        BufferedImage thumb = ImageIO.read(new ByteArrayInputStream(store.thumbnail(name, 160)));
+
+        assertThat(thumb.getWidth()).isEqualTo(160);
+        assertThat(thumb.getHeight()).isEqualTo(120);
+        assertThat(dataDir.resolve("thumbs/160").resolve(name + ".jpg")).exists();
+        // A thumbnail is not a photograph nothing points at.
+        assertThat(store.all()).containsExactly(name);
+    }
+
+    @Test
+    void aThumbnailGoesWithItsPhotographAndAStrayOneIsSweptAtBoot() throws IOException {
+        FilesystemImageStore store = new FilesystemImageStore(dataDir.toString());
+        String kept = store.store(jpeg(400, 300), "image/jpeg");
+        String gone = store.store(jpeg(400, 300), "image/jpeg");
+        store.thumbnail(kept, 160);
+        store.thumbnail(gone, 160);
+
+        store.delete(gone);
+        assertThat(dataDir.resolve("thumbs/160").resolve(gone + ".jpg")).doesNotExist();
+
+        Files.delete(dataDir.resolve("photos").resolve(kept));
+        new FilesystemImageStore(dataDir.toString());
+        assertThat(dataDir.resolve("thumbs/160").resolve(kept + ".jpg")).doesNotExist();
+    }
+
+    @Test
+    void aFormatItCannotScaleIsServedAsItWas() throws IOException {
+        FilesystemImageStore store = new FilesystemImageStore(dataDir.toString());
+        byte[] notAnImage = "RIFF....WEBP".getBytes(StandardCharsets.UTF_8);
+        String name = store.store(notAnImage, "image/webp");
+
+        assertThat(store.thumbnail(name, 160)).isEqualTo(notAnImage);
+    }
+
+    private static byte[] jpeg(int width, int height) throws IOException {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(image, "jpeg", out);
+        return out.toByteArray();
+    }
 
     @Test
     void aBatchStoredWithinOneSecondGetsDistinctNames() throws IOException {

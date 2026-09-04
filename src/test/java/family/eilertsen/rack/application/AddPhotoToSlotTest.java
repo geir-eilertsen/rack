@@ -181,6 +181,11 @@ class AddPhotoToSlotTest {
     }
 
     private static final class FakeImages implements ImageStore {
+        @Override
+        public byte[] thumbnail(String filename, int maxEdge) {
+            return read(filename);
+        }
+
         /** Filenames, so that a delete is visible here and not only in the index. */
         private final List<String> stored = new ArrayList<>();
         private int written;

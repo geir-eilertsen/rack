@@ -115,6 +115,11 @@ class AddPhotoEndpointTest {
     }
 
     private static final class FakeImages implements ImageStore {
+        @Override
+        public byte[] thumbnail(String filename, int maxEdge) {
+            return read(filename);
+        }
+
         /** Filenames, so that a delete shows up here too. */
         private final List<String> stored = new ArrayList<>();
 
