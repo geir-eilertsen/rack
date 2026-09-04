@@ -22,10 +22,12 @@ public class SuggestSlot {
 
     private final PartExtractor extractor;
     private final FindItems find;
+    private final FindCompanions companions;
 
-    public SuggestSlot(PartExtractor extractor, FindItems find) {
+    public SuggestSlot(PartExtractor extractor, FindItems find, FindCompanions companions) {
         this.extractor = extractor;
         this.find = find;
+        this.companions = companions;
     }
 
     public Result execute(List<byte[]> photos) {
@@ -52,7 +54,18 @@ public class SuggestSlot {
             .map(b -> new Suggestion(b.key.container, b.key.slot, b.score, b.matches, b.lastVerified))
             .toList();
 
-        return new Result(extracted, suggestions);
+        // Filing is the moment a pair gets split: a charger filed by likeness
+        // goes in with the other chargers, and the phone it belongs to stays
+        // where it was. So the drawer holding the counterpart is offered here,
+        // beside the drawers holding the same kind of thing. Not yet filed, so
+        // there is no slot of its own to leave out.
+        List<FindCompanions.Result> goesWith = new ArrayList<>();
+        for (Item queried : extracted) {
+            FindCompanions.Result found = companions.execute(queried, null, null);
+            if (!found.hits().isEmpty()) goesWith.add(found);
+        }
+
+        return new Result(extracted, suggestions, goesWith);
     }
 
     private static boolean containsItem(List<Item> list, Item item) {
@@ -81,5 +94,6 @@ public class SuggestSlot {
         Instant lastVerified
     ) {}
 
-    public record Result(List<Item> extracted, List<Suggestion> suggestions) {}
+    /** {@code companions}: per extracted item that has one, where its counterpart is. */
+    public record Result(List<Item> extracted, List<Suggestion> suggestions, List<FindCompanions.Result> companions) {}
 }

@@ -37,7 +37,25 @@ class SuggestSlotTest {
         extractor = new FakeExtractor();
         index = new FakeIndex();
         expander = new FakeExpander();
-        suggest = new SuggestSlot(extractor, new FindItems(index, expander));
+        suggest = new SuggestSlot(extractor, new FindItems(index, expander), new FindCompanions(index, expander));
+    }
+
+    @Test
+    void offersTheDrawerHoldingWhatThePhotographedThingGoesWith() {
+        // A charger filed by likeness goes in with the other chargers, and the
+        // phone it belongs to stays where it was — filing is where a pair gets
+        // split, so the phone's drawer is offered alongside.
+        extractor.returns(item("Phone charger", null, List.of()));
+        index.hits("phone charger", hit("1", 9));
+        index.hits("phone", new SearchHit(LAB, new SlotId("7"), 0,
+            new Item("Phone", "old Android", null, "electronics", 1, 0.9, List.of(), List.of(), null, null, List.of()), 3, null));
+        expander.pairsWith("phone");
+
+        SuggestSlot.Result result = suggest.execute(List.of(new byte[]{1}));
+
+        assertThat(result.suggestions()).extracting(SuggestSlot.Suggestion::slot).containsExactly(new SlotId("1"));
+        assertThat(result.companions()).hasSize(1);
+        assertThat(result.companions().get(0).hits()).extracting(SearchHit::slot).containsExactly(new SlotId("7"));
     }
 
     @Test
@@ -155,15 +173,25 @@ class SuggestSlotTest {
     private static final class FakeExpander implements QueryExpander {
         private final List<String> calls = new ArrayList<>();
         private List<String> terms = List.of();
+        private List<String> counterparts = List.of();
 
         void returns(String... expanded) {
             this.terms = List.of(expanded);
+        }
+
+        void pairsWith(String... names) {
+            this.counterparts = List.of(names);
         }
 
         @Override
         public List<String> expand(String query, Collection<String> vocabulary) {
             calls.add(query);
             return terms;
+        }
+
+        @Override
+        public List<String> goesWith(String name, Collection<String> vocabulary) {
+            return counterparts;
         }
     }
 

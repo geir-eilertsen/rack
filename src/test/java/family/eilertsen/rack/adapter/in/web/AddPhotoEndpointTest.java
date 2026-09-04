@@ -67,7 +67,7 @@ class AddPhotoEndpointTest {
         AddPhotoToSlot addPhoto = new AddPhotoToSlot(images, extractor, index);
         ContainerController controller = new ContainerController(
             new ContainerRegistry(store), index, addPhoto,
-            null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null, null);
         // Match the app's snake_case output so the assertions below are the
         // wire contract the browser sees, not a MockMvc default.
         ObjectMapper mapper = new ObjectMapper()

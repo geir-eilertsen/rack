@@ -66,6 +66,35 @@ public class SpringAiQueryExpander implements QueryExpander {
         Return ONLY the JSON array. No prose, no markdown, no code fences.
         """;
 
+    private static final String GOES_WITH_PROMPT = """
+        Someone keeps a small-parts inventory — electronics, fasteners, tools,
+        cables, consumables, household things — with one entry per thing in a
+        drawer or box.
+
+        This entry: "%s"
+
+        These are the words the inventory actually uses (item names, categories
+        and tags):
+        %s
+
+        Return a JSON array of at most %d entries from the list above that this
+        thing is used TOGETHER WITH — the other half of a pair, where one is not
+        much use without the other: a phone and its charger, a remote and its
+        receiver, a lens and its cap, a drill and its bits, a printer and its
+        cartridges. Rules:
+        - Only wording that appears in the list above. The point is to find a
+          counterpart that is actually on a shelf here, not to imagine one.
+        - Never a synonym or another of the same thing. A second charger is not
+          a counterpart of a charger; a "USB cable" is not a counterpart of a
+          "USB-C cable".
+        - Never something merely related or of the same category. A resistor is
+          not a counterpart of a capacitor.
+        - Terms are matched as substrings, so keep them short — one or two words.
+        - An empty array is the right answer for most things. Do not fill it.
+
+        Return ONLY the JSON array. No prose, no markdown, no code fences.
+        """;
+
     private final ChatClient chat;
     private final ObjectMapper mapper;
     private final UsageLog usage;
@@ -88,15 +117,30 @@ public class SpringAiQueryExpander implements QueryExpander {
 
     @Override
     public List<String> expand(String query, Collection<String> vocabulary) {
+        return ask("Query expansion", PROMPT, query, vocabulary);
+    }
+
+    /**
+     * Same call, same grounding, same cleaning, a different question: not
+     * "what else is this called" but "what is this used with". The cleaning
+     * rules carry over unchanged — a counterpart built only from the item's own
+     * words ("charger" for "USB charger") would find the item itself.
+     */
+    @Override
+    public List<String> goesWith(String name, Collection<String> vocabulary) {
+        return ask("Counterpart lookup", GOES_WITH_PROMPT, name, vocabulary);
+    }
+
+    private List<String> ask(String what, String template, String query, Collection<String> vocabulary) {
         if (query == null || query.isBlank()) return List.of();
 
-        String prompt = PROMPT.formatted(query.strip(), vocabularyList(vocabulary), MAX_TERMS);
+        String prompt = template.formatted(query.strip(), vocabularyList(vocabulary), MAX_TERMS);
         String reply;
         try {
             reply = SpringAi.tally(chat.prompt().options(options).user(prompt).call().chatResponse(), usage);
         } catch (RuntimeException e) {
             // No API key, rate limit, network — search still has its literal hits.
-            log.warn("Query expansion unavailable for \"{}\": {}", query, e.toString());
+            log.warn("{} unavailable for \"{}\": {}", what, query, e.toString());
             return List.of();
         }
 
@@ -109,11 +153,11 @@ public class SpringAiQueryExpander implements QueryExpander {
             // and "isolating tape" quietly returning nothing is worth being able
             // to look up rather than guess at.
             if (cleaned.isEmpty() && !terms.isEmpty()) {
-                log.info("Query expansion for \"{}\" brought no new words: {}", query, terms);
+                log.info("{} for \"{}\" brought no new words: {}", what, query, terms);
             }
             return cleaned;
         } catch (Exception e) {
-            log.warn("Query expansion returned non-JSON for \"{}\": {}", query, reply);
+            log.warn("{} returned non-JSON for \"{}\": {}", what, query, reply);
             return List.of();
         }
     }

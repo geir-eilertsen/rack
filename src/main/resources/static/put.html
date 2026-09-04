@@ -74,6 +74,8 @@
     .sug .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .3rem; }
     .sug .loc { font-family: var(--font-mono); font-weight: 700; font-size: 1rem; }
     .sug .why { font-size: .8rem; color: var(--muted); margin-bottom: .4rem; }
+    .sug .where { font-size: .8rem; color: var(--muted); }
+    .sug.pair { border-style: dashed; }
     .none { padding: .6rem .85rem; color: var(--muted); font-size: .85rem; font-style: italic; }
     .pending { display: flex; gap: .55rem; flex-wrap: wrap; margin-top: 1rem; }
     .pending .shot { position: relative; line-height: 0; }
@@ -1351,9 +1353,9 @@
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const data = await res.json();
         renderExtracted(data.extracted || []);
-        renderSuggestions(data.suggestions || []);
+        renderSuggestions(data.suggestions || [], data.companions || []);
         pickHeading.hidden = false;
-        manual.open = !(data.suggestions && data.suggestions.length);
+        manual.open = !suggestionsEl.querySelector('button');
         setStatus('ok', 'Ready to file.');
         if (window.rackUsage) rackUsage.refresh();
       } catch (e) {
@@ -1373,24 +1375,61 @@
       }).join('');
     }
 
-    function renderSuggestions(sugs) {
-      if (!sugs.length) {
+    // Two kinds of offer. A drawer holding the same kind of thing, found by
+    // likeness; and a drawer holding what this thing goes with — the phone
+    // this charger belongs to. Filing is where a pair gets split, so the
+    // second is offered here beside the first. A drawer that is both is listed
+    // once, with both reasons.
+    function renderSuggestions(sugs, companions) {
+      const goesWith = new Map();     // "container/slot" -> names of what is there
+      companions.forEach(c => (c.hits || []).forEach(h => {
+        const key = h.container + '/' + h.slot;
+        if (!goesWith.has(key)) goesWith.set(key, []);
+        goesWith.get(key).push(itemName(h.item));
+      }));
+      if (!sugs.length && !goesWith.size) {
         suggestionsEl.innerHTML = '<li class="none">No similar drawers found. Pick one below.</li>';
         return;
       }
-      suggestionsEl.innerHTML = sugs.map((s, i) => {
+      const seen = new Set();
+      const similar = sugs.map((s, i) => {
+        seen.add(s.container + '/' + s.slot);
         const matches = (s.matches || []).slice(0, 3)
           .map(m => esc(itemName(m)))
           .join('; ');
+        const pair = goesWith.get(s.container + '/' + s.slot);
         return '<li class="sug' + (i === 0 ? ' top' : '') + '">' +
-          '<div class="head"><span class="loc">' + esc(containerName(s.container)) + ' · ' + esc(s.slot) + '</span></div>' +
+          '<div class="head"><span class="loc">' + esc(placeLabel(s.container, s.slot)) + '</span>' + whereTag(s.container) + '</div>' +
           (matches ? '<div class="why">has: ' + matches + '</div>' : '') +
+          (pair ? '<div class="why">goes with: ' + esc(pair.join('; ')) + '</div>' : '') +
           '<button class="btn primary block" data-c="' + esc(s.container) + '" data-s="' + esc(s.slot) + '">File here</button>' +
         '</li>';
-      }).join('');
+      });
+      const pairs = [];
+      goesWith.forEach((names, key) => {
+        if (seen.has(key)) return;
+        const [container, slot] = key.split('/');
+        pairs.push('<li class="sug pair">' +
+          '<div class="head"><span class="loc">' + esc(placeLabel(container, slot)) + '</span>' + whereTag(container) + '</div>' +
+          '<div class="why">goes with: ' + esc(names.join('; ')) + '</div>' +
+          '<button class="btn block" data-c="' + esc(container) + '" data-s="' + esc(slot) + '">File beside it</button>' +
+        '</li>');
+      });
+      suggestionsEl.innerHTML = similar.join('') + pairs.join('');
       suggestionsEl.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => fileToPicked(btn.dataset.c, btn.dataset.s, btn));
       });
+    }
+
+    function whereTag(containerId) {
+      const c = containers.find(c => c.id === containerId);
+      return c && c.location ? '<span class="where">' + esc(c.location) + '</span>' : '';
+    }
+
+    /** A container with one storage space is the whole answer. */
+    function placeLabel(containerId, slot) {
+      const c = containers.find(c => c.id === containerId);
+      return isDivided(c) ? containerName(containerId) + ' · ' + slot : containerName(containerId);
     }
 
     function renderContainerPicker() {

@@ -122,6 +122,11 @@ class FindByPhotoTest {
         public List<String> expand(String query, Collection<String> vocabulary) {
             return terms;
         }
+
+        @Override
+        public List<String> goesWith(String name, Collection<String> vocabulary) {
+            return List.of();
+        }
     }
 
     private static final class FakeIndex implements PartIndex {

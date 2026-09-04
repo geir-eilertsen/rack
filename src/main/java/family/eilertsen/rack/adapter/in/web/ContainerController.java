@@ -6,6 +6,7 @@ import family.eilertsen.rack.application.AskAboutItem;
 import family.eilertsen.rack.application.ContainerRegistry;
 import family.eilertsen.rack.application.DeleteContainer;
 import family.eilertsen.rack.application.EditItem;
+import family.eilertsen.rack.application.FindCompanions;
 import family.eilertsen.rack.application.MergeItems;
 import family.eilertsen.rack.application.MoveItem;
 import family.eilertsen.rack.application.RegisterContainer;
@@ -53,13 +54,14 @@ public class ContainerController {
     private final RemovePhoto removePhoto;
     private final AskAboutItem askAboutItem;
     private final KeepDocuments documents;
+    private final FindCompanions companions;
 
     public ContainerController(ContainerRegistry registry, PartIndex index, AddPhotoToSlot addPhoto,
                                 RegisterContainer registerContainer, UpdateContainer updateContainer,
                                 DeleteContainer deleteContainer, RemoveItem removeItem,
                                 EditItem editItem, MoveItem moveItem, MergeItems mergeItems,
                                 RemovePhoto removePhoto, AskAboutItem askAboutItem,
-                                KeepDocuments documents) {
+                                KeepDocuments documents, FindCompanions companions) {
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
@@ -73,6 +75,7 @@ public class ContainerController {
         this.removePhoto = removePhoto;
         this.askAboutItem = askAboutItem;
         this.documents = documents;
+        this.companions = companions;
     }
 
     @GetMapping
@@ -196,6 +199,27 @@ public class ContainerController {
         } catch (IndexOutOfBoundsException | java.util.NoSuchElementException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
         }
+    }
+
+    /**
+     * What this item goes with, and where that is — anywhere but here. Asked
+     * for on demand from a search hit rather than computed for every hit on
+     * every keystroke: it is a model call, small but not free, and most items
+     * have no counterpart to find.
+     */
+    @GetMapping("/{container}/{slot}/items/{index}/companions")
+    public FindCompanions.Result companions(@PathVariable String container,
+                                            @PathVariable String slot,
+                                            @PathVariable("index") int itemIndex) {
+        ContainerId cid = new ContainerId(container);
+        SlotId sid = new SlotId(slot);
+        requireContainerExists(cid);
+        Slot state = index.get(cid, sid)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No such slot: " + container + "/" + slot));
+        if (itemIndex < 0 || itemIndex >= state.items().size()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No item " + itemIndex + " in " + container + "/" + slot);
+        }
+        return companions.execute(state.items().get(itemIndex), cid, sid);
     }
 
     @PostMapping("/{container}/{slot}/items/{index}/move")
