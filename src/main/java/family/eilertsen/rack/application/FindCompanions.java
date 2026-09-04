@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * What an item goes with, and where that is.
@@ -34,6 +35,16 @@ import java.util.Map;
 public class FindCompanions {
 
     private static final int MAX_HITS = 5;
+
+    /**
+     * The weight of a name or part-number match, as in FindItems. A counterpart
+     * has to be found by what it is called: "automotive" is a tag on the paper
+     * towels, and a tag-only hit is a category in common, not a pair.
+     */
+    private static final double CONVINCING = 3.0;
+
+    /** Three letters in a row somewhere: "5V" and "230V" name a property, not a thing. */
+    private static final Pattern NAMES_A_THING = Pattern.compile("\\p{L}{3}");
     private static final int CACHE_SIZE = 200;
 
     private final PartIndex index;
@@ -63,13 +74,13 @@ public class FindCompanions {
         String name = item == null ? null : item.name();
         if (name == null || name.isBlank()) return new Result(name, List.of(), List.of());
 
-        List<String> terms = termsFor(name);
+        List<String> terms = termsFor(name).stream().filter(FindCompanions::namesAThing).toList();
         if (terms.isEmpty()) return new Result(name, terms, List.of());
 
         Map<Key, SearchHit> found = new LinkedHashMap<>();
         for (String term : terms) {
             for (SearchHit hit : index.searchByKeyword(term)) {
-                if (sameSlot(hit, container, slot) || sameKind(hit.item(), name)) continue;
+                if (hit.score() < CONVINCING || sameSlot(hit, container, slot) || sameKind(hit.item(), name)) continue;
                 found.merge(Key.of(hit), hit,
                     (existing, candidate) -> existing.score() >= candidate.score() ? existing : candidate);
             }
@@ -109,6 +120,17 @@ public class FindCompanions {
         String b = other == null ? null : head(other.name());
         if (a == null || b == null) return false;
         return a.equals(b) || (a + "s").equals(b) || (b + "s").equals(a);
+    }
+
+    /**
+     * Asked what a USB wall outlet goes with, the model answered "5V" and
+     * "mains powered" alongside the AC/DC adapter — properties of the thing,
+     * not things — and "5V" is a substring of every 35V capacitor's name. A
+     * counterpart is something on a shelf, so a term with no word in it is
+     * not one.
+     */
+    static boolean namesAThing(String term) {
+        return term != null && NAMES_A_THING.matcher(term).find();
     }
 
     private static String head(String name) {

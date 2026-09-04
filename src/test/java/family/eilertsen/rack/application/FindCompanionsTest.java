@@ -80,7 +80,7 @@ class FindCompanionsTest {
         // compound is named by its last word — so it is another of the same
         // thing as this charger, not what it goes with.
         expander.pairsWith("phone");
-        index.hits("phone", hit(CELLAR, "3", "Phone", 3), hit(CELLAR, "4", "Old phone", 2), hit(LAB, "B2", "Phone charger", 1));
+        index.hits("phone", hit(CELLAR, "3", "Phone", 3), hit(CELLAR, "4", "Old phone", 3), hit(LAB, "B2", "Phone charger", 4));
 
         FindCompanions.Result result = companions.execute(named("USB charger"), LAB, new SlotId("A1"));
 
@@ -94,6 +94,33 @@ class FindCompanionsTest {
         assertThat(FindCompanions.sameKind(named("Phone charger"), "Phone")).isFalse();
         assertThat(FindCompanions.sameKind(named("Old phone"), "Phone")).isTrue();
         assertThat(FindCompanions.sameKind(named("Spare chargers"), "USB charger")).isTrue();
+    }
+
+    @Test
+    void aHitFoundOnlyByATagIsACategoryInCommonNotAPair() {
+        // Asked what a CAN-bus interface goes with, the model said "automotive",
+        // which is a tag on the paper towels. Scored 1 — a tag — where a name
+        // match scores 3.
+        expander.pairsWith("automotive", "OBD2");
+        index.hits("automotive", hit(LAB, "10", "Paper towels", 1.0));
+        index.hits("obd2", hit(LAB, "3", "OBD2 cable", 3.0));
+
+        FindCompanions.Result result = companions.execute(named("CAN interface"), LAB, new SlotId("A1"));
+
+        assertThat(result.hits()).extracting(h -> h.item().name()).containsExactly("OBD2 cable");
+    }
+
+    @Test
+    void aPropertyIsNotAThingToGoWith() {
+        // "5V" is a substring of every 35V capacitor's name.
+        expander.pairsWith("5V", "230V", "AC/DC adapter", "USB-A");
+        index.hits("5v", hit(LAB, "E4", "10uF 35V capacitor", 9.0));
+        index.hits("ac/dc adapter", hit(CELLAR, "3", "Delta AC/DC adapter", 13.0));
+
+        FindCompanions.Result result = companions.execute(named("USB wall outlet"), LAB, new SlotId("A1"));
+
+        assertThat(result.terms()).containsExactly("AC/DC adapter", "USB-A");
+        assertThat(result.hits()).extracting(h -> h.item().name()).containsExactly("Delta AC/DC adapter");
     }
 
     @Test
