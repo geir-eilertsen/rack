@@ -77,6 +77,13 @@ rack:
     expansion-model: ${RACK_EXPANSION_MODEL:claude-haiku-4-5}
     expansion-max-tokens: 300
 
+    # Which entry a charger belongs with is read off the whole listing, one
+    # line per item, so this is a matching job over a few thousand tokens of
+    # prompt rather than a reasoning one. Every citation is checked against
+    # the index before it is shown, which is what makes haiku safe here.
+    companions-model: ${RACK_COMPANIONS_MODEL:claude-haiku-4-5}
+    companions-max-tokens: 600
+
     # Dollars per million tokens, for the running total at the foot of each page.
     # Published prices as of 2026-08-05 — a figure on screen that quietly went
     # stale is worse than none, so check these when you change a model. A model

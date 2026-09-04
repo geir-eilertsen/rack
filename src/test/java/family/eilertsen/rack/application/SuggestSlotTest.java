@@ -1,11 +1,16 @@
 package family.eilertsen.rack.application;
 
+import family.eilertsen.rack.domain.model.Companion;
+import family.eilertsen.rack.domain.model.Container;
 import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.ContainerLayout;
 import family.eilertsen.rack.domain.model.Extraction;
 import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.SearchHit;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
+import family.eilertsen.rack.domain.port.ContainerStore;
+import family.eilertsen.rack.domain.port.PairFinder;
 import family.eilertsen.rack.domain.port.PartExtractor;
 import family.eilertsen.rack.domain.port.PartIndex;
 import family.eilertsen.rack.domain.port.QueryExpander;
@@ -30,6 +35,7 @@ class SuggestSlotTest {
     private FakeExtractor extractor;
     private FakeIndex index;
     private FakeExpander expander;
+    private FakeFinder finder;
     private SuggestSlot suggest;
 
     @BeforeEach
@@ -37,25 +43,29 @@ class SuggestSlotTest {
         extractor = new FakeExtractor();
         index = new FakeIndex();
         expander = new FakeExpander();
-        suggest = new SuggestSlot(extractor, new FindItems(index, expander), new FindCompanions(index, expander));
+        finder = new FakeFinder();
+        ContainerRegistry registry = new ContainerRegistry(new FakeStore(List.of(
+            new Container(LAB, "Lab", ContainerLayout.linear(12, null), 1.0f, "shelf", null, null))));
+        suggest = new SuggestSlot(extractor, new FindItems(index, expander), new FindCompanions(index, registry, finder));
     }
 
     @Test
-    void offersTheDrawerHoldingWhatThePhotographedThingGoesWith() {
+    void saysWhichItemThePhotographedThingBelongsWithAndWhere() {
         // A charger filed by likeness goes in with the other chargers, and the
         // phone it belongs to stays where it was — filing is where a pair gets
-        // split, so the phone's drawer is offered alongside.
+        // split, so the phone's drawer is offered alongside, with the reason.
         extractor.returns(item("Phone charger", null, List.of()));
         index.hits("phone charger", hit("1", 9));
-        index.hits("phone", new SearchHit(LAB, new SlotId("7"), 0,
-            new Item("Phone", "old Android", null, "electronics", 1, 0.9, List.of(), List.of(), null, null, List.of()), 3, null));
-        expander.pairsWith("phone");
+        index.put(LAB, new Slot(new SlotId("7"), List.of(
+            new Item("Phone", "old Android", null, "electronics", 1, 0.9, List.of(), List.of(), null, null, List.of())), null, null));
+        finder.cites(new Companion("lab/7#0", "charges it"));
 
         SuggestSlot.Result result = suggest.execute(List.of(new byte[]{1}));
 
         assertThat(result.suggestions()).extracting(SuggestSlot.Suggestion::slot).containsExactly(new SlotId("1"));
         assertThat(result.companions()).hasSize(1);
-        assertThat(result.companions().get(0).hits()).extracting(SearchHit::slot).containsExactly(new SlotId("7"));
+        assertThat(result.companions().get(0).hits()).extracting(FindCompanions.Found::slot).containsExactly(new SlotId("7"));
+        assertThat(result.companions().get(0).hits().get(0).why()).isEqualTo("charges it");
     }
 
     @Test
@@ -173,14 +183,9 @@ class SuggestSlotTest {
     private static final class FakeExpander implements QueryExpander {
         private final List<String> calls = new ArrayList<>();
         private List<String> terms = List.of();
-        private List<String> counterparts = List.of();
 
         void returns(String... expanded) {
             this.terms = List.of(expanded);
-        }
-
-        void pairsWith(String... names) {
-            this.counterparts = List.of(names);
         }
 
         @Override
@@ -188,15 +193,39 @@ class SuggestSlotTest {
             calls.add(query);
             return terms;
         }
+    }
+
+    private static final class FakeFinder implements PairFinder {
+        private List<Companion> answer = List.of();
+
+        void cites(Companion... companions) {
+            this.answer = List.of(companions);
+        }
 
         @Override
-        public List<String> goesWith(String name, Collection<String> vocabulary) {
-            return counterparts;
+        public List<Companion> find(String subject, List<String> listing) {
+            return answer;
+        }
+    }
+
+    private record FakeStore(List<Container> containers) implements ContainerStore {
+        @Override
+        public List<Container> loadAll() {
+            return containers;
+        }
+
+        @Override
+        public void saveAll(List<Container> containers) {
         }
     }
 
     private static final class FakeIndex implements PartIndex {
         private final Map<String, List<SearchHit>> byQuery = new LinkedHashMap<>();
+        private final Map<ContainerId, Map<SlotId, Slot>> slots = new LinkedHashMap<>();
+
+        void put(ContainerId container, Slot slot) {
+            slots.computeIfAbsent(container, k -> new LinkedHashMap<>()).put(slot.id(), slot);
+        }
 
         void hits(String query, SearchHit... hits) {
             byQuery.put(query.toLowerCase(Locale.ROOT), List.of(hits));
@@ -209,7 +238,7 @@ class SuggestSlotTest {
 
         @Override
         public Optional<Slot> get(ContainerId container, SlotId slot) {
-            return Optional.empty();
+            return Optional.ofNullable(slots.getOrDefault(container, Map.of()).get(slot));
         }
 
         @Override
@@ -218,7 +247,7 @@ class SuggestSlotTest {
 
         @Override
         public Collection<Slot> all(ContainerId container) {
-            return List.of();
+            return new ArrayList<>(slots.getOrDefault(container, Map.of()).values());
         }
 
 

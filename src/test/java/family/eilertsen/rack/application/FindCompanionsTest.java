@@ -1,12 +1,16 @@
 package family.eilertsen.rack.application;
 
+import family.eilertsen.rack.domain.model.Companion;
+import family.eilertsen.rack.domain.model.Container;
 import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.ContainerLayout;
 import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.SearchHit;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
+import family.eilertsen.rack.domain.port.ContainerStore;
+import family.eilertsen.rack.domain.port.PairFinder;
 import family.eilertsen.rack.domain.port.PartIndex;
-import family.eilertsen.rack.domain.port.QueryExpander;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +18,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -22,8 +25,9 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A phone in one box and its charger in another: both filed correctly, both
- * findable, and the rack sends you to two rooms for one thing.
+ * The model call itself is not tested here — what matters is the seam either
+ * side of it: that it is shown every other entry with a reference, and that
+ * nothing it cites is believed until the index agrees.
  */
 class FindCompanionsTest {
 
@@ -31,191 +35,185 @@ class FindCompanionsTest {
     private static final ContainerId CELLAR = new ContainerId("cellar");
 
     private FakeIndex index;
-    private FakeExpander expander;
+    private FakeFinder finder;
     private FindCompanions companions;
 
     @BeforeEach
     void setUp() {
         index = new FakeIndex();
-        expander = new FakeExpander();
-        companions = new FindCompanions(index, expander);
+        finder = new FakeFinder();
+        ContainerRegistry registry = new ContainerRegistry(new FakeStore(List.of(
+            new Container(LAB, "Lab", ContainerLayout.linear(12, null), 1.0f, "shelf", null, null),
+            new Container(CELLAR, "Cellar", ContainerLayout.linear(4, null), 1.0f, "box", null, null))));
+        companions = new FindCompanions(index, registry, finder);
     }
 
     @Test
-    void findsTheOtherHalfOfAPairInAnotherPlace() {
-        expander.pairsWith("charger");
-        index.hits("charger", hit(CELLAR, "3", "Phone charger", 3));
+    void aChargerIsToldWhichDeviceItBelongsWithAndWhereThatIs() {
+        Item pi = item("Raspberry Pi 4", "single-board computer, USB-C power");
+        index.put(LAB, slot("11", pi));
+        index.put(CELLAR, slot("3", item("Paper towels", "kitchen roll")));
+        finder.cites(new Companion("lab/11#0", "powers it over USB-C"));
 
-        FindCompanions.Result result = companions.execute(named("Phone"), LAB, new SlotId("A1"));
+        FindCompanions.Result result = companions.execute(item("USB-C power supply", "5.1V 3A"), null, null);
 
-        assertThat(result.terms()).containsExactly("charger");
-        assertThat(result.hits()).extracting(SearchHit::container).containsExactly(CELLAR);
+        assertThat(result.hits()).hasSize(1);
+        assertThat(result.hits().get(0).container()).isEqualTo(LAB);
+        assertThat(result.hits().get(0).slot()).isEqualTo(new SlotId("11"));
+        assertThat(result.hits().get(0).item().name()).isEqualTo("Raspberry Pi 4");
+        assertThat(result.hits().get(0).why()).isEqualTo("powers it over USB-C");
+    }
+
+    @Test
+    void theModelIsShownEveryOtherEntryWithItsReferenceAndNotTheSubject() {
+        Item phone = item("Phone", "old Android");
+        Item charger = item("Phone charger", "micro-USB");
+        index.put(LAB, slot("1", phone, charger));
+        index.put(CELLAR, slot("2", item("Screws", "M3")));
+
+        companions.execute(charger, LAB, new SlotId("1"));
+
+        assertThat(finder.subject).startsWith("Phone charger | micro-USB");
+        // Containers are listed by name, so the cellar comes before the lab.
+        assertThat(finder.listing).hasSize(2);
+        assertThat(finder.listing.get(0)).startsWith("cellar/2#0 | Screws | M3");
+        assertThat(finder.listing.get(1)).startsWith("lab/1#0 | Phone | old Android");
+    }
+
+    @Test
+    void aReferenceTheListingDoesNotHaveIsNotBelieved() {
+        // The model is not permitted to furnish this rack from memory.
+        index.put(LAB, slot("1", item("Phone", "old Android")));
+        finder.cites(new Companion("lab/9#0", "charges it"), new Companion("nonsense", ""), new Companion("lab/1#0", "charges it"));
+
+        FindCompanions.Result result = companions.execute(item("Phone charger", "micro-USB"), null, null);
+
+        assertThat(result.hits()).extracting(f -> f.item().name()).containsExactly("Phone");
     }
 
     @Test
     void whatIsAlreadyInTheSameSlotIsReportedAsTogetherRatherThanAsAMove() {
-        // The question is what to bring together, and this pair already is —
-        // the Lumix camera sits beside its charger. Saying "nothing anywhere
-        // else" would be true and would hide the pair that was found.
-        expander.pairsWith("charger");
-        index.hits("charger", hit(LAB, "A1", "Phone charger", 3), hit(CELLAR, "3", "Spare charger", 3));
+        // The Lumix camera sits beside its charger. Saying it belongs with
+        // nothing elsewhere would be true and hide the pair that was found.
+        Item camera = item("Panasonic Lumix DMC-FS11", "compact camera");
+        Item charger = item("Panasonic Lumix battery charger", "for DMW-BCF10 battery");
+        index.put(LAB, slot("11", camera, charger));
+        index.put(CELLAR, slot("1", item("Spare DMW-BCF10 battery", "camera battery")));
+        finder.cites(new Companion("lab/11#0", "charges its battery"), new Companion("cellar/1#0", "the battery it charges"));
 
-        FindCompanions.Result result = companions.execute(named("Phone"), LAB, new SlotId("A1"));
+        FindCompanions.Result result = companions.execute(charger, LAB, new SlotId("11"));
 
-        assertThat(result.hits()).extracting(SearchHit::container).containsExactly(CELLAR);
-        assertThat(result.together()).extracting(h -> h.item().name()).containsExactly("Phone charger");
+        assertThat(result.together()).extracting(f -> f.item().name()).containsExactly("Panasonic Lumix DMC-FS11");
+        assertThat(result.hits()).extracting(f -> f.item().name()).containsExactly("Spare DMW-BCF10 battery");
     }
 
     @Test
-    void anItemNotYetFiledHasNoSlotToLeaveOut() {
-        expander.pairsWith("charger");
-        index.hits("charger", hit(LAB, "A1", "Phone charger", 3));
+    void aGeneralPurposeChargerBelongsWithEverythingItServes() {
+        index.put(LAB, slot("1", item("Pixel 7", "phone, USB-C"), item("Kindle", "e-reader, USB-C")));
+        index.put(CELLAR, slot("2", item("Steam Deck", "USB-C PD")));
+        finder.cites(new Companion("lab/1#0", "charges it"), new Companion("lab/1#1", "charges it"), new Companion("cellar/2#0", "charges it at 45W"));
 
-        FindCompanions.Result result = companions.execute(named("Phone"), null, null);
+        FindCompanions.Result result = companions.execute(item("65W USB-C charger", "GaN, PD"), null, null);
 
-        assertThat(result.hits()).hasSize(1);
+        assertThat(result.hits()).extracting(f -> f.item().name()).containsExactly("Pixel 7", "Kindle", "Steam Deck");
     }
 
     @Test
-    void anotherOfTheSameThingIsNotACounterpart() {
-        // "phone" searched literally matches the phone charger in the next
-        // drawer as well as the phones. A phone charger is a charger — a
-        // compound is named by its last word — so it is another of the same
-        // thing as this charger, not what it goes with.
-        expander.pairsWith("phone");
-        index.hits("phone", hit(CELLAR, "3", "Phone", 3), hit(CELLAR, "4", "Old phone", 3), hit(LAB, "B2", "Phone charger", 4));
+    void aCitationSurvivesTheItemMovingBecauseItIsRememberedByName() {
+        // The answer is cached per subject; the drawer is looked up each time.
+        Item pi = item("Raspberry Pi 4", "single-board computer");
+        index.put(LAB, slot("11", pi));
+        finder.cites(new Companion("lab/11#0", "powers it"));
+        Item psu = item("USB-C power supply", "5.1V 3A");
 
-        FindCompanions.Result result = companions.execute(named("USB charger"), LAB, new SlotId("A1"));
+        companions.execute(psu, null, null);
+        index.put(LAB, slot("11"));
+        index.put(CELLAR, slot("3", pi));
+        FindCompanions.Result again = companions.execute(psu, null, null);
 
-        assertThat(result.hits()).extracting(h -> h.item().name()).containsExactly("Phone", "Old phone");
-    }
-
-    @Test
-    void sharingAWordDoesNotMakeItTheSameThing() {
-        // The headline case: "Phone charger" shares a word with "Phone" and is
-        // exactly the answer.
-        assertThat(FindCompanions.sameKind(named("Phone charger"), "Phone")).isFalse();
-        assertThat(FindCompanions.sameKind(named("Old phone"), "Phone")).isTrue();
-        assertThat(FindCompanions.sameKind(named("Spare chargers"), "USB charger")).isTrue();
-    }
-
-    @Test
-    void aHitFoundOnlyByATagIsACategoryInCommonNotAPair() {
-        // Asked what a CAN-bus interface goes with, the model said "automotive",
-        // which is a tag on the paper towels. Scored 1 — a tag — where a name
-        // match scores 3.
-        expander.pairsWith("automotive", "OBD2");
-        index.hits("automotive", hit(LAB, "10", "Paper towels", 1.0));
-        index.hits("obd2", hit(LAB, "3", "OBD2 cable", 3.0));
-
-        FindCompanions.Result result = companions.execute(named("CAN interface"), LAB, new SlotId("A1"));
-
-        assertThat(result.hits()).extracting(h -> h.item().name()).containsExactly("OBD2 cable");
-    }
-
-    @Test
-    void aPropertyIsNotAThingToGoWith() {
-        // "5V" is a substring of every 35V capacitor's name.
-        expander.pairsWith("5V", "230V", "AC/DC adapter", "USB-A");
-        index.hits("5v", hit(LAB, "E4", "10uF 35V capacitor", 9.0));
-        index.hits("ac/dc adapter", hit(CELLAR, "3", "Delta AC/DC adapter", 13.0));
-
-        FindCompanions.Result result = companions.execute(named("USB wall outlet"), LAB, new SlotId("A1"));
-
-        assertThat(result.terms()).containsExactly("AC/DC adapter", "USB-A");
-        assertThat(result.hits()).extracting(h -> h.item().name()).containsExactly("Delta AC/DC adapter");
+        assertThat(finder.calls).isEqualTo(1);
+        assertThat(again.hits()).hasSize(1);
+        assertThat(again.hits().get(0).container()).isEqualTo(CELLAR);
     }
 
     @Test
     void anItemWithNoNameAsksNothing() {
-        // No name is barely an identification, and a counterpart of nothing in
-        // particular is a guess the model would be happy to make.
-        Item nameless = new Item(null, "some cable", null, "other", 1, 0.9, List.of(), List.of(), null, null, List.of());
+        index.put(LAB, slot("1", item("Phone", "old Android")));
 
-        FindCompanions.Result result = companions.execute(nameless, LAB, new SlotId("A1"));
+        FindCompanions.Result result = companions.execute(new Item(null, "some cable", null, "other", 1, 0.9, List.of(), List.of(), null, null, List.of()), null, null);
 
         assertThat(result.hits()).isEmpty();
-        assertThat(expander.calls).isEmpty();
+        assertThat(finder.calls).isZero();
     }
 
-    @Test
-    void theSameNameIsAskedAboutOnce() {
-        expander.pairsWith("charger");
-
-        companions.execute(named("Phone"), LAB, new SlotId("A1"));
-        companions.execute(named("phone "), CELLAR, new SlotId("3"));
-
-        assertThat(expander.calls).containsExactly("Phone");
+    private static Item item(String name, String description) {
+        return new Item(name, description, null, "electronics", 1, 0.9, List.of(), List.of(), null, null, List.of());
     }
 
-    @Test
-    void oneItemFoundByTwoTermsIsListedOnce() {
-        expander.pairsWith("charger", "usb-c");
-        SearchHit same = hit(CELLAR, "3", "USB-C charger", 3);
-        index.hits("charger", same);
-        index.hits("usb-c", same);
-
-        FindCompanions.Result result = companions.execute(named("Phone"), LAB, new SlotId("A1"));
-
-        assertThat(result.hits()).hasSize(1);
+    private static Slot slot(String id, Item... items) {
+        return new Slot(new SlotId(id), List.of(items), null, null);
     }
 
-    private static Item named(String name) {
-        return new Item(name, "", null, "electronics", 1, 0.9, List.of(), List.of(), null, null, List.of());
-    }
+    private static final class FakeFinder implements PairFinder {
+        int calls;
+        String subject;
+        List<String> listing;
+        private List<Companion> answer = List.of();
 
-    private static SearchHit hit(ContainerId container, String slot, String name, double score) {
-        return new SearchHit(container, new SlotId(slot), 0, named(name), score, null);
-    }
-
-    private static final class FakeExpander implements QueryExpander {
-        private final List<String> calls = new ArrayList<>();
-        private List<String> counterparts = List.of();
-
-        void pairsWith(String... names) {
-            this.counterparts = List.of(names);
+        void cites(Companion... companions) {
+            this.answer = List.of(companions);
         }
 
         @Override
-        public List<String> expand(String query, Collection<String> vocabulary) {
-            return List.of();
+        public List<Companion> find(String subject, List<String> listing) {
+            calls++;
+            this.subject = subject;
+            this.listing = listing;
+            return answer;
+        }
+    }
+
+    private record FakeStore(List<Container> containers) implements ContainerStore {
+        @Override
+        public List<Container> loadAll() {
+            return containers;
         }
 
         @Override
-        public List<String> goesWith(String name, Collection<String> vocabulary) {
-            calls.add(name);
-            return counterparts;
+        public void saveAll(List<Container> containers) {
         }
     }
 
     private static final class FakeIndex implements PartIndex {
-        private final Map<String, List<SearchHit>> byQuery = new LinkedHashMap<>();
+        private final Map<ContainerId, Map<SlotId, Slot>> slots = new LinkedHashMap<>();
 
-        void hits(String query, SearchHit... hits) {
-            byQuery.put(query.toLowerCase(Locale.ROOT), List.of(hits));
-        }
-
-        @Override
-        public List<SearchHit> searchByKeyword(String query) {
-            return byQuery.getOrDefault(query.toLowerCase(Locale.ROOT), List.of());
+        void put(ContainerId container, Slot slot) {
+            slots.computeIfAbsent(container, k -> new LinkedHashMap<>()).put(slot.id(), slot);
         }
 
         @Override
         public Optional<Slot> get(ContainerId container, SlotId slot) {
-            return Optional.empty();
+            return Optional.ofNullable(slots.getOrDefault(container, Map.of()).get(slot));
         }
 
         @Override
         public void save(ContainerId container, Slot slot) {
+            put(container, slot);
         }
 
         @Override
         public Collection<Slot> all(ContainerId container) {
-            return List.of();
+            return new ArrayList<>(slots.getOrDefault(container, Map.of()).values());
         }
 
         @Override
         public void forget(ContainerId container) {
+            slots.remove(container);
+        }
+
+        @Override
+        public List<SearchHit> searchByKeyword(String query) {
+            return List.of();
         }
 
         @Override

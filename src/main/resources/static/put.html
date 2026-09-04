@@ -1386,8 +1386,9 @@
     }
 
     // Two kinds of offer. A drawer holding the same kind of thing, found by
-    // likeness; and a drawer holding what this thing goes with — the phone
-    // this charger belongs to. Filing is where a pair gets split, so the
+    // likeness; and a drawer holding what this thing belongs with — the phone
+    // this charger charges, read off the whole listing by the model and
+    // checked against the index. Filing is where a pair gets split, so the
     // second is offered here beside the first. A drawer that is both is listed
     // once, with both reasons.
     function renderSuggestions(sugs, companions) {
@@ -1395,7 +1396,7 @@
       companions.forEach(c => (c.hits || []).forEach(h => {
         const key = h.container + '/' + h.slot;
         if (!goesWith.has(key)) goesWith.set(key, []);
-        goesWith.get(key).push(itemName(h.item));
+        goesWith.get(key).push(itemName(h.item) + (h.why ? ' (' + h.why + ')' : ''));
       }));
       if (!sugs.length && !goesWith.size) {
         suggestionsEl.innerHTML = '<li class="none">No similar drawers found. Pick one below.</li>';
@@ -1411,7 +1412,7 @@
         return '<li class="sug' + (i === 0 ? ' top' : '') + '">' +
           '<div class="head"><span class="loc">' + esc(placeLabel(s.container, s.slot)) + '</span>' + whereTag(s.container) + '</div>' +
           (matches ? '<div class="why">has: ' + matches + '</div>' : '') +
-          (pair ? '<div class="why">goes with: ' + esc(pair.join('; ')) + '</div>' : '') +
+          (pair ? '<div class="why">belongs with: ' + esc(pair.join('; ')) + '</div>' : '') +
           '<button class="btn primary block" data-c="' + esc(s.container) + '" data-s="' + esc(s.slot) + '">File here</button>' +
         '</li>';
       });
@@ -1421,7 +1422,7 @@
         const [container, slot] = key.split('/');
         pairs.push('<li class="sug pair">' +
           '<div class="head"><span class="loc">' + esc(placeLabel(container, slot)) + '</span>' + whereTag(container) + '</div>' +
-          '<div class="why">goes with: ' + esc(names.join('; ')) + '</div>' +
+          '<div class="why">belongs with: ' + esc(names.join('; ')) + '</div>' +
           '<button class="btn block" data-c="' + esc(container) + '" data-s="' + esc(slot) + '">File beside it</button>' +
         '</li>');
       });

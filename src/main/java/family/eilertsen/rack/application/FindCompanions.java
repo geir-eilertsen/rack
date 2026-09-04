@@ -1,162 +1,222 @@
 package family.eilertsen.rack.application;
 
+import family.eilertsen.rack.domain.model.Companion;
+import family.eilertsen.rack.domain.model.Container;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Item;
-import family.eilertsen.rack.domain.model.SearchHit;
+import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
+import family.eilertsen.rack.domain.port.PairFinder;
 import family.eilertsen.rack.domain.port.PartIndex;
-import family.eilertsen.rack.domain.port.QueryExpander;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 /**
- * What an item goes with, and where that is.
+ * What a thing belongs with, and where that is.
  *
- * <p>A phone in one box and its charger in another are both filed correctly
- * and both findable, and neither entry says anything about the other — so the
- * rack is right about both and still sends you to two rooms for one thing.
- * This is the counterpart lookup: the expander is asked what this item is used
- * <em>with</em>, in the words this rack uses, and each answer is searched the
- * way an expanded term is. Hits already in the item's own slot are reported
- * apart from the rest, because the question is what to bring together, and
- * those already are — the Lumix camera sits beside its charger, and a page
- * saying it found nothing anywhere else would be hiding the pair it found.
+ * <p>Photograph a charger and the rack should say which device it charges and
+ * which drawer that is in; photograph the device and it should say where the
+ * charger is. A phone in one box and its charger in another are both filed
+ * correctly and both findable, and neither entry says anything about the
+ * other — so the rack is right about both and still sends you to two rooms
+ * for one thing.
  *
- * <p>It is a suggestion and never a move. The offer is the counterpart's
- * drawer with a move action beside it; which half moves is the user's call,
- * because only they know which box is the phone's home.
+ * <p><strong>The model is shown the rack, not asked to guess words.</strong>
+ * The first version bridged the item's name to the rack's vocabulary and
+ * keyword-searched the result, and every live try broke a different way:
+ * "automotive" matched the paper towels, "5V" every 35V capacitor, and the
+ * one term that would have found the Raspberry Pi was dropped for adding no
+ * new word. Reading "5.1V 3A USB-C power supply" beside "Raspberry Pi 4" is a
+ * matching job, and the whole listing fits in one prompt — the same argument
+ * the project checklist makes — so the model gets the subject and every other
+ * entry with its reference, and cites the ones this belongs with.
+ *
+ * <p><strong>Nothing it says is believed until the index agrees.</strong> A
+ * citation has to resolve to an item the rack holds, with the name it was
+ * cited under; an invented reference is dropped, and so is the subject citing
+ * itself. Same rule as the checklist's {@code verify}. What is already in the
+ * subject's own slot is reported as together rather than offered as a move.
+ *
+ * <p>It is a suggestion, never a move. Which half moves is the user's call,
+ * because only they know which box is the phone's home. And nothing is
+ * stored: a "belongs with" link would be a second place a fact lives.
  */
 @Service
 public class FindCompanions {
 
-    private static final int MAX_HITS = 5;
-
-    /**
-     * The weight of a name or part-number match, as in FindItems. A counterpart
-     * has to be found by what it is called: "automotive" is a tag on the paper
-     * towels, and a tag-only hit is a category in common, not a pair.
-     */
-    private static final double CONVINCING = 3.0;
-
-    /** Three letters in a row somewhere: "5V" and "230V" name a property, not a thing. */
-    private static final Pattern NAMES_A_THING = Pattern.compile("\\p{L}{3}");
+    /** A general-purpose USB-C charger belongs with every USB-C device on the shelf. */
+    private static final int MAX = 12;
     private static final int CACHE_SIZE = 200;
+    private static final int DESCRIPTION_CHARS = 160;
 
     private final PartIndex index;
-    private final QueryExpander expander;
+    private final ContainerRegistry registry;
+    private final PairFinder finder;
 
-    /** The same items get looked at over and over; a counterpart list is worth keeping. */
-    private final Map<String, List<String>> counterparts = Collections.synchronizedMap(
+    /**
+     * The same items get looked at over and over. What is cached is the
+     * citation by name, not by drawer, so a pair whose halves have since moved
+     * still resolves to where they are now.
+     */
+    private final Map<String, List<Cited>> answers = Collections.synchronizedMap(
         new LinkedHashMap<>(16, 0.75f, true) {
             @Override
-            protected boolean removeEldestEntry(Map.Entry<String, List<String>> eldest) {
+            protected boolean removeEldestEntry(Map.Entry<String, List<Cited>> eldest) {
                 return size() > CACHE_SIZE;
             }
         });
 
-    public FindCompanions(PartIndex index, QueryExpander expander) {
+    public FindCompanions(PartIndex index, ContainerRegistry registry, PairFinder finder) {
         this.index = index;
-        this.expander = expander;
+        this.registry = registry;
+        this.finder = finder;
     }
 
     /**
-     * Counterparts of a stored item, from anywhere but its own slot.
-     *
-     * @param container where the item is; null for an item not yet filed, which
-     *                  has no slot to leave out
+     * @param container where the subject is filed; null for an item not yet
+     *                  filed, which has no slot of its own and no line of its
+     *                  own to keep out of the listing
      */
     public Result execute(Item item, ContainerId container, SlotId slot) {
-        String name = item == null ? null : item.name();
-        if (name == null || name.isBlank()) return new Result(name, List.of(), List.of(), List.of());
+        if (item == null || blank(item.name())) return new Result(null, List.of(), List.of());
 
-        List<String> terms = termsFor(name).stream().filter(FindCompanions::namesAThing).toList();
-        if (terms.isEmpty()) return new Result(name, terms, List.of(), List.of());
+        Ref self = container == null || slot == null ? null : indexOf(item, container, slot);
+        Listing listing = listing(self);
+        if (listing.lines.isEmpty()) return new Result(item.name(), List.of(), List.of());
 
-        Map<Key, SearchHit> elsewhere = new LinkedHashMap<>();
-        Map<Key, SearchHit> here = new LinkedHashMap<>();
-        for (String term : terms) {
-            for (SearchHit hit : index.searchByKeyword(term)) {
-                if (hit.score() < CONVINCING || sameKind(hit.item(), name)) continue;
-                Map<Key, SearchHit> into = sameSlot(hit, container, slot) ? here : elsewhere;
-                into.merge(Key.of(hit), hit,
-                    (existing, candidate) -> existing.score() >= candidate.score() ? existing : candidate);
+        List<Cited> cited = citedFor(item, listing);
+
+        List<Found> elsewhere = new ArrayList<>();
+        List<Found> here = new ArrayList<>();
+        for (Cited c : cited) {
+            Found found = resolve(c, listing);
+            if (found == null) continue;
+            if (self != null && found.container().equals(self.container) && found.slot().equals(self.slot)
+                && found.index() == self.index) continue;
+            boolean sameSlot = container != null && slot != null
+                && found.container().equals(container) && found.slot().equals(slot);
+            List<Found> into = sameSlot ? here : elsewhere;
+            if (into.size() < MAX && into.stream().noneMatch(f -> samePlace(f, found))) into.add(found);
+        }
+        return new Result(item.name(), List.copyOf(elsewhere), List.copyOf(here));
+    }
+
+    private List<Cited> citedFor(Item item, Listing listing) {
+        String key = normalise(item.name()) + "|" + normalise(clip(item.description()));
+        List<Cited> cached = answers.get(key);
+        if (cached != null) return cached;
+        List<Cited> cited = new ArrayList<>();
+        for (Companion c : finder.find(line(null, item), listing.lines)) {
+            Entry entry = listing.byRef.get(c.ref());
+            if (entry == null) continue;    // invented, or the subject's own line
+            cited.add(new Cited(c.ref(), entry.item.name(), c.why()));
+        }
+        answers.put(key, List.copyOf(cited));
+        return cited;
+    }
+
+    /**
+     * The reference first, and only while it still names the item it named:
+     * a moved item leaves its old reference pointing at whatever slid into
+     * that position, or at nothing. Then by name anywhere, which is what a
+     * move leaves behind.
+     */
+    private Found resolve(Cited c, Listing listing) {
+        Entry at = listing.byRef.get(c.ref());
+        if (at != null && normalise(at.item.name()).equals(normalise(c.name()))) return found(at, c.why());
+        for (Entry e : listing.byRef.values()) {
+            if (normalise(e.item.name()).equals(normalise(c.name()))) return found(e, c.why());
+        }
+        return null;
+    }
+
+    private static Found found(Entry e, String why) {
+        return new Found(e.container, e.slot, e.index, e.item, why, e.lastVerified);
+    }
+
+    private static boolean samePlace(Found a, Found b) {
+        return a.container().equals(b.container()) && a.slot().equals(b.slot()) && a.index() == b.index();
+    }
+
+    /** Every item in the rack but the subject, in the order containers are listed. */
+    private Listing listing(Ref self) {
+        List<String> lines = new ArrayList<>();
+        Map<String, Entry> byRef = new LinkedHashMap<>();
+        for (Container container : registry.all()) {
+            for (Slot slot : index.all(container.id())) {
+                List<Item> items = slot.items() == null ? List.of() : slot.items();
+                for (int i = 0; i < items.size(); i++) {
+                    if (self != null && self.container.equals(container.id()) && self.slot.equals(slot.id()) && self.index == i) continue;
+                    String ref = container.id().value() + "/" + slot.id().value() + "#" + i;
+                    Entry entry = new Entry(container.id(), slot.id(), i, items.get(i), slot.lastVerified());
+                    byRef.put(ref, entry);
+                    lines.add(line(ref, items.get(i)));
+                }
             }
         }
-
-        return new Result(name, terms, best(elsewhere), best(here));
+        return new Listing(lines, byRef);
     }
 
-    private static List<SearchHit> best(Map<Key, SearchHit> found) {
-        List<SearchHit> hits = new ArrayList<>(found.values());
-        hits.sort((a, b) -> Double.compare(b.score(), a.score()));
-        if (hits.size() > MAX_HITS) hits = hits.subList(0, MAX_HITS);
-        return List.copyOf(hits);
+    /** One entry as the model sees it: what it is called, what it looks like, what is printed on it. */
+    static String line(String ref, Item item) {
+        return (ref == null ? "" : ref + " | ")
+            + orBlank(item.name())
+            + " | " + clip(item.description())
+            + " | " + orBlank(item.partNumber())
+            + " | " + orBlank(item.category());
     }
 
-    private List<String> termsFor(String name) {
-        String key = name.strip().toLowerCase(Locale.ROOT);
-        List<String> cached = counterparts.get(key);
-        if (cached != null) return cached;
-        List<String> terms = expander.goesWith(name, index.vocabulary());
-        counterparts.put(key, terms);
-        return terms;
-    }
-
-    private static boolean sameSlot(SearchHit hit, ContainerId container, SlotId slot) {
-        return container != null && slot != null
-            && hit.container().equals(container) && hit.slot().equals(slot);
-    }
-
-    /**
-     * A second charger is not a counterpart of a charger. The prompt says so,
-     * but a term like "phone" searched literally still matches "Phone charger",
-     * so the hit's name is read for what kind of thing it names: a compound
-     * is named by its last word — a phone charger is a charger, an old phone
-     * is a phone — and a hit naming the same kind as the item is another of
-     * the same thing rather than its other half. Word overlap will not do:
-     * "Phone charger" shares a word with "Phone" and is exactly the answer.
-     */
-    static boolean sameKind(Item other, String name) {
-        String a = head(name);
-        String b = other == null ? null : head(other.name());
-        if (a == null || b == null) return false;
-        return a.equals(b) || (a + "s").equals(b) || (b + "s").equals(a);
-    }
-
-    /**
-     * Asked what a USB wall outlet goes with, the model answered "5V" and
-     * "mains powered" alongside the AC/DC adapter — properties of the thing,
-     * not things — and "5V" is a substring of every 35V capacitor's name. A
-     * counterpart is something on a shelf, so a term with no word in it is
-     * not one.
-     */
-    static boolean namesAThing(String term) {
-        return term != null && NAMES_A_THING.matcher(term).find();
-    }
-
-    private static String head(String name) {
-        if (name == null || name.isBlank()) return null;
-        String[] words = name.strip().toLowerCase(Locale.ROOT).split("\\s+");
-        return words[words.length - 1];
-    }
-
-    private record Key(ContainerId container, SlotId slot, int index) {
-        static Key of(SearchHit hit) {
-            return new Key(hit.container(), hit.slot(), hit.index());
+    private Ref indexOf(Item item, ContainerId container, SlotId slot) {
+        List<Item> items = index.get(container, slot).map(Slot::items).orElse(List.of());
+        for (int i = 0; i < items.size(); i++) {
+            if (items.get(i) == item) return new Ref(container, slot, i);
         }
+        // Not the same instance — matched by name, the way a citation is.
+        for (int i = 0; i < items.size(); i++) {
+            if (normalise(items.get(i).name()).equals(normalise(item.name()))) return new Ref(container, slot, i);
+        }
+        return null;
     }
 
+    private static String clip(String s) {
+        String t = s == null ? "" : s.strip().replaceAll("\\s+", " ");
+        return t.length() <= DESCRIPTION_CHARS ? t : t.substring(0, DESCRIPTION_CHARS) + "…";
+    }
+
+    private static String normalise(String s) {
+        return s == null ? "" : s.strip().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    }
+
+    private static boolean blank(String s) {
+        return s == null || s.isBlank();
+    }
+
+    private static String orBlank(String s) {
+        return s == null ? "" : s;
+    }
+
+    private record Ref(ContainerId container, SlotId slot, int index) {}
+
+    private record Entry(ContainerId container, SlotId slot, int index, Item item, Instant lastVerified) {}
+
+    private record Listing(List<String> lines, Map<String, Entry> byRef) {}
+
+    /** A citation as remembered: by the name it was made under, so a move does not strand it. */
+    private record Cited(String ref, String name, String why) {}
+
+    /** One thing the subject belongs with, where it is, and why. */
+    public record Found(ContainerId container, SlotId slot, int index, Item item, String why, Instant lastVerified) {}
+
     /**
-     * The name asked about, the words it was bridged to, where they are
-     * ({@code hits}, anywhere but the item's own slot) and which of them are
-     * already beside it ({@code together}).
+     * The name asked about, what it belongs with elsewhere ({@code hits}) and
+     * what is already beside it ({@code together}).
      */
-    public record Result(String query, List<String> terms, List<SearchHit> hits, List<SearchHit> together) {}
+    public record Result(String query, List<Found> hits, List<Found> together) {}
 }

@@ -69,26 +69,27 @@
   }
 
   function body(result, page) {
-    const terms = (result.terms || []).map(t => '“' + esc(t) + '”').join(', ');
     const found = result.hits || [];
     // What is already beside it is the pair working, and worth saying: the
     // camera is in this drawer with its charger, and "nothing anywhere else"
     // would be true and hide that.
-    const together = (result.together || []).map(h => esc(page.itemName(h.item)));
+    const together = (result.together || [])
+      .map(h => esc(page.itemName(h.item)) + (h.why ? ' <span class="why">— ' + esc(h.why) + '</span>' : ''));
     const alreadyHere = together.length
       ? '<p class="pair-hint">Already here: ' + together.join('; ') + '.</p>'
       : '';
     if (!found.length) {
       return alreadyHere + '<p class="pair-hint">'
-        + (terms ? 'Looked for ' + terms + ' and found nothing anywhere else.' : 'Nothing this is known to go with.')
+        + (together.length ? 'Nothing else it belongs with.' : 'Nothing in the rack this belongs with.')
         + '</p>';
     }
     return alreadyHere
-      + '<p class="pair-hint">Looked for ' + terms + '. Which half moves is your call.</p>'
+      + '<p class="pair-hint">Which half moves is your call.</p>'
       + found.map(h => {
           const room = page.room(h.container);
           return '<div class="pair-row" data-c="' + esc(h.container) + '" data-s="' + esc(h.slot) + '" data-i="' + h.index + '">'
-            + '<div class="name">' + esc(page.itemName(h.item)) + '</div>'
+            + '<div class="name">' + esc(page.itemName(h.item))
+              + (h.why ? ' <span class="why">— ' + esc(h.why) + '</span>' : '') + '</div>'
             + '<div class="at">' + esc(page.place(h.container, h.slot)) + (room ? ' — ' + esc(room) : '') + '</div>'
             + '<div class="acts">'
               + '<button type="button" class="btn there">Move this there</button>'
