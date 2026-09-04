@@ -53,14 +53,17 @@ class FindCompanionsTest {
     }
 
     @Test
-    void leavesOutWhatIsAlreadyInTheSameSlot() {
-        // The question is what to bring together, and this pair already is.
+    void whatIsAlreadyInTheSameSlotIsReportedAsTogetherRatherThanAsAMove() {
+        // The question is what to bring together, and this pair already is —
+        // the Lumix camera sits beside its charger. Saying "nothing anywhere
+        // else" would be true and would hide the pair that was found.
         expander.pairsWith("charger");
         index.hits("charger", hit(LAB, "A1", "Phone charger", 3), hit(CELLAR, "3", "Spare charger", 3));
 
         FindCompanions.Result result = companions.execute(named("Phone"), LAB, new SlotId("A1"));
 
         assertThat(result.hits()).extracting(SearchHit::container).containsExactly(CELLAR);
+        assertThat(result.together()).extracting(h -> h.item().name()).containsExactly("Phone charger");
     }
 
     @Test

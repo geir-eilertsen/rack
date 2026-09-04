@@ -867,13 +867,20 @@
         }
         const terms = (result.terms || []).map(t => '“' + esc(t) + '”').join(', ');
         const found = result.hits || [];
+        // What is already beside it is the pair working, and worth saying:
+        // the camera is in this drawer with its charger, and "nothing anywhere
+        // else" would be true and hide that.
+        const together = (result.together || []).map(h => esc(itemName(h.item)));
+        const alreadyHere = together.length
+          ? '<p class="merge-hint">Already here: ' + together.join('; ') + '.</p>'
+          : '';
         if (!found.length) {
-          host.innerHTML = '<p class="merge-hint">' +
+          host.innerHTML = alreadyHere + '<p class="merge-hint">' +
             (terms ? 'Looked for ' + terms + ' and found nothing anywhere else.' : 'Nothing this is known to go with.') +
           '</p>';
           return;
         }
-        host.innerHTML = '<p class="merge-hint">Looked for ' + terms + '. Which half moves is your call.</p>' +
+        host.innerHTML = alreadyHere + '<p class="merge-hint">Looked for ' + terms + '. Which half moves is your call.</p>' +
           found.map(h => {
             const where = rackPlaces.where(h.container);
             return '<div class="pair-row" data-c="' + esc(h.container) + '" data-s="' + esc(h.slot) + '" data-i="' + h.index + '">' +

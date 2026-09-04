@@ -24,8 +24,10 @@ import java.util.regex.Pattern;
  * rack is right about both and still sends you to two rooms for one thing.
  * This is the counterpart lookup: the expander is asked what this item is used
  * <em>with</em>, in the words this rack uses, and each answer is searched the
- * way an expanded term is. Hits already in the item's own slot are left out,
- * because the question is what to bring together, and those already are.
+ * way an expanded term is. Hits already in the item's own slot are reported
+ * apart from the rest, because the question is what to bring together, and
+ * those already are — the Lumix camera sits beside its charger, and a page
+ * saying it found nothing anywhere else would be hiding the pair it found.
  *
  * <p>It is a suggestion and never a move. The offer is the counterpart's
  * drawer with a move action beside it; which half moves is the user's call,
@@ -72,24 +74,30 @@ public class FindCompanions {
      */
     public Result execute(Item item, ContainerId container, SlotId slot) {
         String name = item == null ? null : item.name();
-        if (name == null || name.isBlank()) return new Result(name, List.of(), List.of());
+        if (name == null || name.isBlank()) return new Result(name, List.of(), List.of(), List.of());
 
         List<String> terms = termsFor(name).stream().filter(FindCompanions::namesAThing).toList();
-        if (terms.isEmpty()) return new Result(name, terms, List.of());
+        if (terms.isEmpty()) return new Result(name, terms, List.of(), List.of());
 
-        Map<Key, SearchHit> found = new LinkedHashMap<>();
+        Map<Key, SearchHit> elsewhere = new LinkedHashMap<>();
+        Map<Key, SearchHit> here = new LinkedHashMap<>();
         for (String term : terms) {
             for (SearchHit hit : index.searchByKeyword(term)) {
-                if (hit.score() < CONVINCING || sameSlot(hit, container, slot) || sameKind(hit.item(), name)) continue;
-                found.merge(Key.of(hit), hit,
+                if (hit.score() < CONVINCING || sameKind(hit.item(), name)) continue;
+                Map<Key, SearchHit> into = sameSlot(hit, container, slot) ? here : elsewhere;
+                into.merge(Key.of(hit), hit,
                     (existing, candidate) -> existing.score() >= candidate.score() ? existing : candidate);
             }
         }
 
+        return new Result(name, terms, best(elsewhere), best(here));
+    }
+
+    private static List<SearchHit> best(Map<Key, SearchHit> found) {
         List<SearchHit> hits = new ArrayList<>(found.values());
         hits.sort((a, b) -> Double.compare(b.score(), a.score()));
         if (hits.size() > MAX_HITS) hits = hits.subList(0, MAX_HITS);
-        return new Result(name, terms, List.copyOf(hits));
+        return List.copyOf(hits);
     }
 
     private List<String> termsFor(String name) {
@@ -145,6 +153,10 @@ public class FindCompanions {
         }
     }
 
-    /** The name asked about, the words it was bridged to, and where they are. */
-    public record Result(String query, List<String> terms, List<SearchHit> hits) {}
+    /**
+     * The name asked about, the words it was bridged to, where they are
+     * ({@code hits}, anywhere but the item's own slot) and which of them are
+     * already beside it ({@code together}).
+     */
+    public record Result(String query, List<String> terms, List<SearchHit> hits, List<SearchHit> together) {}
 }
