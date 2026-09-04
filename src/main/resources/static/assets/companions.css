@@ -1,0 +1,12 @@
+/* What this goes with, and where that is. A suggestion with a move beside
+   it, never a move: which half goes is the person's call. */
+.pair-panel { margin-top: .6rem; }
+.pair-panel summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--primary-hover); padding: .3rem 0; }
+.pair-body { padding: .4rem 0 .2rem; }
+.pair-hint { margin: 0 0 .5rem; font-size: .8rem; color: var(--muted); }
+.pair-row { padding: .5rem 0; border-top: 1px solid var(--border); }
+.pair-row:first-of-type { border-top: none; }
+.pair-row .name { font-weight: 600; }
+.pair-row .at { font-size: .8rem; color: var(--muted); margin-top: .1rem; }
+.pair-row .acts { display: flex; gap: .4rem; margin-top: .45rem; flex-wrap: wrap; }
+.pair-row .acts .btn { flex: 1 1 auto; }

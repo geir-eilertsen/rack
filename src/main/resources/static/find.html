@@ -10,11 +10,13 @@
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
   <link rel="stylesheet" href="/assets/itemdocs.css">
+  <link rel="stylesheet" href="/assets/companions.css">
   <script src="/assets/photos.js"></script>
   <script src="/assets/slots.js"></script>
   <script src="/assets/route.js"></script>
   <script src="/assets/places.js"></script>
   <script src="/assets/itemdocs.js"></script>
+  <script src="/assets/companions.js"></script>
   <style>
     .search { margin-bottom: 1rem; display: flex; gap: .4rem; }
     .search input { flex: 1; min-width: 0; font-size: 1.05rem; padding: .8rem 1rem; }
@@ -85,17 +87,6 @@
     .merge-body { padding: .4rem 0 .2rem; }
     .merge-hint { margin: 0 0 .5rem; font-size: .8rem; color: var(--muted); }
     .merge-targets .merge-into { margin-bottom: .35rem; text-align: left; width: 100%; }
-    /* What this goes with, and where that is. A suggestion with a move beside
-       it, never a move: which half goes is the person's call. */
-    .pair-panel { margin-top: .6rem; }
-    .pair-panel summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--primary-hover); padding: .3rem 0; }
-    .pair-body { padding: .4rem 0 .2rem; }
-    .pair-row { padding: .5rem 0; border-top: 1px solid var(--border); }
-    .pair-row:first-of-type { border-top: none; }
-    .pair-row .name { font-weight: 600; }
-    .pair-row .at { font-size: .8rem; color: var(--muted); margin-top: .1rem; }
-    .pair-row .acts { display: flex; gap: .4rem; margin-top: .45rem; flex-wrap: wrap; }
-    .pair-row .acts .btn { flex: 1 1 auto; }
     .ai { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--border); }
     .ai h4 { margin: 0 0 .4rem; font-size: .7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
     .ai-input { display: flex; gap: .3rem; }
@@ -576,10 +567,7 @@
               '<div class="merge-targets"></div>' +
             '</div>' +
           '</details>' +
-          '<details class="pair-panel">' +
-            '<summary>What does this go with?</summary>' +
-            '<div class="pair-body"></div>' +
-          '</details>' +
+          rackCompanions.render({ container: g.container, slot: g.slot, index: h.index }) +
           '<details class="move-panel">' +
             '<summary>Move to another place…</summary>' +
             '<div class="move-body">' +
@@ -674,7 +662,13 @@
       hits.querySelectorAll('.ai-q').forEach(inp => inp.addEventListener('click', e => e.stopPropagation()));
       hits.querySelectorAll('.merge-panel').forEach(panel => wireMergePanel(panel));
       hits.querySelectorAll('.move-panel').forEach(panel => wireMovePanel(panel));
-      hits.querySelectorAll('.pair-panel').forEach(panel => wirePairPanel(panel));
+      rackCompanions.wire(hits, {
+        place: placeName,
+        room: rackPlaces.where,
+        itemName,
+        moved: (c, sl) => { status.className = 'status ok'; status.textContent = '✓ Moved to ' + placeName(c, sl) + '.'; runSearch(); },
+        failed: msg => { status.className = 'status error'; status.textContent = 'Move failed: ' + msg; }
+      });
     }
 
     // Whether two rows are the same thing is a person's judgement, so this only
@@ -839,71 +833,6 @@
         btn.disabled = false;
         btn.textContent = original;
       }
-    }
-
-    // What this item goes with, and where that is — a phone's charger, a
-    // remote's receiver. Fetched when the panel is opened rather than for every
-    // hit on every keystroke: it is a model call, small but not free, and most
-    // things have no other half. The counterpart's own slot is never listed,
-    // because the question is what to bring together and that already is.
-    function wirePairPanel(panel) {
-      const host = panel.querySelector('.pair-body');
-      const li = panel.closest('li');
-      const { container, slot } = li.dataset;
-      const index = +li.dataset.index;
-      panel.addEventListener('click', ev => ev.stopPropagation());
-      panel.addEventListener('toggle', async () => {
-        if (!panel.open || host.children.length) return;
-        host.innerHTML = '<p class="merge-hint">Looking…</p>';
-        let result = null;
-        try {
-          const res = await fetch('/c/' + container + '/' + slot + '/items/' + index + '/companions');
-          if (res.ok) result = await res.json();
-        } catch (e) { /* handled below */ }
-        if (window.rackUsage) rackUsage.refresh();
-        if (!result) {
-          host.innerHTML = '<p class="merge-hint">Could not look this up.</p>';
-          return;
-        }
-        const terms = (result.terms || []).map(t => '“' + esc(t) + '”').join(', ');
-        const found = result.hits || [];
-        // What is already beside it is the pair working, and worth saying:
-        // the camera is in this drawer with its charger, and "nothing anywhere
-        // else" would be true and hide that.
-        const together = (result.together || []).map(h => esc(itemName(h.item)));
-        const alreadyHere = together.length
-          ? '<p class="merge-hint">Already here: ' + together.join('; ') + '.</p>'
-          : '';
-        if (!found.length) {
-          host.innerHTML = alreadyHere + '<p class="merge-hint">' +
-            (terms ? 'Looked for ' + terms + ' and found nothing anywhere else.' : 'Nothing this is known to go with.') +
-          '</p>';
-          return;
-        }
-        host.innerHTML = alreadyHere + '<p class="merge-hint">Looked for ' + terms + '. Which half moves is your call.</p>' +
-          found.map(h => {
-            const where = rackPlaces.where(h.container);
-            return '<div class="pair-row" data-c="' + esc(h.container) + '" data-s="' + esc(h.slot) + '" data-i="' + h.index + '">' +
-              '<div class="name">' + esc(itemName(h.item)) + '</div>' +
-              '<div class="at">' + esc(placeName(h.container, h.slot)) + (where ? ' — ' + esc(where) : '') + '</div>' +
-              '<div class="acts">' +
-                '<button type="button" class="btn there">Move this there</button>' +
-                '<button type="button" class="btn here">Bring it here</button>' +
-              '</div>' +
-            '</div>';
-          }).join('');
-        host.querySelectorAll('.pair-row').forEach(row => {
-          const { c, s, i } = row.dataset;
-          row.querySelector('.there').addEventListener('click', ev => {
-            ev.stopPropagation();
-            moveTo(container, slot, index, c, s, ev.currentTarget);
-          });
-          row.querySelector('.here').addEventListener('click', ev => {
-            ev.stopPropagation();
-            moveTo(c, s, +i, container, slot, ev.currentTarget);
-          });
-        });
-      });
     }
 
     async function askHit(li) {
