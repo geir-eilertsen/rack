@@ -11,7 +11,11 @@ import family.eilertsen.rack.domain.port.PairFinder;
 import family.eilertsen.rack.domain.port.PartIndex;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -62,9 +66,12 @@ public class FindCompanions {
     private final PairFinder finder;
 
     /**
-     * The same items get looked at over and over. What is cached is the
-     * citation by name, not by drawer, so a pair whose halves have since moved
-     * still resolves to where they are now.
+     * The same items get looked at over and over. The answer is a function of
+     * the subject and the listing it was shown, so the key carries both: a
+     * charger asked about before the phones went into the glass cabinet was
+     * answered "nothing", and that answer must not outlive the cabinet's
+     * contents. A citation is still remembered by name rather than by drawer,
+     * so a moved item resolves to where it is now.
      */
     private final Map<String, List<Cited>> answers = Collections.synchronizedMap(
         new LinkedHashMap<>(16, 0.75f, true) {
@@ -135,7 +142,7 @@ public class FindCompanions {
 
     /** Citations per item, in the items' order; only the items not already answered cost a call. */
     private List<List<Cited>> citedFor(List<Item> items, Listing listing) {
-        List<String> keys = items.stream().map(FindCompanions::cacheKey).toList();
+        List<String> keys = items.stream().map(i -> cacheKey(i) + "|" + listing.fingerprint).toList();
         List<Integer> unanswered = new ArrayList<>();
         for (int i = 0; i < items.size(); i++) {
             if (!answers.containsKey(keys.get(i))) unanswered.add(i);
@@ -209,7 +216,18 @@ public class FindCompanions {
                 }
             }
         }
-        return new Listing(lines, byRef);
+        return new Listing(lines, byRef, fingerprint(lines));
+    }
+
+    /** The listing as shown, in a few characters. */
+    private static String fingerprint(List<String> lines) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            for (String line : lines) digest.update(line.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest.digest(), 0, 12);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** One entry as the model sees it: what it is called, what it looks like, what is printed on it. */
@@ -254,7 +272,7 @@ public class FindCompanions {
 
     private record Entry(ContainerId container, SlotId slot, int index, Item item, Instant lastVerified) {}
 
-    private record Listing(List<String> lines, Map<String, Entry> byRef) {}
+    private record Listing(List<String> lines, Map<String, Entry> byRef, String fingerprint) {}
 
     /** A citation as remembered: by the name it was made under, so a move does not strand it. */
     private record Cited(String ref, String name, String why) {}

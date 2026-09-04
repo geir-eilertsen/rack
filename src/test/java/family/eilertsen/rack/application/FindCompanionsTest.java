@@ -121,21 +121,35 @@ class FindCompanionsTest {
     }
 
     @Test
-    void aCitationSurvivesTheItemMovingBecauseItIsRememberedByName() {
-        // The answer is cached per subject; the drawer is looked up each time.
-        Item pi = item("Raspberry Pi 4", "single-board computer");
-        index.put(LAB, slot("11", pi));
+    void theSameQuestionOverTheSameRackIsAskedOnce() {
+        index.put(LAB, slot("11", item("Raspberry Pi 4", "single-board computer")));
         finder.cites(new Companion(0, "lab/11#0", "powers it"));
         Item psu = item("USB-C power supply", "5.1V 3A");
 
         companions.execute(psu, null, null);
-        index.put(LAB, slot("11"));
-        index.put(CELLAR, slot("3", pi));
-        FindCompanions.Result again = companions.execute(psu, null, null);
+        companions.execute(item("usb-c power supply", "5.1V 3A"), null, null);
 
         assertThat(finder.calls).isEqualTo(1);
-        assertThat(again.hits()).hasSize(1);
-        assertThat(again.hits().get(0).container()).isEqualTo(CELLAR);
+    }
+
+    @Test
+    void aRackThatHasChangedIsAskedAgain() {
+        // A charger asked about before the phones went into the glass cabinet
+        // was answered "nothing", and that answer must not outlive the
+        // cabinet's contents.
+        index.put(LAB, slot("11", item("Screws", "M3")));
+        Item charger = item("Sony Ericsson CST-13 charger", "EU two-pin");
+        companions.execute(charger, null, null);
+        assertThat(companions.execute(charger, null, null).hits()).isEmpty();
+        assertThat(finder.calls).isEqualTo(1);
+
+        index.put(CELLAR, slot("2", item("Sony Ericsson mobile phone", "clamshell")));
+        finder.cites(new Companion(0, "cellar/2#0", "the phone it charges"));
+
+        FindCompanions.Result result = companions.execute(charger, null, null);
+
+        assertThat(finder.calls).isEqualTo(2);
+        assertThat(result.hits()).extracting(f -> f.item().name()).containsExactly("Sony Ericsson mobile phone");
     }
 
     @Test
