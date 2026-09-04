@@ -30,6 +30,18 @@ class SpringAiPairFinderTest {
     }
 
     @Test
+    void aClaimStandsOnlyWhenTheModelSaysSoAndAnUnansweredOneDoesNot() {
+        List<Boolean> stands = SpringAiPairFinder.held(Arrays.asList(
+            new SpringAiPairFinder.Verdict(1, true, "made for it"),
+            new SpringAiPairFinder.Verdict(2, false, "brand in common"),
+            new SpringAiPairFinder.Verdict(7, true, "no such claim"),
+            new SpringAiPairFinder.Verdict(null, true, ""),
+            null), 4);
+
+        assertThat(stands).containsExactly(true, false, false, false);
+    }
+
+    @Test
     void aLoneSubjectNeedNotBeNamed() {
         List<Companion> kept = SpringAiPairFinder.pairs(List.of(
             new SpringAiPairFinder.Cited(null, "lab/11#0", "pair", "powers it")), 1);

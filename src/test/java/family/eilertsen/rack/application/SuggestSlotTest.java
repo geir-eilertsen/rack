@@ -1,5 +1,6 @@
 package family.eilertsen.rack.application;
 
+import family.eilertsen.rack.domain.model.Claim;
 import family.eilertsen.rack.domain.model.Companion;
 import family.eilertsen.rack.domain.model.Container;
 import family.eilertsen.rack.domain.model.ContainerId;
@@ -205,6 +206,13 @@ class SuggestSlotTest {
         @Override
         public List<Companion> find(List<String> subjects, List<String> listing) {
             return answer;
+        }
+
+        @Override
+        public List<Boolean> confirm(List<Claim> claims) {
+            List<Boolean> stands = new ArrayList<>();
+            for (int i = 0; i < claims.size(); i++) stands.add(true);
+            return stands;
         }
     }
 

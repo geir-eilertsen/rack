@@ -2,6 +2,7 @@ package family.eilertsen.rack.adapter.out.springai;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import family.eilertsen.rack.domain.model.Claim;
 import family.eilertsen.rack.domain.model.Companion;
 import family.eilertsen.rack.domain.port.PairFinder;
 import family.eilertsen.rack.domain.port.UsageLog;
@@ -51,6 +52,10 @@ public class SpringAiPairFinder implements PairFinder {
           category, same hobby, same brand, plugs into the same socket, but
           neither needs the other. Only "pair" will be kept, so a candidate
           you would talk yourself out of belongs under one of the other two.
+        - A brand in common is not a pair. A spare part or component belongs
+          only with the exact product it fits, and only when that product is
+          the other entry: a spring for a light switch is not the pair of a
+          USB outlet of the same make.
         - Made for one thing, or good for many: both are real. A Sony CST-13
           charger belongs with the Sony phone it was made for and nothing
           else. A general-purpose USB-C charger, a AA battery or an HDMI cable
@@ -61,6 +66,29 @@ public class SpringAiPairFinder implements PairFinder {
 
         Reply with a JSON array only, no prose, no code fence:
         [{"subject": "S1", "ref": "the reference", "verdict": "pair" | "same kind" | "related", "why": "what the one does for the other"}]
+        """;
+
+    private static final String CONFIRM_PROMPT = """
+        You are checking claims about what belongs together in someone's
+        inventory of drawers and boxes. Each claim is two entries and a
+        proposed reason. Say whether the two are really the other half of a
+        pair: one is not much use without the other, made for it or serving
+        it. Be strict:
+        - A brand in common is not a pair. A spare part or component belongs
+          only with the exact product it fits, and only when that product is
+          the other entry. A spring for a light switch is not the pair of a
+          USB wall outlet of the same make; the outlet has no switch.
+        - Another of the same kind is not a pair. Same category, same hobby,
+          plugs into the same socket: not a pair.
+        - A device and the charger, cable, battery, cap, remote or add-on
+          board made for it, or a general-purpose one that serves it: a pair.
+
+        The claims:
+        %s
+
+        Reply with a JSON array only, one per claim in order, no prose, no
+        code fence:
+        [{"claim": 1, "pair": true, "why": "a few words"}]
         """;
 
     private final ChatClient chat;
@@ -107,6 +135,50 @@ public class SpringAiPairFinder implements PairFinder {
             return List.of();
         }
     }
+
+    @Override
+    public List<Boolean> confirm(List<Claim> claims) {
+        if (claims == null || claims.isEmpty()) return List.of();
+        List<Boolean> stands = new ArrayList<>();
+        for (int i = 0; i < claims.size(); i++) stands.add(true);
+
+        StringBuilder list = new StringBuilder();
+        for (int i = 0; i < claims.size(); i++) {
+            Claim c = claims.get(i);
+            list.append(i + 1).append(". A: ").append(c.subject().strip())
+                .append("\n   B: ").append(c.candidate().strip())
+                .append("\n   proposed: ").append(c.why() == null ? "" : c.why().strip()).append('\n');
+        }
+        String prompt = CONFIRM_PROMPT.formatted(list.toString().strip());
+        String reply;
+        try {
+            reply = SpringAi.tally(chat.prompt().options(options).user(prompt).call().chatResponse(), usage);
+        } catch (RuntimeException e) {
+            log.warn("Pair confirmation unavailable: {}", e.toString());
+            return stands;
+        }
+        try {
+            List<Verdict> verdicts = mapper.readValue(SpringAi.json(reply), new TypeReference<>() {});
+            return held(verdicts, claims.size());
+        } catch (Exception e) {
+            log.warn("Pair confirmation returned non-JSON: {}", reply);
+            return stands;
+        }
+    }
+
+    /** A claim the model did not answer does not stand: it was asked. */
+    static List<Boolean> held(List<Verdict> verdicts, int claims) {
+        List<Boolean> stands = new ArrayList<>();
+        for (int i = 0; i < claims; i++) stands.add(false);
+        for (Verdict v : verdicts) {
+            if (v == null || v.claim() == null) continue;
+            int i = v.claim() - 1;
+            if (i >= 0 && i < claims) stands.set(i, Boolean.TRUE.equals(v.pair()));
+        }
+        return stands;
+    }
+
+    record Verdict(Integer claim, Boolean pair, String why) {}
 
     /**
      * Only what the model called a pair. Asked for citations alone, Sonnet

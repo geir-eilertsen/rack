@@ -1,5 +1,6 @@
 package family.eilertsen.rack.application;
 
+import family.eilertsen.rack.domain.model.Claim;
 import family.eilertsen.rack.domain.model.Companion;
 import family.eilertsen.rack.domain.model.Container;
 import family.eilertsen.rack.domain.model.ContainerId;
@@ -143,10 +144,22 @@ public class FindCompanions {
             List<String> subjects = unanswered.stream().map(i -> line(null, items.get(i))).toList();
             Map<Integer, List<Cited>> fresh = new LinkedHashMap<>();
             for (int i : unanswered) fresh.put(i, new ArrayList<>());
+            List<Claim> claims = new ArrayList<>();
+            List<Integer> claimedFor = new ArrayList<>();
+            List<Cited> claimed = new ArrayList<>();
             for (Companion c : finder.find(subjects, listing.lines)) {
                 Entry entry = listing.byRef.get(c.ref());
                 if (entry == null || c.subject() < 0 || c.subject() >= unanswered.size()) continue;    // invented
-                fresh.get(unanswered.get(c.subject())).add(new Cited(c.ref(), entry.item.name(), c.why()));
+                claims.add(new Claim(subjects.get(c.subject()), line(null, entry.item), c.why()));
+                claimedFor.add(unanswered.get(c.subject()));
+                claimed.add(new Cited(c.ref(), entry.item.name(), c.why()));
+            }
+            // Second opinion, pair by pair. Picked out of a listing of a hundred
+            // and fifty lines, "small coil spring for Elco switch" was the pair
+            // of an ELKO USB outlet; judged on its own beside it, it is not.
+            List<Boolean> stands = claims.isEmpty() ? List.of() : finder.confirm(claims);
+            for (int k = 0; k < claimed.size(); k++) {
+                if (k < stands.size() && stands.get(k)) fresh.get(claimedFor.get(k)).add(claimed.get(k));
             }
             fresh.forEach((i, cited) -> answers.put(keys.get(i), List.copyOf(cited)));
         }

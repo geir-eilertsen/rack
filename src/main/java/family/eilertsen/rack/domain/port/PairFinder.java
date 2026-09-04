@@ -1,5 +1,6 @@
 package family.eilertsen.rack.domain.port;
 
+import family.eilertsen.rack.domain.model.Claim;
 import family.eilertsen.rack.domain.model.Companion;
 
 import java.util.List;
@@ -27,4 +28,16 @@ public interface PairFinder {
      *         model is unreachable.
      */
     List<Companion> find(List<String> subjects, List<String> listing);
+
+    /**
+     * A second opinion on each proposed pair, one at a time. Asked over the
+     * whole listing, the model paired a USB wall outlet with "small coil
+     * spring for Elco switch" on the brand; asked about the two alone, it
+     * does not.
+     *
+     * @return one answer per claim, in order: whether it stands. Never null;
+     *         when the model is unreachable every claim stands, because the
+     *         first opinion was the model's too.
+     */
+    List<Boolean> confirm(List<Claim> claims);
 }

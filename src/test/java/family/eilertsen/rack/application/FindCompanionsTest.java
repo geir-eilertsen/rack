@@ -1,5 +1,6 @@
 package family.eilertsen.rack.application;
 
+import family.eilertsen.rack.domain.model.Claim;
 import family.eilertsen.rack.domain.model.Companion;
 import family.eilertsen.rack.domain.model.Container;
 import family.eilertsen.rack.domain.model.ContainerId;
@@ -138,6 +139,26 @@ class FindCompanionsTest {
     }
 
     @Test
+    void everyProposedPairIsPutToTheModelAgainOnItsOwnAndOnlyWhatStandsIsKept() {
+        // Picked out of the whole listing, the spring "for Elco switch" was the
+        // pair of an ELKO USB outlet — a brand in common. Judged beside it
+        // alone, it is not.
+        Item outlet = item("ELKO dual USB wall outlet", "flush-mount, two USB-A ports");
+        index.put(LAB, slot("1", outlet));
+        index.put(CELLAR, slot("2", item("small coil spring for Elco switch", "compression spring"), item("5V 2A USB charger", "wall wart")));
+        finder.cites(new Companion(0, "cellar/2#0", "spring for the switch inside"), new Companion(0, "cellar/2#1", "plugs into its USB port"));
+        finder.rejects("small coil spring for Elco switch");
+
+        FindCompanions.Result result = companions.execute(outlet, LAB, new SlotId("1"));
+
+        assertThat(finder.claims).hasSize(2);
+        assertThat(finder.claims.get(0).subject()).startsWith("ELKO dual USB wall outlet |");
+        assertThat(finder.claims.get(0).candidate()).startsWith("small coil spring for Elco switch |");
+        assertThat(finder.claims.get(0).why()).isEqualTo("spring for the switch inside");
+        assertThat(result.hits()).extracting(f -> f.item().name()).containsExactly("5V 2A USB charger");
+    }
+
+    @Test
     void aFiledBatchIsOneCallWithEachItemAnsweredForItself() {
         // Eight items in one shot used to be eight calls in a row, and the
         // listing is most of each prompt.
@@ -192,6 +213,21 @@ class FindCompanionsTest {
             this.subjects = subjects;
             this.listing = listing;
             return answer;
+        }
+
+        List<Claim> claims;
+        private Set<String> rejected = Set.of();
+
+        void rejects(String... candidateNames) {
+            this.rejected = Set.of(candidateNames);
+        }
+
+        @Override
+        public List<Boolean> confirm(List<Claim> claims) {
+            this.claims = claims;
+            List<Boolean> stands = new ArrayList<>();
+            for (Claim c : claims) stands.add(rejected.stream().noneMatch(name -> c.candidate().startsWith(name + " |")));
+            return stands;
         }
     }
 
