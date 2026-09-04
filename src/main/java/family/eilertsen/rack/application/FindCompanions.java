@@ -91,8 +91,32 @@ public class FindCompanions {
         Listing listing = listing(self);
         if (listing.lines.isEmpty()) return new Result(item.name(), List.of(), List.of());
 
-        List<Cited> cited = citedFor(item, listing);
+        return result(item, citedFor(List.of(item), listing).get(0), listing, self, container, slot);
+    }
 
+    /**
+     * Several items not yet filed, in one call. A filed batch is several items
+     * and the listing is most of the prompt, so one call per batch costs about
+     * what one per item does and takes a tenth of the time.
+     */
+    public List<Result> executeAll(List<Item> items) {
+        List<Item> named = items.stream().filter(i -> i != null && !blank(i.name())).toList();
+        Listing listing = listing(null);
+        List<List<Cited>> cited = named.isEmpty() || listing.lines.isEmpty()
+            ? List.of() : citedFor(named, listing);
+        List<Result> results = new ArrayList<>();
+        int n = 0;
+        for (Item item : items) {
+            if (item == null || blank(item.name()) || cited.isEmpty()) {
+                results.add(new Result(item == null ? null : item.name(), List.of(), List.of()));
+            } else {
+                results.add(result(item, cited.get(n++), listing, null, null, null));
+            }
+        }
+        return results;
+    }
+
+    private Result result(Item item, List<Cited> cited, Listing listing, Ref self, ContainerId container, SlotId slot) {
         List<Found> elsewhere = new ArrayList<>();
         List<Found> here = new ArrayList<>();
         for (Cited c : cited) {
@@ -108,18 +132,29 @@ public class FindCompanions {
         return new Result(item.name(), List.copyOf(elsewhere), List.copyOf(here));
     }
 
-    private List<Cited> citedFor(Item item, Listing listing) {
-        String key = normalise(item.name()) + "|" + normalise(clip(item.description()));
-        List<Cited> cached = answers.get(key);
-        if (cached != null) return cached;
-        List<Cited> cited = new ArrayList<>();
-        for (Companion c : finder.find(line(null, item), listing.lines)) {
-            Entry entry = listing.byRef.get(c.ref());
-            if (entry == null) continue;    // invented, or the subject's own line
-            cited.add(new Cited(c.ref(), entry.item.name(), c.why()));
+    /** Citations per item, in the items' order; only the items not already answered cost a call. */
+    private List<List<Cited>> citedFor(List<Item> items, Listing listing) {
+        List<String> keys = items.stream().map(FindCompanions::cacheKey).toList();
+        List<Integer> unanswered = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
+            if (!answers.containsKey(keys.get(i))) unanswered.add(i);
         }
-        answers.put(key, List.copyOf(cited));
-        return cited;
+        if (!unanswered.isEmpty()) {
+            List<String> subjects = unanswered.stream().map(i -> line(null, items.get(i))).toList();
+            Map<Integer, List<Cited>> fresh = new LinkedHashMap<>();
+            for (int i : unanswered) fresh.put(i, new ArrayList<>());
+            for (Companion c : finder.find(subjects, listing.lines)) {
+                Entry entry = listing.byRef.get(c.ref());
+                if (entry == null || c.subject() < 0 || c.subject() >= unanswered.size()) continue;    // invented
+                fresh.get(unanswered.get(c.subject())).add(new Cited(c.ref(), entry.item.name(), c.why()));
+            }
+            fresh.forEach((i, cited) -> answers.put(keys.get(i), List.copyOf(cited)));
+        }
+        return keys.stream().map(k -> answers.getOrDefault(k, List.of())).toList();
+    }
+
+    private static String cacheKey(Item item) {
+        return normalise(item.name()) + "|" + normalise(clip(item.description()));
     }
 
     /**

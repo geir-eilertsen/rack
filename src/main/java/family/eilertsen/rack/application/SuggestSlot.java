@@ -60,8 +60,7 @@ public class SuggestSlot {
         // beside the drawers holding the same kind of thing. Not yet filed, so
         // there is no slot of its own to leave out.
         List<FindCompanions.Result> goesWith = new ArrayList<>();
-        for (Item queried : extracted) {
-            FindCompanions.Result found = companions.execute(queried, null, null);
+        for (FindCompanions.Result found : companions.executeAll(extracted)) {
             if (!found.hits().isEmpty()) goesWith.add(found);
         }
 

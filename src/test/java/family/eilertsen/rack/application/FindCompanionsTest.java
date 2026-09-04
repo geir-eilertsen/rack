@@ -53,7 +53,7 @@ class FindCompanionsTest {
         Item pi = item("Raspberry Pi 4", "single-board computer, USB-C power");
         index.put(LAB, slot("11", pi));
         index.put(CELLAR, slot("3", item("Paper towels", "kitchen roll")));
-        finder.cites(new Companion("lab/11#0", "powers it over USB-C"));
+        finder.cites(new Companion(0, "lab/11#0", "powers it over USB-C"));
 
         FindCompanions.Result result = companions.execute(item("USB-C power supply", "5.1V 3A"), null, null);
 
@@ -73,7 +73,8 @@ class FindCompanionsTest {
 
         companions.execute(charger, LAB, new SlotId("1"));
 
-        assertThat(finder.subject).startsWith("Phone charger | micro-USB");
+        assertThat(finder.subjects).hasSize(1);
+        assertThat(finder.subjects.get(0)).startsWith("Phone charger | micro-USB");
         // Containers are listed by name, so the cellar comes before the lab.
         assertThat(finder.listing).hasSize(2);
         assertThat(finder.listing.get(0)).startsWith("cellar/2#0 | Screws | M3");
@@ -84,7 +85,7 @@ class FindCompanionsTest {
     void aReferenceTheListingDoesNotHaveIsNotBelieved() {
         // The model is not permitted to furnish this rack from memory.
         index.put(LAB, slot("1", item("Phone", "old Android")));
-        finder.cites(new Companion("lab/9#0", "charges it"), new Companion("nonsense", ""), new Companion("lab/1#0", "charges it"));
+        finder.cites(new Companion(0, "lab/9#0", "charges it"), new Companion(0, "nonsense", ""), new Companion(0, "lab/1#0", "charges it"));
 
         FindCompanions.Result result = companions.execute(item("Phone charger", "micro-USB"), null, null);
 
@@ -99,7 +100,7 @@ class FindCompanionsTest {
         Item charger = item("Panasonic Lumix battery charger", "for DMW-BCF10 battery");
         index.put(LAB, slot("11", camera, charger));
         index.put(CELLAR, slot("1", item("Spare DMW-BCF10 battery", "camera battery")));
-        finder.cites(new Companion("lab/11#0", "charges its battery"), new Companion("cellar/1#0", "the battery it charges"));
+        finder.cites(new Companion(0, "lab/11#0", "charges its battery"), new Companion(0, "cellar/1#0", "the battery it charges"));
 
         FindCompanions.Result result = companions.execute(charger, LAB, new SlotId("11"));
 
@@ -111,7 +112,7 @@ class FindCompanionsTest {
     void aGeneralPurposeChargerBelongsWithEverythingItServes() {
         index.put(LAB, slot("1", item("Pixel 7", "phone, USB-C"), item("Kindle", "e-reader, USB-C")));
         index.put(CELLAR, slot("2", item("Steam Deck", "USB-C PD")));
-        finder.cites(new Companion("lab/1#0", "charges it"), new Companion("lab/1#1", "charges it"), new Companion("cellar/2#0", "charges it at 45W"));
+        finder.cites(new Companion(0, "lab/1#0", "charges it"), new Companion(0, "lab/1#1", "charges it"), new Companion(0, "cellar/2#0", "charges it at 45W"));
 
         FindCompanions.Result result = companions.execute(item("65W USB-C charger", "GaN, PD"), null, null);
 
@@ -123,7 +124,7 @@ class FindCompanionsTest {
         // The answer is cached per subject; the drawer is looked up each time.
         Item pi = item("Raspberry Pi 4", "single-board computer");
         index.put(LAB, slot("11", pi));
-        finder.cites(new Companion("lab/11#0", "powers it"));
+        finder.cites(new Companion(0, "lab/11#0", "powers it"));
         Item psu = item("USB-C power supply", "5.1V 3A");
 
         companions.execute(psu, null, null);
@@ -134,6 +135,27 @@ class FindCompanionsTest {
         assertThat(finder.calls).isEqualTo(1);
         assertThat(again.hits()).hasSize(1);
         assertThat(again.hits().get(0).container()).isEqualTo(CELLAR);
+    }
+
+    @Test
+    void aFiledBatchIsOneCallWithEachItemAnsweredForItself() {
+        // Eight items in one shot used to be eight calls in a row, and the
+        // listing is most of each prompt.
+        index.put(LAB, slot("11", item("Raspberry Pi 4", "single-board computer")));
+        index.put(CELLAR, slot("3", item("Panasonic Lumix DMC-FS11", "compact camera")));
+        finder.cites(new Companion(1, "cellar/3#0", "charges its battery"), new Companion(0, "lab/11#0", "powers it"));
+
+        List<FindCompanions.Result> results = companions.executeAll(List.of(
+            item("USB-C power supply", "5.1V 3A"),
+            item("Lumix battery charger", "DE-A60"),
+            new Item(null, "unreadable", null, "other", 1, 0.3, List.of(), List.of(), null, null, List.of())));
+
+        assertThat(finder.calls).isEqualTo(1);
+        assertThat(finder.subjects).hasSize(2);
+        assertThat(results).hasSize(3);
+        assertThat(results.get(0).hits()).extracting(f -> f.item().name()).containsExactly("Raspberry Pi 4");
+        assertThat(results.get(1).hits()).extracting(f -> f.item().name()).containsExactly("Panasonic Lumix DMC-FS11");
+        assertThat(results.get(2).hits()).isEmpty();
     }
 
     @Test
@@ -156,7 +178,7 @@ class FindCompanionsTest {
 
     private static final class FakeFinder implements PairFinder {
         int calls;
-        String subject;
+        List<String> subjects;
         List<String> listing;
         private List<Companion> answer = List.of();
 
@@ -165,9 +187,9 @@ class FindCompanionsTest {
         }
 
         @Override
-        public List<Companion> find(String subject, List<String> listing) {
+        public List<Companion> find(List<String> subjects, List<String> listing) {
             calls++;
-            this.subject = subject;
+            this.subjects = subjects;
             this.listing = listing;
             return answer;
         }

@@ -25,35 +25,42 @@ public class SpringAiPairFinder implements PairFinder {
         electronics, tools, cables, chargers, household things — one entry per
         thing, each with where it is.
 
-        This is the entry to place:
+        These are the entries to place, one per line, each beginning with its
+        subject number:
         %s
 
         This is everything else they have, one per line, each beginning with
         its reference:
         %s
 
-        Which of those entries does this thing BELONG WITH — the other half of
-        a pair, where one is not much use without the other? A charger and the
-        device it charges, either way round. A remote and its receiver. A lens
-        and its cap. A battery and the tool it powers. A dock and the laptop
-        it docks. Read the descriptions: a 5.1V 3A USB-C power supply is a
-        Raspberry Pi 4's, and a Sony charger belongs with the Sony phone, not
-        with every phone.
+        For each subject: which of those entries does it BELONG WITH — the
+        other half of a pair, where one is not much use without the other? A
+        charger and the device it charges, either way round. A remote and its
+        receiver. A lens and its cap. A battery and the tool it powers. A dock
+        and the laptop it docks. A HAT and the Raspberry Pi it plugs onto.
+        Read the descriptions: a 5.1V 3A USB-C power supply is a Raspberry Pi
+        4's, and a Sony charger belongs with the Sony phone, not with every
+        phone.
 
         Rules:
-        - Cite only entries from the list, by their exact reference.
-        - Never another of the same kind: a second charger is not what a
-          charger belongs with. Never something merely related or in the same
-          category.
+        - Consider only entries from the list, by their exact reference.
+        - Give every candidate you consider a verdict, and be strict about it:
+          "pair" — one is not much use without the other, made for it or
+          serving it; "same kind" — another charger, cable, adapter or
+          computer like this one, which is never a pair; "related" — same
+          category, same hobby, same brand, plugs into the same socket, but
+          neither needs the other. Only "pair" will be kept, so a candidate
+          you would talk yourself out of belongs under one of the other two.
         - Made for one thing, or good for many: both are real. A Sony CST-13
           charger belongs with the Sony phone it was made for and nothing
           else. A general-purpose USB-C charger, a AA battery or an HDMI cable
-          belongs with every entry it serves, so cite each of them, and say in
-          "why" what it does for that one.
+          belongs with every entry it serves, so cite each of them.
+        - "why" says what the one does for the other, in a few words. Not a
+          description of the entry.
         - Most things belong with nothing. An empty array is the usual answer.
 
         Reply with a JSON array only, no prose, no code fence:
-        [{"ref": "the reference", "why": "a few words on what the one does for the other"}]
+        [{"subject": "S1", "ref": "the reference", "verdict": "pair" | "same kind" | "related", "why": "what the one does for the other"}]
         """;
 
     private final ChatClient chat;
@@ -75,32 +82,61 @@ public class SpringAiPairFinder implements PairFinder {
     }
 
     @Override
-    public List<Companion> find(String subject, List<String> listing) {
-        if (subject == null || subject.isBlank() || listing == null || listing.isEmpty()) return List.of();
+    public List<Companion> find(List<String> subjects, List<String> listing) {
+        if (subjects == null || subjects.isEmpty() || listing == null || listing.isEmpty()) return List.of();
 
-        String prompt = PROMPT.formatted(subject.strip(), String.join("\n", listing));
+        StringBuilder numbered = new StringBuilder();
+        for (int i = 0; i < subjects.size(); i++) {
+            numbered.append("S").append(i + 1).append(" | ").append(subjects.get(i).strip()).append('\n');
+        }
+        String prompt = PROMPT.formatted(numbered.toString().strip(), String.join("\n", listing));
         String reply;
         try {
             reply = SpringAi.tally(chat.prompt().options(options).user(prompt).call().chatResponse(), usage);
         } catch (RuntimeException e) {
             // No API key, rate limit, network — the page says it could not look.
-            log.warn("Pair lookup unavailable for \"{}\": {}", subject, e.toString());
+            log.warn("Pair lookup unavailable for {}: {}", subjects, e.toString());
             return List.of();
         }
 
         try {
             List<Cited> cited = mapper.readValue(SpringAi.json(reply), new TypeReference<>() {});
-            List<Companion> companions = new ArrayList<>();
-            for (Cited c : cited) {
-                if (c == null || c.ref() == null || c.ref().isBlank()) continue;
-                companions.add(new Companion(c.ref().strip(), c.why() == null ? "" : c.why().strip()));
-            }
-            return List.copyOf(companions);
+            return pairs(cited, subjects.size());
         } catch (Exception e) {
-            log.warn("Pair lookup returned non-JSON for \"{}\": {}", subject, reply);
+            log.warn("Pair lookup returned non-JSON for {}: {}", subjects, reply);
             return List.of();
         }
     }
 
-    private record Cited(String ref, String why) {}
+    /**
+     * Only what the model called a pair. Asked for citations alone, Sonnet
+     * cited the ceiling rose beside a USB wall outlet and wrote "merely
+     * related, not a pair" in the reason — it knew, and the format gave it no
+     * way to say so. A verdict per candidate is that way.
+     */
+    static List<Companion> pairs(List<Cited> cited, int subjects) {
+        List<Companion> companions = new ArrayList<>();
+        for (Cited c : cited) {
+            if (c == null || c.ref() == null || c.ref().isBlank()) continue;
+            if (c.verdict() == null || !c.verdict().strip().equalsIgnoreCase("pair")) continue;
+            int subject = subjectIndex(c.subject(), subjects);
+            if (subject < 0) continue;
+            companions.add(new Companion(subject, c.ref().strip(), c.why() == null ? "" : c.why().strip()));
+        }
+        return List.copyOf(companions);
+    }
+
+    /** "S1" is the first subject; one subject may be cited without saying which. */
+    private static int subjectIndex(String s, int subjects) {
+        if (s == null || s.isBlank()) return subjects == 1 ? 0 : -1;
+        String digits = s.strip().replaceAll("^[Ss]", "");
+        try {
+            int n = Integer.parseInt(digits) - 1;
+            return n >= 0 && n < subjects ? n : -1;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    record Cited(String subject, String ref, String verdict, String why) {}
 }

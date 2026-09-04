@@ -78,11 +78,14 @@ rack:
     expansion-max-tokens: 300
 
     # Which entry a charger belongs with is read off the whole listing, one
-    # line per item, so this is a matching job over a few thousand tokens of
-    # prompt rather than a reasoning one. Every citation is checked against
-    # the index before it is shown, which is what makes haiku safe here.
-    companions-model: ${RACK_COMPANIONS_MODEL:claude-haiku-4-5}
-    companions-max-tokens: 600
+    # line per item. Measured on this rack's own drawers, claude-haiku-4-5
+    # cited the Raspberry Pi PSU as the pair for a Sony phone charger, a USB
+    # wall outlet and a Lumix camera charger alike; sonnet answered nothing
+    # for those, the camera for its charger, and found the Z-Wave HAT in
+    # lab/5 for the Pi in lab/11 — a split pair the feature exists to catch.
+    # About five cents a call; one call per filed batch, one per click.
+    companions-model: ${RACK_COMPANIONS_MODEL:claude-sonnet-4-6}
+    companions-max-tokens: 1500
 
     # Dollars per million tokens, for the running total at the foot of each page.
     # Published prices as of 2026-08-05 — a figure on screen that quietly went

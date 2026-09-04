@@ -58,7 +58,7 @@ class SuggestSlotTest {
         index.hits("phone charger", hit("1", 9));
         index.put(LAB, new Slot(new SlotId("7"), List.of(
             new Item("Phone", "old Android", null, "electronics", 1, 0.9, List.of(), List.of(), null, null, List.of())), null, null));
-        finder.cites(new Companion("lab/7#0", "charges it"));
+        finder.cites(new Companion(0, "lab/7#0", "charges it"));
 
         SuggestSlot.Result result = suggest.execute(List.of(new byte[]{1}));
 
@@ -203,7 +203,7 @@ class SuggestSlotTest {
         }
 
         @Override
-        public List<Companion> find(String subject, List<String> listing) {
+        public List<Companion> find(List<String> subjects, List<String> listing) {
             return answer;
         }
     }
