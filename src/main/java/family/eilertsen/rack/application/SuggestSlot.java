@@ -6,6 +6,8 @@ import family.eilertsen.rack.domain.model.Item;
 import family.eilertsen.rack.domain.model.SearchHit;
 import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.port.PartExtractor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -17,6 +19,8 @@ import java.util.Map;
 
 @Service
 public class SuggestSlot {
+
+    private static final Logger log = LoggerFactory.getLogger(SuggestSlot.class);
 
     private static final int TOP_N = 5;
 
@@ -38,7 +42,15 @@ public class SuggestSlot {
         Map<Key, Bucket> buckets = new LinkedHashMap<>();
 
         for (Item queried : extracted) {
-            for (SearchHit hit : find.forPhotographed(queried).hits()) {
+            FindItems.Result found = find.forPhotographed(queried);
+            // A suggestion that finds nothing is not stored anywhere, so this is
+            // the only record of what the extractor called the thing and what
+            // that name found. An SD card that got no drawer is otherwise
+            // indistinguishable from a call that never happened.
+            log.info("Suggest: \"{}\" (pn {}, tags {}) found {} item(s){}",
+                queried.name(), queried.partNumber(), queried.tags(), found.hits().size(),
+                found.expandedTerms().isEmpty() ? "" : " after widening to " + found.expandedTerms());
+            for (SearchHit hit : found.hits()) {
                 Key k = new Key(hit.container(), hit.slot());
                 Bucket b = buckets.computeIfAbsent(k, key -> new Bucket(key, hit.lastVerified()));
                 b.score += hit.score();
@@ -64,6 +76,8 @@ public class SuggestSlot {
             if (!found.hits().isEmpty()) goesWith.add(found);
         }
 
+        log.info("Suggest: {} suggestion(s) {}", suggestions.size(),
+            suggestions.stream().map(sg -> sg.container().value() + "/" + sg.slot().value()).toList());
         return new Result(extracted, suggestions, goesWith);
     }
 
