@@ -111,7 +111,9 @@ class AskAboutRackTest {
     }
 
     @Test
-    void aClaimAgainstADrawerThatDoesNotExistIsDropped() {
+    void aClaimAgainstADrawerThatDoesNotExistIsPlacedWhereTheItemIs() {
+        // The item is real and the rack holds it in one place, so the drawer is
+        // the index's to say. It used to be dropped over the drawer alone.
         index.put(RACK, slot("A1", item("220uF 100V capacitor", "radial", 4)));
         Map<String, List<String>> held = AskAboutRack.inventory(registry, index).held();
 
@@ -119,8 +121,8 @@ class AskAboutRackTest {
             need("Reservoir capacitor", "have",
                 new AskAboutRack.Found("rack", "E9", "220uF 100V capacitor", null))), held);
 
-        assertThat(checked.get(0).found()).isEmpty();
-        assertThat(checked.get(0).status()).isEqualTo("missing");
+        assertThat(checked.get(0).status()).isEqualTo("have");
+        assertThat(checked.get(0).found().get(0).slot()).isEqualTo("A1");
     }
 
     @Test
@@ -185,6 +187,55 @@ class AskAboutRackTest {
 
         assertThat(checked.get(0).found()).isEmpty();
         assertThat(checked.get(0).status()).isEqualTo("missing");
+    }
+
+    @Test
+    void aRightNameInTheWrongDrawerIsPlacedWhereTheIndexHasIt() {
+        // The first build talked through on the live rack led with the Delta
+        // adapter — its exact name, cited at lab/11, kept in box02 — and the
+        // page showed prose about a thing with no drawer under it. The link is
+        // the index's to give, and the index knows exactly one drawer has it.
+        index.put(RACK, slot("A1", item("Delta AC/DC adapter", "19V 3.42A", 1)));
+        index.put(LAB, slot("2", item("Heat sink compound", "Dow Corning 340", 1)));
+        Map<String, List<String>> held = AskAboutRack.inventory(registry, index).held();
+
+        List<AskAboutRack.Need> checked = AskAboutRack.verify(List.of(
+            need("A 19 V supply", "have",
+                new AskAboutRack.Found("lab", "11", "Delta AC/DC adapter", null))), held);
+
+        assertThat(checked.get(0).status()).isEqualTo("have");
+        AskAboutRack.Found f = checked.get(0).found().get(0);
+        assertThat(f.container()).isEqualTo("rack");
+        assertThat(f.slot()).isEqualTo("A1");
+    }
+
+    @Test
+    void aNameTwoDrawersHoldIsNotGuessedBetween() {
+        // Then the drawer is the claim, and a wrong one is a wrong answer.
+        index.put(RACK, slot("A1", item("100K resistors", "1/4W", 20)));
+        index.put(LAB, slot("2", item("100K resistors", "1W", 5)));
+        Map<String, List<String>> held = AskAboutRack.inventory(registry, index).held();
+
+        List<AskAboutRack.Need> checked = AskAboutRack.verify(List.of(
+            need("Feedback resistors", "have",
+                new AskAboutRack.Found("rack", "B7", "100K resistors", null))), held);
+
+        assertThat(checked.get(0).found()).isEmpty();
+        assertThat(checked.get(0).status()).isEqualTo("missing");
+    }
+
+    @Test
+    void aCitationComesBackSpelledTheWayTheIndexSpellsTheDrawer() {
+        // A slot id is case-sensitive, so a link built from the model's "a1"
+        // would miss the drawer that is actually called A1.
+        index.put(RACK, slot("A1", item("220uF 100V capacitor", "radial", 4)));
+        Map<String, List<String>> held = AskAboutRack.inventory(registry, index).held();
+
+        List<AskAboutRack.Need> checked = AskAboutRack.verify(List.of(
+            need("Reservoir capacitor", "have",
+                new AskAboutRack.Found("RACK", "a1", "220uF 100V capacitor", null))), held);
+
+        assertThat(checked.get(0).found().get(0).slot()).isEqualTo("A1");
     }
 
     @Test

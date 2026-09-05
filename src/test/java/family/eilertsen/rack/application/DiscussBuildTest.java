@@ -74,7 +74,7 @@ class DiscussBuildTest {
     }
 
     @Test
-    void aSuggestionNamingAThingTheDrawerDoesNotHoldIsDropped() {
+    void aSuggestionNamingAThingTheRackDoesNotHoldIsDropped() {
         // The failure this cannot have: sending someone to a drawer for a supply
         // the model remembers from a different workshop. The rack is furnished
         // from the index, never from memory.
@@ -85,7 +85,11 @@ class DiscussBuildTest {
             new DiscussBuild.Suggestion("lab", "3", "LM317 regulator", "use", "set it to 15 V"),
             new DiscussBuild.Suggestion("rack", "A1", "19V laptop power supply", "use", "as is")), held);
 
-        assertThat(kept).isEmpty();
+        // The invented regulator goes; the real supply is placed in the one
+        // drawer that holds it, whatever drawer was cited.
+        assertThat(kept).extracting(DiscussBuild.Suggestion::item).containsExactly("19V laptop power supply");
+        assertThat(kept.get(0).container()).isEqualTo("lab");
+        assertThat(kept.get(0).slot()).isEqualTo("3");
     }
 
     @Test

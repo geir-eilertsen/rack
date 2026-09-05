@@ -203,14 +203,45 @@ public class AskAboutRack {
      * <p>So the pair is resolved rather than demanded, and the standard is
      * unchanged: whichever reading is tried, that drawer has to hold that item.
      * A citation is repaired into the form the links need, or it is dropped.
+     *
+     * <p><strong>And a name the rack holds in exactly one drawer is placed in
+     * that drawer</strong>, whatever drawer was cited. The first build talked
+     * through on the live rack led with the Delta adapter — quoted by its exact
+     * name, cited at lab/11, kept in box02/Box2 — and the prose praised a thing
+     * the page showed no drawer for. The drawer link is read off the index
+     * either way, so this is the index's answer and not the model's; a name two
+     * drawers hold is still dropped, because then the drawer is the claim.
      */
     private static Found locate(Found f, Map<String, List<String>> held) {
         String item = normalise(f.item());
         for (String[] pair : readings(f)) {
-            List<String> names = held.get(key(pair[0], pair[1]));
-            if (names != null && names.contains(item)) {
-                return new Found(pair[0], pair[1], f.item(), f.note());
+            String[] at = drawer(pair[0], pair[1], held);
+            if (at != null && held.get(at[0] + "/" + at[1]).contains(item)) {
+                return new Found(at[0], at[1], f.item(), f.note());
             }
+        }
+        List<String[]> holding = new ArrayList<>();
+        for (Map.Entry<String, List<String>> e : held.entrySet()) {
+            if (e.getValue().contains(item)) holding.add(e.getKey().split("/", 2));
+        }
+        if (holding.size() == 1) {
+            String[] at = holding.get(0);
+            log.info("Placing \"{}\" in {}/{} rather than the cited {}/{}",
+                f.item(), at[0], at[1], f.container(), f.slot());
+            return new Found(at[0], at[1], f.item(), f.note());
+        }
+        return null;
+    }
+
+    /**
+     * The drawer these two name, case aside, spelled the way the index spells
+     * it — a slot id is case-sensitive, and a link to "a1" would miss "A1".
+     */
+    private static String[] drawer(String container, String slot, Map<String, List<String>> held) {
+        if (container == null || slot == null) return null;
+        String want = key(container, slot);
+        for (String k : held.keySet()) {
+            if (normalise(k).equals(want)) return k.split("/", 2);
         }
         return null;
     }
@@ -246,7 +277,7 @@ public class AskAboutRack {
                         + " | " + (item.qtyEstimate() == null ? "?" : item.qtyEstimate())
                         + " | " + (item.tags() == null ? "" : String.join(",", item.tags()))
                         + verified(slot.lastVerified()));
-                    held.computeIfAbsent(key(container.id().value(), slot.id().value()), k -> new ArrayList<>())
+                    held.computeIfAbsent(where, k -> new ArrayList<>())
                         .add(normalise(orBlank(item.name()).isBlank() ? item.description() : item.name()));
                 }
             }

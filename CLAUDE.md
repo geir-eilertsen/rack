@@ -314,6 +314,8 @@ Each line carries how long ago its drawer was last checked, so an answer leaning
 
 **Citations are resolved, not demanded.** Every listing line begins `lab/10 | …`, so a model asked for a container and a slot separately sometimes hands back the token it read: `{"container": "lab/10", "slot": "lab/10"}`. The first real plan lost **62 of about 100** tool references that way — every one a real item in a real drawer, rejected over punctuation. `AskAboutRack.locate` now tries the pair as given, then either field split on its slash, and repairs the citation into the form the drawer links need. The standard is unchanged: whichever reading is tried, that drawer must hold that item. Fixing it took kept references from 43 to 58, all 58 verifiable against `data/`.
 
+**And a name the rack holds in exactly one drawer is placed in that drawer, whatever drawer was cited.** The first build talked through on the live rack led with the Delta adapter — quoted by its exact name, cited at lab/11, kept in box02/Box2 — and the page showed prose praising a thing with no drawer under it. The drawer link is read off the index either way, so this is the index's answer rather than the model's, and a citation now comes back spelled the way the index spells the slot (a slot id is case-sensitive, and a link to `a1` would miss `A1`). A name two drawers hold is still dropped: then the drawer is the claim, and a wrong one is a wrong answer.
+
 **It takes about two minutes.** ~8k output tokens of supplier lists and twenty steps, at ~5–10¢. A deliberate button press with a status line, not something that fires as you type.
 
 ### A project is a thing in the app, not a page of advice
