@@ -82,6 +82,19 @@ class JpegsTest {
     }
 
     @Test
+    void whatDescribesTheOldFilesBytesDoesNotRideAlong() throws IOException {
+        // A Galaxy S24's XMP declares an Ultra HDR gain map appended after the
+        // picture. The fitted file has none, and Chrome reads that XMP.
+        String xmp = "http://ns.adobe.com/xap/1.0/\0<x:xmpmeta><Container:Item Item:Semantic=\"GainMap\" Item:Length=\"20845\"/></x:xmpmeta>";
+        byte[] tagged = withSegment(withOrientation(jpeg(400, 200, Color.RED, Color.BLUE), 1), 0xE1, xmp.getBytes(StandardCharsets.ISO_8859_1));
+        byte[] kept = Jpegs.fit(tagged, 1568, 0.85f, true);
+        String text = new String(kept, StandardCharsets.ISO_8859_1);
+        assertThat(text).contains("Exif");
+        assertThat(text).doesNotContain("GainMap");
+        assertThat(read(kept).getWidth()).isEqualTo(400);
+    }
+
+    @Test
     void somethingThatIsNotAPictureIsNull() throws IOException {
         assertThat(Jpegs.fit("a frame".getBytes(StandardCharsets.UTF_8), 1568, 0.85f, true)).isNull();
     }
@@ -121,6 +134,20 @@ class JpegsTest {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         out.write(jpeg, 0, 2);
         out.write(segment.array(), 0, segment.array().length);
+        out.write(jpeg, 2, jpeg.length - 2);
+        return out.toByteArray();
+    }
+
+    /** Splices one application segment in after the start marker. */
+    static byte[] withSegment(byte[] jpeg, int marker, byte[] payload) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(jpeg, 0, 2);
+        out.write(0xFF);
+        out.write(marker);
+        int length = payload.length + 2;
+        out.write(length >> 8);
+        out.write(length & 0xFF);
+        out.write(payload, 0, payload.length);
         out.write(jpeg, 2, jpeg.length - 2);
         return out.toByteArray();
     }

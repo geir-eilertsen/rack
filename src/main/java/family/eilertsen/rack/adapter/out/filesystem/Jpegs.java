@@ -39,8 +39,8 @@ final class Jpegs {
      * — HEIC, WebP — so the caller can keep the bytes as they came.
      *
      * <p>With {@code keepMetadata}, what the camera wrote about the shot rides
-     * along: the Exif block (when it was taken, which camera, where), any XMP,
-     * and the colour profile. The page used to make the photograph on a canvas,
+     * along: the Exif block (when it was taken, which camera, where) and the
+     * colour profile. The page used to make the photograph on a canvas,
      * which keeps none of it, so every photograph filed before this is a
      * picture and nothing else. The orientation tag is reset to "as is",
      * because the pixels have been turned and a viewer that honoured the old
@@ -176,11 +176,17 @@ final class Jpegs {
         }
 
         /**
-         * The fitted JPEG with the original's Exif, XMP and ICC segments put
-         * back in after its start marker, Exif first as the standard has it.
-         * Only those three: a vendor segment such as MPF holds byte offsets
-         * into the file it came from, and would point into the middle of a
-         * different picture here.
+         * The fitted JPEG with the original's Exif and ICC segments put back
+         * in after its start marker, Exif first as the standard has it.
+         *
+         * <p>Only those two. Anything that describes the file's own bytes is
+         * a lie about this file: MPF holds offsets into the one it came from,
+         * and on a phone the XMP is a container directory — a Galaxy S24
+         * writes one declaring an Ultra HDR gain map of 20,845 bytes appended
+         * after the picture, a Pixel one declaring a motion-photo video. The
+         * fitted file has no trailer, and Chrome on Android reads that XMP to
+         * render HDR, went looking for the gain map, and froze the phone on
+         * the first photograph that carried it.
          */
         static byte[] carryOver(byte[] original, byte[] fitted) {
             List<Segment> keep;
@@ -203,7 +209,6 @@ final class Jpegs {
 
         private record Segment(int marker, int at, int length, String signature) {
             boolean isExif() { return marker == 0xE1 && signature.startsWith("Exif"); }
-            boolean isXmp() { return marker == 0xE1 && signature.startsWith("http://ns.adobe.com/xap/1.0/"); }
             boolean isIcc() { return marker == 0xE2 && signature.startsWith("ICC_PROFILE"); }
             /** The TIFF structure that follows "Exif\0\0", as its own buffer with offsets from its start. */
             ByteBuffer tiff(byte[] jpeg) {
@@ -218,7 +223,7 @@ final class Jpegs {
 
         private static List<Segment> metadataSegments(byte[] jpeg) {
             List<Segment> keep = new ArrayList<>();
-            for (Segment s : segments(jpeg)) if (s.isExif() || s.isXmp() || s.isIcc()) keep.add(s);
+            for (Segment s : segments(jpeg)) if (s.isExif() || s.isIcc()) keep.add(s);
             keep.sort((a, b) -> Boolean.compare(b.isExif(), a.isExif()));
             return keep;
         }
