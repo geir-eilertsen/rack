@@ -4,16 +4,6 @@ import family.eilertsen.rack.domain.port.ImageStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
-import javax.imageio.stream.ImageOutputStream;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.FileAlreadyExistsException;
@@ -107,33 +97,8 @@ public class FilesystemImageStore implements ImageStore {
 
     /** Null for anything ImageIO cannot read — HEIC, WebP — so the original is served as it was. */
     static byte[] scale(byte[] original, int maxEdge) throws IOException {
-        BufferedImage source = ImageIO.read(new ByteArrayInputStream(original));
-        if (source == null) return null;
-        double factor = Math.min(1.0, (double) maxEdge / Math.max(source.getWidth(), source.getHeight()));
-        int width = Math.max(1, (int) Math.round(source.getWidth() * factor));
-        int height = Math.max(1, (int) Math.round(source.getHeight() * factor));
-        // RGB regardless of what came in: a JPEG writer has no alpha to keep.
-        BufferedImage target = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = target.createGraphics();
-        try {
-            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-            g.drawImage(source, 0, 0, width, height, null);
-        } finally {
-            g.dispose();
-        }
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
-        try (ImageOutputStream stream = ImageIO.createImageOutputStream(out)) {
-            writer.setOutput(stream);
-            ImageWriteParam param = writer.getDefaultWriteParam();
-            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            param.setCompressionQuality(0.8f);
-            writer.write(null, new IIOImage(target, null, null), param);
-        } finally {
-            writer.dispose();
-        }
-        return out.toByteArray();
+        // No metadata on a thumbnail: it is a picture for a strip, not a record of anything.
+        return Jpegs.fit(original, maxEdge, 0.8f, false);
     }
 
     /** Thumbnails of photographs that are no longer there. */

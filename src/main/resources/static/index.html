@@ -33,6 +33,12 @@
       <!-- A label rather than a link: tapping it opens the camera on that tap.
            Going to the page first and tapping a camera there is one tap more,
            and the whole design is tap-shoot-done. -->
+      <li id="resumeCard" hidden>
+        <a class="card resume" id="resume" href="/put.html">
+          <h2>Continue filing</h2>
+          <p id="resumeHint"></p>
+        </a>
+      </li>
       <li>
         <label class="card add" id="addCard">
           <h2>Add an item</h2>
@@ -78,6 +84,7 @@
   </div>
   <style>
     .card.add { cursor: pointer; display: block; }
+    .card.resume { border-color: var(--primary); }
     /* A card that opens rather than leads. The marker goes because the other
        two cards have none, and the heading is what you tap. */
     .jump summary { cursor: pointer; list-style: none; display: block; }
@@ -167,9 +174,8 @@
       }
     })();
 
-    // Start the add on the tap that starts it. A file cannot cross a
-    // navigation, so it is handed over in session storage and picked up by
-    // put.html; if that hand-off fails the page still opens, just empty.
+    // Start the add on the tap that starts it. The frames go to the server as
+    // they came — the page never decodes them — and put.html finds them there.
     (function () {
       const input = document.getElementById('addPhoto');
       const hint = document.getElementById('addHint');
@@ -178,17 +184,36 @@
         const files = [...input.files];
         input.value = '';
         if (!files.length) return;
-        hint.textContent = files.length === 1 ? 'Preparing photo…' : 'Preparing ' + files.length + ' photos…';
-        // Yield a frame so that lands before the canvas work starts: coming back
-        // from the camera, iOS otherwise holds the repaint until the next touch.
-        await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
         try {
-          await window.rackPhotos.stash(files);
+          await window.rackPhotos.stage(files, null, (n, total) => {
+            hint.textContent = total === 1 ? 'Uploading photo…' : 'Uploading ' + n + ' of ' + total + '…';
+          });
+          location.href = '/put.html';
         } catch (e) {
-          hint.textContent = original;
+          // The photograph did not arrive, so there is nothing on the other
+          // page to go to. Say so here, where the camera is one tap away.
+          hint.textContent = 'Upload failed: ' + e.message + ' — tap to try again.';
+          setTimeout(() => { hint.textContent = original; }, 8000);
         }
-        location.href = '/put.html';
       });
+    })();
+
+    // A batch that was shot and never filed — the app was killed with the
+    // camera open, or the phone was put down — is still on the server. Offer
+    // to pick it up where it was, rather than leaving it to be found by
+    // accident on the filing page.
+    (async function () {
+      const card = document.getElementById('resume');
+      try {
+        const staged = await window.rackPhotos.list();
+        if (!staged.length) return;
+        const first = staged.find(p => p.container) || staged[0];
+        card.href = first.container ? rackRoute.slotHref(first.container, first.slot) : '/put.html';
+        document.getElementById('resumeHint').textContent =
+          staged.length + ' photo' + (staged.length === 1 ? '' : 's') + ' waiting to be filed'
+          + (first.container ? ' in ' + first.container + (first.slot ? ' · ' + first.slot : '') : '') + '.';
+        document.getElementById('resumeCard').hidden = false;
+      } catch (e) { /* no server, no batch */ }
     })();
 
     // A different tip each visit. Every one of these is something the app

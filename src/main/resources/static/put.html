@@ -299,7 +299,7 @@
       }
       refreshUiForSelection();
       syncAddress({ replace: true });
-      await adoptHandover();
+      await restorePending();
     }
 
     // Back, Forward, or an address typed by hand: the page follows the URL
@@ -344,20 +344,21 @@
       rackRoute.go(rackRoute.join([selectedContainer.id, slot]), options);
     }
 
-    // A photograph taken from the front page arrives here rather than being
-    // taken again. It lands in the pending strip exactly as one shot on this
-    // page would, so everything downstream is unchanged.
-    async function adoptHandover() {
-      const files = await window.rackPhotos.takeStash();
-      if (!files.length) return;
-      for (const file of files) {
-        await pend(file);
-        renderPending();
-        await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
-      }
+    // Whatever was shot and not yet filed is on the server: a photograph taken
+    // from the front page, or a batch the app was killed in the middle of. It
+    // lands in the pending strip exactly as one shot on this page would, so
+    // everything downstream is unchanged.
+    async function restorePending() {
+      let staged;
+      try { staged = await window.rackPhotos.list(); } catch (e) { return; }
+      if (!staged.length) return;
+      for (const p of staged) pendingPhotos.push({ id: p.id, url: p.preview });
+      renderPending();
       refreshUiForSelection();
       const n = pendingPhotos.length;
-      setStatus('', n + ' photo' + (n === 1 ? '' : 's') + ' ready — pick a drawer below, or let me suggest one.');
+      setStatus('', n + ' photo' + (n === 1 ? '' : 's') + ' waiting — '
+        + (selectedContainer && selectedSlot ? 'file ' + (n === 1 ? 'it' : 'them') + ' here, or add another angle.'
+                                              : 'pick a drawer below, or let me suggest one.'));
     }
 
     // The resync response is the slot itself, so it is passed in as `known` and
@@ -439,17 +440,13 @@
         : 'Identify ' + photos;
     }
 
-    // The strip shows a small copy, not the photograph: the photograph is what
-    // gets filed, and the copy is what the page can afford to keep decoded
-    // while the camera is open for the next one. Both come off one decode.
+    // The frame goes up as it came and the strip shows the small copy the
+    // server made: the page never decodes a camera frame, which is what was
+    // running the phone out of memory while the camera was open for the next.
     async function pend(file) {
-      let shown = file;
-      try {
-        const p = await window.rackPhotos.prepare(file);
-        file = p.file;
-        shown = p.preview || file;
-      } catch (e) { /* filed and shown as it came */ }
-      pendingPhotos.push({ file, url: URL.createObjectURL(shown) });
+      const where = selectedContainer ? { container: selectedContainer.id, slot: selectedSlot } : null;
+      const staged = await window.rackPhotos.stage([file], where);
+      for (const p of staged) pendingPhotos.push({ id: p.id, url: p.preview });
     }
 
     function renderPending() {
@@ -472,7 +469,7 @@
     }
 
     function dropPending(idx) {
-      URL.revokeObjectURL(pendingPhotos[idx].url);
+      window.rackPhotos.drop(pendingPhotos[idx].id);
       pendingPhotos.splice(idx, 1);
       renderPending();
       discardProposal();
@@ -485,8 +482,10 @@
       }
     }
 
+    // Filing releases the staged copies on the server; cancelling has to. Both
+    // drop them here, because dropping one already gone costs nothing.
     function clearPending() {
-      pendingPhotos.forEach(p => URL.revokeObjectURL(p.url));
+      pendingPhotos.forEach(p => window.rackPhotos.drop(p.id));
       pendingPhotos = [];
       renderPending();
     }
@@ -1333,17 +1332,21 @@
       suggestionsEl.innerHTML = '';
       extractedHeading.hidden = true;
       pickHeading.hidden = true;
-      setStatus('', files.length === 1 ? 'Preparing photo…' : 'Preparing ' + files.length + ' photos…');
-      // Yield a frame so the paint above lands before we start heavy work.
-      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
-
+      let n = 0;
       for (const file of files) {
-        await pend(file);
+        n++;
+        setStatus('', files.length === 1 ? 'Uploading photo…' : 'Uploading ' + n + ' of ' + files.length + '…');
+        try {
+          await pend(file);
+        } catch (e) {
+          // The ones before it are in the strip; this one is not, and the
+          // camera is one tap away. Say which.
+          renderPending();
+          refreshUiForSelection();
+          setStatus('error', 'Upload failed on photo ' + n + ' of ' + files.length + ': ' + e.message);
+          return;
+        }
         renderPending();
-        // Yield a frame again so each thumbnail paints as it lands. Coming back
-        // from the camera straight into canvas work, iOS holds the repaint until
-        // the next touch — the photo is there, the strip just looks empty.
-        await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
       }
 
       refreshUiForSelection();
@@ -1368,7 +1371,7 @@
 
     function appendPending(form) {
       // One field name repeated: the server binds it as the batch.
-      pendingPhotos.forEach(p => form.append('photo', p.file));
+      pendingPhotos.forEach(p => form.append('staged', p.id));
     }
 
     async function suggestAndPick() {

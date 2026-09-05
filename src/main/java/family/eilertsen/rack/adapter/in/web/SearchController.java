@@ -21,8 +21,10 @@ public class SearchController {
     private final FindItems find;
     private final FindByPhoto findByPhoto;
     private final SearchHistory history;
+    private final Batches batches;
 
-    public SearchController(FindItems find, FindByPhoto findByPhoto, SearchHistory history) {
+    public SearchController(FindItems find, FindByPhoto findByPhoto, SearchHistory history, Batches batches) {
+        this.batches = batches;
         this.find = find;
         this.findByPhoto = findByPhoto;
         this.history = history;
@@ -73,8 +75,7 @@ public class SearchController {
      */
     @PostMapping(value = "/search/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public FindItems.Result searchByPhoto(@RequestParam("photo") List<MultipartFile> photos) throws IOException {
-        List<byte[]> images = new ArrayList<>(photos.size());
-        for (MultipartFile photo : photos) images.add(photo.getBytes());
-        return findByPhoto.execute(images);
+        // Fitted on arrival like every other frame, and kept nowhere: a search is asked once.
+        return findByPhoto.execute(batches.bytes(photos, null));
     }
 }

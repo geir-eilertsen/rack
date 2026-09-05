@@ -41,6 +41,7 @@ import java.util.List;
 @RequestMapping("/c")
 public class ContainerController {
 
+    private final Batches batches;
     private final ContainerRegistry registry;
     private final PartIndex index;
     private final AddPhotoToSlot addPhoto;
@@ -61,7 +62,8 @@ public class ContainerController {
                                 DeleteContainer deleteContainer, RemoveItem removeItem,
                                 EditItem editItem, MoveItem moveItem, MergeItems mergeItems,
                                 RemovePhoto removePhoto, AskAboutItem askAboutItem,
-                                KeepDocuments documents, FindCompanions companions) {
+                                KeepDocuments documents, FindCompanions companions, Batches batches) {
+        this.batches = batches;
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
@@ -153,23 +155,28 @@ public class ContainerController {
         return index.get(cid, sid).orElse(new Slot(sid, List.of(), null, null));
     }
 
-    /** Repeated {@code photo} parts file a whole batch at once; a single part is just a batch of one. */
+    /**
+     * Repeated {@code photo} parts file a whole batch at once; a single part is
+     * just a batch of one. Repeated {@code staged} ids name frames uploaded
+     * when they were shot, and those are released once the batch is filed.
+     */
     @PostMapping(value = "/{container}/{slot}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AddPhotoToSlot.Result addPhoto(@PathVariable String container,
                                            @PathVariable String slot,
-                                           @RequestParam("photo") List<MultipartFile> photos) throws IOException {
+                                           @RequestParam(value = "photo", required = false) List<MultipartFile> photos,
+                                           @RequestParam(value = "staged", required = false) List<String> staged) throws IOException {
         ContainerId cid = new ContainerId(container);
         SlotId sid = new SlotId(slot);
         requireContainerExists(cid);
-        List<AddPhotoToSlot.Photo> batch = new java.util.ArrayList<>(photos.size());
-        for (MultipartFile photo : photos) {
-            batch.add(new AddPhotoToSlot.Photo(photo.getBytes(), photo.getContentType()));
-        }
+        List<AddPhotoToSlot.Photo> batch = batches.photos(photos, staged);
+        AddPhotoToSlot.Result result;
         try {
-            return addPhoto.execute(cid, sid, batch);
+            result = addPhoto.execute(cid, sid, batch);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         }
+        batches.release(staged);
+        return result;
     }
 
     @DeleteMapping("/{container}/{slot}/items/{index}")

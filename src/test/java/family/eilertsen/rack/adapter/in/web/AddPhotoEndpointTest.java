@@ -18,6 +18,9 @@ import family.eilertsen.rack.domain.port.PartExtractor;
 import family.eilertsen.rack.domain.port.PartIndex;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import family.eilertsen.rack.adapter.out.filesystem.FilesystemPhotoStaging;
+import java.nio.file.Path;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
@@ -40,6 +43,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /** The wire contract for a batch: repeated {@code photo} parts, one extraction call. */
 class AddPhotoEndpointTest {
 
+    @TempDir
+    Path stagingDir;
+
     private static final ContainerId RACK = new ContainerId("rack");
 
     private FakeImages images;
@@ -47,7 +53,7 @@ class AddPhotoEndpointTest {
     private MockMvc mvc;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws java.io.IOException {
         images = new FakeImages();
         extractor = new FakeExtractor();
         ContainerStore store = new ContainerStore() {
@@ -67,7 +73,8 @@ class AddPhotoEndpointTest {
         AddPhotoToSlot addPhoto = new AddPhotoToSlot(images, extractor, index);
         ContainerController controller = new ContainerController(
             new ContainerRegistry(store), index, addPhoto,
-            null, null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null, null,
+            new Batches(new FilesystemPhotoStaging(stagingDir.toString())));
         // Match the app's snake_case output so the assertions below are the
         // wire contract the browser sees, not a MockMvc default.
         ObjectMapper mapper = new ObjectMapper()

@@ -415,12 +415,10 @@
       status.className = 'status';
       status.textContent = 'Reading the photo...';
       hits.innerHTML = '';
-      // Yield a frame so that lands before the canvas work starts: coming back
-      // from the camera, iOS otherwise holds the repaint until the next touch.
-      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
       try {
+        // As it came: the server fits it, and the page never decodes it.
         const form = new FormData();
-        for (const file of files) form.append('photo', await resize(file));
+        for (const file of files) form.append('photo', file, file.name || 'photo.jpg');
         const res = await fetch('/search/photo', { method: 'POST', body: form });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const result = await res.json();
@@ -435,8 +433,6 @@
         shoot.disabled = false;
       }
     });
-
-    const resize = (file) => window.rackPhotos.resize(file);
 
     function renderHits(results, query, expanded) {
       const alsoTried = expanded.length

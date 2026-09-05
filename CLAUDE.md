@@ -71,7 +71,7 @@ Three calls, three answers — all under `rack.ai` in `application.yml`, each ov
 
 It would not pay for itself anyway. Measured on the same photo, Sonnet 5 reads the part number correctly but costs ~18% more input tokens at the *same* pixel size — 605 vs 475 for the prompt text (its tokenizer) and 1800 vs 1570 for the image (it tokenizes the same pixels more densely, not merely allowing more of them). It also runs adaptive thinking by default, which adds output tokens and returns a `thinking` block ahead of the JSON.
 
-Photos are resized client-side to **1568px**, the longest edge the vision model keeps — larger is downsampled on arrival, so sending more is upload time for nothing. That is also why the resize does not rescue Sonnet 5: it recovers 122 of the 352-token image gap and none of the tokenizer's.
+Photos are fitted to **1568px** on the server, the longest edge the vision model keeps — larger is downsampled on arrival, so sending more is tokens for nothing. That is also why the resize does not rescue Sonnet 5: it recovers 122 of the 352-token image gap and none of the tokenizer's.
 
 Claude has native vision, so the multipart-photo flow uses the same `ChatClient` API as any other model.
 
@@ -154,6 +154,7 @@ Order of magnitude: ~60 slots × ~20 items = ~1,200 items per container. That's 
 data/
   photos/                # every photograph, for the whole rack
     2026-08-04-1712.jpg
+  staging/                      # shot and not yet filed: <id>.jpg, <id>.preview.jpg, <id>.properties
   documents/                    # service manuals, schematics — flat, like photos
     Quad-405-2-606-707-service-manual.pdf
   projects/
@@ -174,11 +175,9 @@ The old key is inert rather than migrated, per the no-migrations rule: `fail-on-
 
 `GET /photos/{filename}` serves them flat, and the filename is validated as a bare name: one folder for the whole rack means a `../` would walk out of the data directory rather than merely into the next drawer.
 
-**Small images are served small.** `?w=160` and `?w=320` (anything else rounds to one of the two) return a JPEG no longer than that on its longer side, made with ImageIO on first request and kept under `data/thumbs/<edge>/` — beside the photographs rather than among them, because `all()` lists the photo folder and a thumbnail is not a photograph nothing points at. A phone decodes every image at the size it was sent, so a drawer of twenty items whose 48px thumbnails were the full 1568px photographs was twenty full photographs in memory, and the camera app wanted that memory next: phones started reporting low memory while photographing. Item thumbnails ask for 160, strip frames for 320, and the link behind each still opens the photograph. A thumbnail goes with its photograph on delete and strays are swept at boot; a format ImageIO cannot read (HEIC, WebP) is served as it was. The client-side resize also releases its decoded bitmap and canvas as soon as the JPEG exists rather than when the collector gets round to it.
+**Small images are served small.** `?w=160` and `?w=320` (anything else rounds to one of the two) return a JPEG no longer than that on its longer side, made with ImageIO on first request and kept under `data/thumbs/<edge>/` — beside the photographs rather than among them, because `all()` lists the photo folder and a thumbnail is not a photograph nothing points at. A phone decodes every image at the size it was sent, so a drawer of twenty items whose 48px thumbnails were the full 1568px photographs was twenty full photographs in memory, and the camera app wanted that memory next: phones started reporting low memory while photographing. Item thumbnails ask for 160, strip frames for 320, and the link behind each still opens the photograph. A thumbnail goes with its photograph on delete and strays are swept at boot; a format ImageIO cannot read (HEIC, WebP) is served as it was. 
 
-**The pending strip shows previews, not the photographs.** An `<img>` is decoded at the size it was given rather than the size it is drawn at, so six 88px thumbnails backed by the resized photographs were six 1568px pictures in memory, seven megabytes each, for exactly as long as the camera was open for the seventh. `rackPhotos.prepare` makes a 264px copy for the strip off the same decode that makes the photograph, which stays a JPEG in a `File` until it is filed.
-
-**Asking `createImageBitmap` for a smaller decode was tried and rolled back.** The idea was to read the size off the JPEG frame header and pass `resizeWidth`, so a 12-megapixel frame need never be held whole. Chrome does decode a JPEG scaled when asked; WebKit decodes the whole frame anyway and then downscales it at the quality asked for on the CPU, and the phone froze on the first photo. One decode at the camera's size, then a canvas, is the path that is known to work on both.
+**And the phone never decodes a camera frame at all.** Serving thumbnails small was not enough: the page still decoded every frame the camera handed over — 48MB for 12 megapixels, 200MB for 50 — to make the photograph the rack keeps, and the pending strip's 88px thumbnails were the resized photographs themselves, seven megabytes each, for exactly as long as the camera was open for the next one. Phones reported low memory, then froze, then the installed app was killed with the camera open and relaunched at its start URL with the batch gone. Asking `createImageBitmap` for a smaller decode was tried and made it worse: Chrome decodes a JPEG scaled when asked, WebKit decodes the whole frame and downscales it at high quality on the CPU, and the phone froze on the first photo. So the frame goes to the server as it came, the moment it is taken — see *Staging* below — and the page shows the 264px copy the server hands back. `assets/photos.js` is the client for that and has no image code in it.
 
 **Deleting a frame is a question about the whole rack, not one slot.** `PartIndex.photosInUse()` is the union of what every item names, and every path that can orphan a file asks it before removing anything — the frames one drawer is finished with may be the only picture another drawer's item has.
 
@@ -236,10 +235,11 @@ Committing after each write gives history, per-drawer undo, and free multi-site 
 - `/projects.html`, `/project.html`, `GET|POST /projects`, `GET|PATCH|DELETE /projects/{id}`, `PATCH /projects/{id}/steps/{n}`, `PATCH /projects/{id}/parts/{n}`, `POST /projects/{id}/notes`, `GET|POST /projects/{id}/settle`, `POST|PATCH|DELETE /projects/{id}/documents`, `POST /projects/{id}/adopt` → a job of work, tracked and settled against stock
 - `/ask.html`, `POST /ask` → one question about the whole rack (project checklist); the entire index goes in the prompt. `POST /plan` turns the gaps into per-supplier shopping lists plus steps for the job
 - `/find.html`, `GET /search?q=` → search; `&smart=true` widens a query that came up short (see Search above). `POST /search/photo` searches by photo instead of by typing. All three return `{query, expanded_terms, hits}`
-- `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state. The photo endpoint (and `POST /suggest`) take **repeated `photo` parts** — one part is just a batch of one.
+- `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state. The photo endpoint (and `POST /suggest`, both resync endpoints) take **repeated `photo` parts** — one part is just a batch of one — **or repeated `staged` ids** naming frames already uploaded (see *Staging*). `Batches` reads either form for all of them, fitting a raw part on arrival.
+- `POST /staging` (repeated `photo` parts, optional `c` and `s`), `GET /staging`, `GET /staging/{id}` (`?w=` for the small copy), `DELETE /staging/{id}` → photographs shot and not yet filed
 - `/containers.html`, `POST /c` (register), `PATCH /c/{container}` (name + label scale), `DELETE /c/{container}` → maintain containers; also hosts registration and the label flow below
 - `GET /labels/{container}` (preview), `POST /labels/{container}` (mark + archive), `GET /labels/{container}/status` → QR label sheets
-- Static pages resize phone photos to ~1600px client-side before upload; keeps below the 20MB per-file multipart cap (`max-request-size` is 100MB, since a batch is one request) and shrinks the vision call.
+- Phone photos are uploaded as the camera made them and fitted on the server; `max-file-size` is 60MB and `max-request-size` 100MB, since a batch is one request.
 
 ### Where you are is in the address
 
@@ -440,11 +440,15 @@ Photograph a charger and the rack should say which device it charges and which d
 
 **It is a suggestion, never a move.** A move is a physical act the app cannot do, and the record must not lead the drawer. Each row is the counterpart's place with the room and *Move this there* / *Bring it here* beside it, both through the existing `MoveItem`; which half moves is the user's call, because only they know which box is the phone's home. Nothing is stored — a "belongs with" link would be a second place a fact lives and would drift the moment one half was used up or moved.
 
-### Starting an add on the tap that starts it
+### Staging: a frame goes up the moment it is shot
 
-The **Add an item** card on the hub is a `<label>` around a file input, not a link: tapping it opens the camera on that tap, where going to the page first and tapping a camera there costs one tap more. A file cannot cross a navigation, so `assets/photos.js` resizes the batch, hands it over in `sessionStorage` and `put.html` picks it up into the pending strip exactly as if it had been shot there. The stash is taken once, so a reload cannot re-add photographs already filed; if the hand-off fails the page still opens, just empty.
+`PhotoStaging` (port) and `FilesystemPhotoStaging` (`data/staging/`) are where a camera frame becomes a photograph. Every page that takes a photo hands the file straight to `POST /staging`, as it came, and gets back an id, the photograph's URL and a 264px preview for the strip. Filing, suggesting and resyncing then send the ids as repeated `staged` fields; filing and a resync apply release them, a suggestion and a resync preview leave them, and `×` on the strip deletes one. A batch left for seven days was abandoned rather than interrupted and is swept at boot.
 
-That file is also where `resize()` now lives — the same 1568px helper had been copied into two pages.
+**The batch lives on the server, so a killed page gets it back.** `put.html` asks `GET /staging` on load and fills the strip; the hub shows a *Continue filing* card pointing at the drawer the first staged photo was shot for, since an installed app killed with the camera open relaunches on the hub. That is also how the **Add an item** card on the hub works now — it is a `<label>` around a file input, so tapping it opens the camera on that tap, and the frames it stages are simply already there when put.html opens. The `sessionStorage` hand-off that used to carry them across the navigation is gone with the client-side resize it depended on.
+
+**The server keeps what the camera wrote.** `Jpegs.fit` reads the frame subsampled when it is far larger than 1568px (a 50-megapixel shot is never a 200MB bitmap on the server either), scales it in halvings, turns it the way the EXIF orientation says the camera was held — ImageIO does not, and a drawer shot in portrait would otherwise be filed on its side — and then splices the original's Exif, XMP and ICC segments back in with the orientation tag reset to 1. When it was taken, which camera, where: the canvas that used to do this kept none of it, so every photograph filed before this is a picture and nothing else. Only those three segments, because a vendor block such as MPF holds byte offsets into the file it came from. Thumbnails go through the same `fit` without the metadata.
+
+**A raw `photo` part is still accepted everywhere, and fitted on arrival.** `find.html`'s photo search sends the frame that way and keeps nothing; a test or a curl can post one to any filing endpoint. Both forms in one batch are fine.
 
 ### Filing a slot as a batch of photos
 

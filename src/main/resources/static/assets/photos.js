@@ -1,99 +1,57 @@
 // Taking a photograph, shared by the pages that do it.
 //
-// The front page needs it because starting an add should open the camera on the
-// tap that starts it, not on a second tap once a page has loaded — and a file
-// cannot be carried across a navigation, so it goes in sessionStorage and is
-// picked up on the other side.
+// A frame goes to the server the moment the camera hands it over, as it came.
+// The page never decodes it: a phone's camera frame is tens of megapixels, and
+// decoding it on the page to make the photograph the rack keeps was a 48MB
+// bitmap on a device that wanted that memory back for the very next shot —
+// phones reported low memory, froze, and killed the app while the camera was
+// open. The server fits it to the size the vision model reads, keeps what the
+// camera wrote about the shot, and hands back an id and a small copy for the
+// strip. Filing then names the ids.
+//
+// Because the batch lives on the server, a page that was killed and relaunched
+// finds it again by asking — which is also how a photograph taken from the
+// front page reaches put.html: it is simply already there.
 (function () {
-  const STASH = 'rack.pendingPhotos';
+  const PREVIEW = 264;
 
-  // 1568px is the longest edge the vision model keeps; anything larger is
-  // downsampled on arrival, so sending more is upload time for nothing.
-  //
-  // The decode is taken as the browser gives it. createImageBitmap can be asked
-  // for a smaller size up front, and that was tried: WebKit answers by decoding
-  // the whole frame anyway and then downscaling it at high quality on the CPU,
-  // and a 12-megapixel frame through that path froze the phone. So the frame
-  // is decoded once, at its own size, and everything made from it — the
-  // photograph to file and the small copy for the strip — comes off that one
-  // decode before it is released.
-  async function prepare(file, maxDim = 1568, quality = 0.85, previewEdge = 264) {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    // The decoded camera frame is tens of megabytes and the camera app wants
-    // that memory back for the next shot: release it now rather than when the
-    // collector gets round to it, and the canvas the moment its JPEG exists.
-    bitmap.close();
-    const preview = await shrink(canvas, previewEdge);
-    const keep = scale >= 1 && file.size < 3_000_000;
-    const blob = keep ? null : await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
-    canvas.width = canvas.height = 0;
-    return { file: keep ? file : new File([blob], 'photo.jpg', { type: 'image/jpeg' }), preview };
-  }
-
-  // A small copy for showing on the page. An <img> is decoded at the size it
-  // was given, not the size it is drawn at, so a strip of 88px thumbnails
-  // backed by the photographs themselves is the photographs themselves in
-  // memory — seven megabytes each — for as long as the strip is on screen,
-  // which is exactly while the camera is open for the next one.
-  async function shrink(source, edge) {
-    const scale = Math.min(1, edge / Math.max(source.width, source.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(source.width * scale);
-    canvas.height = Math.round(source.height * scale);
-    canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
-    canvas.width = canvas.height = 0;
-    return blob;
-  }
-
-  async function resize(file, maxDim, quality) {
-    return (await prepare(file, maxDim, quality)).file;
-  }
-
-  function readAsDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
-  }
-
-  async function toFile(dataUrl) {
-    const blob = await (await fetch(dataUrl)).blob();
-    return new File([blob], 'photo.jpg', { type: 'image/jpeg' });
-  }
-
-  /** Hands photographs to the next page. Already resized, so a batch is a few hundred kB. */
-  async function stash(files) {
-    const urls = [];
-    for (const file of files) urls.push(await readAsDataUrl(await resize(file)));
-    try {
-      sessionStorage.setItem(STASH, JSON.stringify(urls));
-      return true;
-    } catch (e) {
-      // Out of room, or storage refused. The photograph is not worth losing the
-      // navigation over — the next page simply starts empty.
-      return false;
+  /**
+   * Uploads each file in turn and returns what the server made of them:
+   * [{id, url, preview, container, slot, at}]. `where` is {container, slot}
+   * or null; `onProgress(n, total)` is told before each upload. One request
+   * per photograph rather than one for the batch, so a batch of five that
+   * fails on the fourth keeps three.
+   */
+  async function stage(files, where, onProgress) {
+    const staged = [];
+    let n = 0;
+    for (const file of files) {
+      if (onProgress) onProgress(++n, files.length);
+      const form = new FormData();
+      form.append('photo', file, file.name || 'photo.jpg');
+      if (where && where.container) form.append('c', where.container);
+      if (where && where.slot) form.append('s', where.slot);
+      const res = await fetch('/staging', { method: 'POST', body: form });
+      if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+      staged.push(...await res.json());
     }
+    return staged;
   }
 
-  /** Takes them once. A reload must not re-add photographs already filed. */
-  async function takeStash() {
-    const raw = sessionStorage.getItem(STASH);
-    if (!raw) return [];
-    sessionStorage.removeItem(STASH);
-    try {
-      return await Promise.all(JSON.parse(raw).map(toFile));
-    } catch (e) {
-      return [];
-    }
+  /** Every photograph waiting to be filed, oldest first. */
+  async function list() {
+    const res = await fetch('/staging');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
   }
 
-  window.rackPhotos = { resize, prepare, stash, takeStash };
+  /** Dropping one that has already gone is not an error. */
+  async function drop(id) {
+    try { await fetch('/staging/' + encodeURIComponent(id), { method: 'DELETE' }); } catch (e) { /* gone is gone */ }
+  }
+
+  function previewUrl(id) { return '/staging/' + encodeURIComponent(id) + '?w=' + PREVIEW; }
+  function url(id) { return '/staging/' + encodeURIComponent(id); }
+
+  window.rackPhotos = { stage, list, drop, previewUrl, url };
 })();

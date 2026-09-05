@@ -18,7 +18,6 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -35,22 +34,26 @@ public class ResyncController {
     private final ContainerRegistry registry;
     private final ObjectMapper mapper;
 
-    public ResyncController(ResyncSlot resync, ContainerRegistry registry, ObjectMapper mapper) {
+    private final Batches batches;
+
+    public ResyncController(ResyncSlot resync, ContainerRegistry registry, ObjectMapper mapper, Batches batches) {
+        this.batches = batches;
         this.resync = resync;
         this.registry = registry;
         this.mapper = mapper;
     }
 
-    /** Repeated {@code photo} parts, as everywhere else a batch is shot. */
+    /** Repeated {@code photo} parts or {@code staged} ids, as everywhere else a batch is shot. */
     @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResyncSlot.Preview preview(@PathVariable String container,
                                        @PathVariable String slot,
-                                       @RequestParam("photo") List<MultipartFile> photos) throws IOException {
+                                       @RequestParam(value = "photo", required = false) List<MultipartFile> photos,
+                                       @RequestParam(value = "staged", required = false) List<String> staged) throws IOException {
         ContainerId cid = new ContainerId(container);
         SlotId sid = new SlotId(slot);
         requireContainerExists(cid);
         try {
-            return resync.preview(cid, sid, bytes(photos));
+            return resync.preview(cid, sid, batches.bytes(photos, staged));
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         }
@@ -63,13 +66,16 @@ public class ResyncController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Slot apply(@PathVariable String container,
                        @PathVariable String slot,
-                       @RequestParam("photo") List<MultipartFile> photos,
+                       @RequestParam(value = "photo", required = false) List<MultipartFile> photos,
+                       @RequestParam(value = "staged", required = false) List<String> staged,
                        @RequestParam("decisions") String decisions) throws IOException {
         ContainerId cid = new ContainerId(container);
         SlotId sid = new SlotId(slot);
         requireContainerExists(cid);
         try {
-            return resync.apply(cid, sid, bytes(photos), read(decisions));
+            Slot result = resync.apply(cid, sid, batches.bytes(photos, staged), read(decisions));
+            batches.release(staged);
+            return result;
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         } catch (IndexOutOfBoundsException e) {
@@ -92,11 +98,6 @@ public class ResyncController {
         }
     }
 
-    private static List<byte[]> bytes(List<MultipartFile> photos) throws IOException {
-        List<byte[]> batch = new ArrayList<>(photos.size());
-        for (MultipartFile photo : photos) batch.add(photo.getBytes());
-        return batch;
-    }
 
     private void requireContainerExists(ContainerId id) {
         registry.get(id)
