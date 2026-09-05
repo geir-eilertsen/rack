@@ -1332,18 +1332,16 @@
       suggestionsEl.innerHTML = '';
       extractedHeading.hidden = true;
       pickHeading.hidden = true;
-      let n = 0;
-      for (const file of files) {
-        n++;
-        setStatus('', files.length === 1 ? 'Uploading photo…' : 'Uploading ' + n + ' of ' + files.length + '…');
+      for (let i = 0; i < files.length; i++) {
+        setStatus('', files.length === 1 ? 'Uploading photo…' : 'Uploading ' + (i + 1) + ' of ' + files.length + '…');
         try {
-          await pend(file);
+          await pend(files[i]);
         } catch (e) {
           // The ones before it are in the strip; this one is not, and the
           // camera is one tap away. Say which.
           renderPending();
           refreshUiForSelection();
-          setStatus('error', 'Upload failed on photo ' + n + ' of ' + files.length + ': ' + e.message);
+          setStatus('error', 'Upload failed on photo ' + (i + 1) + ' of ' + files.length + ': ' + e.message);
           return;
         }
         renderPending();
