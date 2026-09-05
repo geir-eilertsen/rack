@@ -441,10 +441,14 @@
 
     // The strip shows a small copy, not the photograph: the photograph is what
     // gets filed, and the copy is what the page can afford to keep decoded
-    // while the camera is open for the next one.
+    // while the camera is open for the next one. Both come off one decode.
     async function pend(file) {
       let shown = file;
-      try { shown = await window.rackPhotos.preview(file); } catch (e) { /* shown as it is */ }
+      try {
+        const p = await window.rackPhotos.prepare(file);
+        file = p.file;
+        shown = p.preview || file;
+      } catch (e) { /* filed and shown as it came */ }
       pendingPhotos.push({ file, url: URL.createObjectURL(shown) });
     }
 
@@ -1334,7 +1338,7 @@
       await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 
       for (const file of files) {
-        await pend(await resize(file));
+        await pend(file);
         renderPending();
         // Yield a frame again so each thumbnail paints as it lands. Coming back
         // from the camera straight into canvas work, iOS holds the repaint until
@@ -1597,7 +1601,6 @@
 
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-    const resize = (file) => window.rackPhotos.resize(file);
   </script>
   <script src="/assets/usage.js" defer></script>
 </body>

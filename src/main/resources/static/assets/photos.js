@@ -7,56 +7,32 @@
 (function () {
   const STASH = 'rack.pendingPhotos';
 
-  // Reads a JPEG's pixel size off its header. A browser can decode a JPEG at
-  // a fraction of its size and never hold the whole frame, but only if told
-  // what size it wants before it starts — and it cannot be asked a picture's
-  // size without decoding it. Null for anything that is not a JPEG, which is
-  // then decoded as it comes.
-  async function jpegSize(file) {
-    const head = new DataView(await file.slice(0, 1 << 20).arrayBuffer());
-    if (head.byteLength < 4 || head.getUint16(0) !== 0xFFD8) return null;
-    let at = 2;
-    while (at + 9 <= head.byteLength) {
-      if (head.getUint8(at) !== 0xFF) return null;
-      const marker = head.getUint8(at + 1);
-      if (marker === 0xFF) { at += 1; continue; }                                  // fill byte
-      if (marker === 0x01 || (marker >= 0xD0 && marker <= 0xD8)) { at += 2; continue; } // no payload
-      if (marker === 0xDA || marker === 0xD9) return null;                          // image data began: no frame header
-      const frameHeader = marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC;
-      if (frameHeader) return { width: head.getUint16(at + 7), height: head.getUint16(at + 5) };
-      at += 2 + head.getUint16(at + 2);
-    }
-    return null;
-  }
-
   // 1568px is the longest edge the vision model keeps; anything larger is
   // downsampled on arrival, so sending more is upload time for nothing.
   //
-  // The decode is asked for that size rather than the camera's. A 12-megapixel
-  // frame decodes to 48MB and a 50-megapixel one to 200MB, and a phone that has
-  // just handed one over wants that memory back for the next shot. One
-  // dimension is given and the browser keeps the ratio: which edge is the width
-  // depends on an orientation tag this does not read, and a wrong guess at the
-  // pair would squash the picture where a wrong guess at one edge only leaves
-  // it a little larger than asked, for the canvas below to finish.
-  async function resize(file, maxDim = 1568, quality = 0.85) {
-    const size = await jpegSize(file);
-    const asked = size ? Math.min(1, maxDim / Math.max(size.width, size.height)) : 1;
-    const bitmap = await createImageBitmap(file, asked < 1
-      ? { resizeWidth: Math.round(size.width * asked), resizeQuality: 'high' }
-      : {});
+  // The decode is taken as the browser gives it. createImageBitmap can be asked
+  // for a smaller size up front, and that was tried: WebKit answers by decoding
+  // the whole frame anyway and then downscaling it at high quality on the CPU,
+  // and a 12-megapixel frame through that path froze the phone. So the frame
+  // is decoded once, at its own size, and everything made from it — the
+  // photograph to file and the small copy for the strip — comes off that one
+  // decode before it is released.
+  async function prepare(file, maxDim = 1568, quality = 0.85, previewEdge = 264) {
+    const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
-    if (asked >= 1 && scale >= 1 && file.size < 3_000_000) { bitmap.close(); return file; }
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(bitmap.width * scale);
     canvas.height = Math.round(bitmap.height * scale);
     canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    // Release the decoded frame now rather than when the collector gets round
-    // to it, and the canvas the moment its JPEG exists.
+    // The decoded camera frame is tens of megabytes and the camera app wants
+    // that memory back for the next shot: release it now rather than when the
+    // collector gets round to it, and the canvas the moment its JPEG exists.
     bitmap.close();
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+    const preview = await shrink(canvas, previewEdge);
+    const keep = scale >= 1 && file.size < 3_000_000;
+    const blob = keep ? null : await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
     canvas.width = canvas.height = 0;
-    return new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+    return { file: keep ? file : new File([blob], 'photo.jpg', { type: 'image/jpeg' }), preview };
   }
 
   // A small copy for showing on the page. An <img> is decoded at the size it
@@ -64,16 +40,19 @@
   // backed by the photographs themselves is the photographs themselves in
   // memory — seven megabytes each — for as long as the strip is on screen,
   // which is exactly while the camera is open for the next one.
-  async function preview(file, edge = 264) {
-    const bitmap = await createImageBitmap(file, { resizeWidth: edge, resizeQuality: 'medium' });
+  async function shrink(source, edge) {
+    const scale = Math.min(1, edge / Math.max(source.width, source.height));
     const canvas = document.createElement('canvas');
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    canvas.getContext('2d').drawImage(bitmap, 0, 0);
-    bitmap.close();
+    canvas.width = Math.round(source.width * scale);
+    canvas.height = Math.round(source.height * scale);
+    canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
     canvas.width = canvas.height = 0;
     return blob;
+  }
+
+  async function resize(file, maxDim, quality) {
+    return (await prepare(file, maxDim, quality)).file;
   }
 
   function readAsDataUrl(file) {
@@ -116,5 +95,5 @@
     }
   }
 
-  window.rackPhotos = { resize, preview, stash, takeStash };
+  window.rackPhotos = { resize, prepare, stash, takeStash };
 })();
