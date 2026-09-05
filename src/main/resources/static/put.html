@@ -351,7 +351,7 @@
       const files = await window.rackPhotos.takeStash();
       if (!files.length) return;
       for (const file of files) {
-        pendingPhotos.push({ file, url: URL.createObjectURL(file) });
+        await pend(file);
         renderPending();
         await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
       }
@@ -437,6 +437,15 @@
       fileBtn.textContent = selectedContainer && selectedSlot
         ? 'File ' + photos + ' in ' + here()
         : 'Identify ' + photos;
+    }
+
+    // The strip shows a small copy, not the photograph: the photograph is what
+    // gets filed, and the copy is what the page can afford to keep decoded
+    // while the camera is open for the next one.
+    async function pend(file) {
+      let shown = file;
+      try { shown = await window.rackPhotos.preview(file); } catch (e) { /* shown as it is */ }
+      pendingPhotos.push({ file, url: URL.createObjectURL(shown) });
     }
 
     function renderPending() {
@@ -1325,8 +1334,7 @@
       await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 
       for (const file of files) {
-        const resized = await resize(file);
-        pendingPhotos.push({ file: resized, url: URL.createObjectURL(resized) });
+        await pend(await resize(file));
         renderPending();
         // Yield a frame again so each thumbnail paints as it lands. Coming back
         // from the camera straight into canvas work, iOS holds the repaint until
