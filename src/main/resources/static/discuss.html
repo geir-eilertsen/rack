@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rack — build something</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/rack.svg">
+  <link rel="apple-touch-icon" href="/assets/rack.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#d97747">
+  <link rel="stylesheet" href="/assets/rack.css">
+  <link rel="stylesheet" href="/assets/advice.css">
+  <style>
+    /* Openers, because the hard part of this is knowing it can be asked at all. */
+    .examples { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 1.25rem; }
+    .examples button { padding: .35rem .7rem; border: 1px solid var(--border); border-radius: 999px;
+      background: var(--card); color: var(--primary-hover); font-size: .82rem; font-family: inherit;
+      cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent; }
+    .examples button:hover { background: var(--primary-soft); border-color: var(--primary); }
+
+    /* The exchange so far. Yours on the right, the rack's on the left, the way
+       every messaging app has taught a thumb to read it. */
+    .thread { display: flex; flex-direction: column; gap: .7rem; margin: 0 0 1rem; }
+    .turn { max-width: 92%; }
+    .turn.user { align-self: flex-end; background: var(--primary-soft); color: var(--text);
+      padding: .65rem .9rem; border-radius: var(--radius) var(--radius) var(--radius-xs) var(--radius);
+      white-space: pre-wrap; }
+    .turn.assistant { align-self: flex-start; background: var(--card); border: 1px solid var(--border);
+      border-left: 3px solid var(--primary); border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: .85rem 1rem; }
+    .turn.assistant p { margin: 0 0 .5rem; }
+    .turn.assistant p:last-child { margin-bottom: 0; }
+    .turn .found { margin-top: .7rem; }
+    .turn .found li { flex-wrap: wrap; }
+    .turn .found .kind { flex: 0 0 auto; }
+    .turn .found .how { flex: 1 1 100%; font-size: .88rem; color: var(--muted); margin-top: .1rem; }
+    .tag.use { background: var(--success-soft); color: var(--success); }
+    .tag.adapt, .tag.substitute { background: #fdf0dd; color: #8a5a12; }
+    .tag.cannibalise { background: #e3eff1; color: var(--accent); }
+    .missing-line { margin: .7rem 0 0; font-size: .88rem; }
+    .missing-line b { color: var(--error); font-weight: 600; }
+    .turn .considered { margin: .6rem 0 0; font-size: .78rem; color: var(--muted); }
+
+    .composer { display: flex; flex-direction: column; gap: .6rem; margin-bottom: 1rem;
+      position: sticky; bottom: 0; background: var(--bg); padding: .6rem 0; }
+    .composer textarea { font-family: inherit; font-size: 1.05rem; padding: .8rem 1rem; min-height: 4.5rem;
+      resize: vertical; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+      background: var(--card); color: inherit; }
+    .composer .row { display: flex; gap: .5rem; align-items: center; }
+    .composer .row .btn { flex: 0 0 auto; }
+    .composer .row .status { margin: 0; flex: 1; min-width: 0; }
+    .thread-bar { display: flex; gap: .6rem; align-items: center; margin: 0 0 .8rem; }
+    .thread-bar .kept { margin: 0; flex: 1; min-width: 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="app-header">
+      <a class="back" href="/">← Home</a>
+      <a class="brand" href="/">
+        <img class="logo" src="/assets/rack.svg" alt="">
+        <span class="name">rack</span>
+      </a>
+    </header>
+
+    <h1>Build something</h1>
+    <p class="callout">Say what you're making or fixing. Every item in every container is read
+      &mdash; nothing is sampled &mdash; and rack suggests what to use, what to adapt, and what
+      could be taken apart for it. Talk it through: ask why, push back, change the plan.</p>
+
+    <div class="examples" id="examples"></div>
+    <div class="thread-bar" id="threadBar" hidden>
+      <p class="kept" id="keptNote"></p>
+      <button class="btn" type="button" id="reset">Start over</button>
+    </div>
+    <div class="thread" id="thread"></div>
+
+    <div class="composer">
+      <textarea id="q" placeholder="I need a 15 V DC supply for a small amplifier. What could I use, or take apart?"
+        aria-label="Your message"></textarea>
+      <div class="row">
+        <button class="btn primary" id="go">Send</button>
+        <span class="status" id="status"></span>
+      </div>
+    </div>
+  </div>
+
+  <script src="/assets/route.js"></script>
+  <script src="/assets/places.js"></script>
+  <script src="/assets/usage.js"></script>
+  <script>
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g,
+        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    const q = document.getElementById('q');
+    const go = document.getElementById('go');
+    const status = document.getElementById('status');
+    const thread = document.getElementById('thread');
+    const threadBar = document.getElementById('threadBar');
+    const keptNote = document.getElementById('keptNote');
+    const examples = document.getElementById('examples');
+
+    // A suggestion cites a drawer, which answers "which drawer" and not
+    // "which room". Started as the page loads: wanted once a reply is back.
+    rackPlaces.load();
+
+    // The conversation is kept in the browser and nowhere else. It is a
+    // proposal under review — nothing in it is a fact about the rack until you
+    // walk to a drawer — and a refresh, or following a drawer link and coming
+    // back, must not cost the whole exchange again. Same trade the pending photo
+    // strip makes: it does not follow you to another device.
+    const HELD = 'rack.discuss.thread';
+    let messages = [];
+    let startedAt = null;
+
+    const EXAMPLES = [
+      'I need a 15 V DC supply for a small amplifier. What could I use, or take apart?',
+      'I want to put a dimmable LED light over the bench.',
+      'Can I build a USB power bank from what is here?',
+      'What could I make out of what is on the lab shelf?'
+    ];
+
+    examples.innerHTML = EXAMPLES.map((e, i) =>
+      '<button type="button" data-i="' + i + '">' + esc(e) + '</button>').join('');
+    examples.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+      q.value = EXAMPLES[Number(b.dataset.i)];
+      send();
+    }));
+
+    go.addEventListener('click', send);
+    // Enter sends, newline needs a modifier — a message is a sentence or two.
+    q.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+    document.getElementById('reset').addEventListener('click', () => {
+      messages = [];
+      startedAt = null;
+      try { localStorage.removeItem(HELD); } catch (e) { /* nothing to forget */ }
+      render();
+      q.focus();
+    });
+
+    recall();
+    render();
+
+    async function send() {
+      const text = q.value.trim();
+      if (!text) { q.focus(); return; }
+      go.disabled = true;
+      messages.push({ role: 'user', text });
+      if (!startedAt) startedAt = new Date().toISOString();
+      q.value = '';
+      render();
+      // Say what it is doing and why it takes a moment: one call over every
+      // item, which is the thing that makes a suggestion worth walking to.
+      setStatus('', 'Reading every item…');
+      try {
+        const res = await fetch('/discuss', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages })
+        });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const a = await res.json();
+        messages.push({ role: 'assistant', text: a.reply, suggestions: a.suggestions || [],
+                        missing: a.missing || [], items_considered: a.items_considered });
+        remember();
+        render();
+        setStatus('', '');
+        if (window.rackUsage) rackUsage.refresh();
+      } catch (e) {
+        // The message that failed goes back in the box rather than into the
+        // thread: it was never answered, and sending it again is one tap.
+        messages.pop();
+        q.value = text;
+        render();
+        setStatus('error', 'Could not answer that: ' + e.message);
+      } finally {
+        go.disabled = false;
+        q.focus();
+      }
+    }
+
+    function render() {
+      examples.hidden = messages.length > 0;
+      threadBar.hidden = messages.length === 0;
+      keptNote.textContent = startedAt && messages.length
+        ? 'Started ' + ago(startedAt) + '. The drawers may have moved since — start over for a fresh reading.'
+        : '';
+      thread.innerHTML = messages.map(turn).join('');
+      // Fill in the room names once /c has landed, without redrawing anything.
+      rackPlaces.load().then(() => {
+        thread.querySelectorAll('.where[data-c]').forEach(el => {
+          el.textContent = rackPlaces.where(el.dataset.c) || '';
+        });
+      });
+      const last = thread.lastElementChild;
+      if (last) last.scrollIntoView({ block: 'nearest' });
+    }
+
+    function turn(m) {
+      if (m.role === 'user') return '<div class="turn user">' + esc(m.text) + '</div>';
+      const paras = String(m.text || '').split(/\n\s*\n/).filter(p => p.trim());
+      const s = m.suggestions || [];
+      const missing = (m.missing || []).filter(Boolean);
+      return '<div class="turn assistant">'
+        + paras.map(p => '<p>' + esc(p.trim()).replace(/\n/g, '<br>') + '</p>').join('')
+        + (s.length
+            ? '<ul class="found">' + s.map(x =>
+                '<li><a href="' + rackRoute.slotHref(x.container, x.slot) + '">'
+                  + esc(x.container) + ' · ' + esc(x.slot) + '</a>'
+                + '<span class="where" data-c="' + esc(x.container) + '">'
+                  + esc(rackPlaces.where(x.container) || '') + '</span>'
+                + '<span class="what">' + esc(x.item || '') + '</span>'
+                + '<span class="tag kind ' + esc(kind(x.kind)) + '">' + kindLabel(x.kind) + '</span>'
+                + (x.how ? '<span class="how">' + esc(x.how) + '</span>' : '')
+                + '</li>').join('')
+              + '</ul>'
+            : '')
+        + (missing.length
+            ? '<p class="missing-line"><b>Still needed:</b> ' + missing.map(esc).join(' · ') + '</p>'
+            : '')
+        // Worth stating: a thing not suggested is a thing the rack really has
+        // not got, because nothing was sampled away first.
+        + (m.items_considered ? '<p class="considered">Read all ' + m.items_considered + ' items in the index.</p>' : '')
+        + '</div>';
+    }
+
+    function kind(k) {
+      return ['use', 'adapt', 'cannibalise', 'substitute'].includes(k) ? k : 'use';
+    }
+
+    function kindLabel(k) {
+      return { use: 'use as is', adapt: 'adapt', cannibalise: 'take apart', substitute: 'near enough' }[kind(k)];
+    }
+
+    function remember() {
+      try {
+        localStorage.setItem(HELD, JSON.stringify({ messages, at: startedAt }));
+      } catch (e) { /* out of room: this page still has it */ }
+    }
+
+    function recall() {
+      try {
+        const row = localStorage.getItem(HELD);
+        if (!row) return;
+        const held = JSON.parse(row);
+        messages = Array.isArray(held.messages) ? held.messages : [];
+        startedAt = held.at || null;
+      } catch (e) {
+        messages = [];   // half a row: start clean
+      }
+    }
+
+    /** Minutes, because a conversation from before lunch is not one from a moment ago. */
+    function ago(iso) {
+      const ms = Date.now() - new Date(iso).getTime();
+      if (!(ms >= 0)) return 'just now';
+      const mins = Math.floor(ms / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return mins + (mins === 1 ? ' minute ago' : ' minutes ago');
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return hours + (hours === 1 ? ' hour ago' : ' hours ago');
+      const days = Math.floor(hours / 24);
+      return days === 1 ? 'yesterday' : days + ' days ago';
+    }
+
+    function setStatus(kind, text) {
+      status.className = 'status' + (kind ? ' ' + kind : '');
+      status.textContent = text;
+    }
+  </script>
+</body>
+</html>

@@ -14,6 +14,7 @@ The photo is ground truth. The extracted data is an index over it — when the t
 
 - **File a drawer from several photos at once.** The part from the front, the same part from the side, its label on a third frame — one vision call merges them into one item, so a bag photographed twice isn't two entries. Photograph the labels as much as the parts; printed text is what the model reads reliably.
 - **Search that bridges your words to the drawer's.** Ask for "isolating tape" and get the electrical tape. Every word of a query has to match, and a query that finds nothing is widened into wording the rack actually uses — grounded in this rack's own vocabulary rather than generic synonyms.
+- **Say what you're building.** "I need a 15 V supply for a small amp" gets the laptop brick on the shelf with a buck module from the drawer, or the transformer inside the dead amplifier in the garage, and which of those is the sensible one. Talk it through. Every suggestion names a drawer and is checked against the index before you see it.
 - **Search by photograph.** For the part in your hand that you can't name, which is exactly the case typing serves worst.
 - **Take stock in two taps.** `−` on a search result drops the count and re-dates the drawer, no form.
 - **QR labels.** Scan a drawer with a phone camera to jump straight to that slot. Small labels share a sticker, four to an Avery L7160 slot, ready to trim.

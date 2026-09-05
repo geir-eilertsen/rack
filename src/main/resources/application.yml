@@ -70,6 +70,9 @@ rack:
     # A list per supplier plus the steps for the job is a long answer, and being
     # cut off mid-list is worse than the tokens are worth.
     plan-max-tokens: 8192
+    # A build talked through is a few sentences and a handful of suggestions per
+    # turn; the listing is the bulk of the call and goes in the other direction.
+    discuss-max-tokens: 3000
 
     # Bridging "isolating tape" to "electrical tape" is a synonym lookup against
     # a list of words we hand it, not a reasoning job, and it sits in front of a
