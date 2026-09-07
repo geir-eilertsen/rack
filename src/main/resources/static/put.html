@@ -40,8 +40,12 @@
     .current li.editing .take { display: none; }
     .current .pn-line { margin-top: .2rem; }
     .current .tags-line { margin-top: .3rem; }
-    .current li.editing .row { display: none; }
+    /* The header stays when a row is open — it is the handle that closes it —
+       and only the lines the form repeats give way. */
+    .current li.editing .row { cursor: pointer; padding-bottom: .6rem; margin-bottom: .2rem; border-bottom: 1px solid var(--border); }
     .current li.editing .pn-line, .current li.editing .tags-line { display: none; }
+    .current .caret { flex: 0 0 auto; width: 20px; height: 20px; color: var(--muted); transition: transform .15s ease; }
+    .current li.editing .caret { transform: rotate(180deg); color: var(--primary); }
     .edit-form { display: none; flex-direction: column; gap: .35rem; }
     .current li.editing .edit-form { display: flex; }
     .edit-form label { font-size: .7rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: .35rem; }
@@ -620,6 +624,10 @@
       if (n) n.textContent = qty;
       const minus = li.querySelector('.minus');
       if (minus) minus.disabled = qty <= 0;
+      // The form's count follows the stepper, so opening the row shows the
+      // number just taken to and closing it does not put the old one back.
+      const f = li.querySelector('.f-qty_estimate');
+      if (f) f.value = f.defaultValue = String(qty);
     }
 
     // Every write takes the whole item, not a delta, so changing one field means
@@ -697,14 +705,15 @@
         e.stopPropagation();                     // taking stock must not open the form
         adjust(b.closest('li'), b.classList.contains('minus') ? -1 : 1);
       }));
-      currentEl.querySelectorAll('li').forEach((li, idx) => {
+      // The header opens the row and closes it again; Cancel closes it too,
+      // and puts back whatever was typed over.
+      currentEl.querySelectorAll('li').forEach(li => {
         li.addEventListener('click', ev => {
-          if (li.classList.contains('editing')) return;
           if (ev.target.closest('.edit-form')) return;
-          li.classList.add('editing');
+          li.classList.contains('editing') ? collapseRow(li) : li.classList.add('editing');
         });
       });
-      currentEl.querySelectorAll('.cancel').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); b.closest('li').classList.remove('editing'); }));
+      currentEl.querySelectorAll('.cancel').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); collapseRow(b.closest('li')); }));
       currentEl.querySelectorAll('.save').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); saveEdit(b.closest('li')); }));
       currentEl.querySelectorAll('.remove').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); removeItem(b.closest('li')); }));
       currentEl.querySelectorAll('.ask-btn').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); askItem(b.closest('li')); }));
@@ -908,6 +917,15 @@
       }
     }
 
+    function caret() { return '<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'; }
+
+    // Every render puts the stored values in the markup, so an input's
+    // defaultValue is what the drawer says and closing the row restores it.
+    function collapseRow(li) {
+      li.classList.remove('editing');
+      li.querySelectorAll('.edit-form input, .edit-form textarea').forEach(f => { f.value = f.defaultValue; });
+    }
+
     function renderItemRow(it, idx) {
       const tags = (it.tags || []).map(t => '<span class="tag">' + esc(t) + '</span>').join('');
       const qty = it.qty_estimate == null ? 1 : it.qty_estimate;
@@ -929,6 +947,7 @@
             '<span class="qty">&times;<span class="n">' + qty + '</span></span>' +
             '<button type="button" class="step plus" title="Put one back">+</button>' +
           '</div>' +
+          caret() +
         '</div>' +
         '<div class="edit-form">' +
           '<label>Name</label><input class="f-name" type="text" value="' + esc(it.name || '') + '">' +

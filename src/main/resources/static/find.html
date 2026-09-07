@@ -59,7 +59,12 @@
     .editing .take { display: none; }
     .pn-line { margin-top: .2rem; }
     .tags-line { margin-top: .3rem; }
-    .editing .row, .editing .pn-line, .editing .tags-line { display: none; }
+    /* The header stays when a row is open — it is the handle that closes it —
+       and only the lines the form repeats give way. */
+    .editing .row { cursor: pointer; padding-bottom: .6rem; margin-bottom: .2rem; border-bottom: 1px solid var(--border); }
+    .editing .pn-line, .editing .tags-line { display: none; }
+    .caret { flex: 0 0 auto; width: 20px; height: 20px; color: var(--muted); transition: transform .15s ease; }
+    .editing .caret { transform: rotate(180deg); color: var(--primary); }
     .edit-form { display: none; flex-direction: column; gap: .35rem; }
     .editing .edit-form { display: flex; }
     .edit-form label { font-size: .7rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: .35rem; }
@@ -360,6 +365,10 @@
       if (n) n.textContent = qty;
       const minus = li.querySelector('.minus');
       if (minus) minus.disabled = qty <= 0;
+      // The form's count follows the stepper, so opening the row shows the
+      // number just taken to and closing it does not put the old one back.
+      const f = li.querySelector('.f-qty_estimate');
+      if (f) f.value = f.defaultValue = String(qty);
     }
 
     async function save(key) {
@@ -517,6 +526,15 @@
       return photoUrl(fn) + '?w=' + w;
     }
 
+    function caret() { return '<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'; }
+
+    // Every render puts the stored values in the markup, so an input's
+    // defaultValue is what the drawer says and closing the row restores it.
+    function collapseRow(li) {
+      li.classList.remove('editing');
+      li.querySelectorAll('.edit-form input, .edit-form textarea').forEach(f => { f.value = f.defaultValue; });
+    }
+
     function renderHitItem(h, g) {
       const it = h.item || {};
       const tags = (it.tags || []).map(t => '<span class="tag">' + esc(t) + '</span>').join('');
@@ -539,6 +557,7 @@
             '<span class="qty">&times;<span class="n">' + qty + '</span></span>' +
             '<button type="button" class="step plus" title="Put one back">+</button>' +
           '</div>' +
+          caret() +
         '</div>' +
         '<div class="edit-form">' +
           '<label>Name</label><input class="f-name" type="text" value="' + esc(it.name || '') + '">' +
@@ -683,18 +702,19 @@
     }
 
     function wireEvents() {
+      // The header opens the row and closes it again; Cancel closes it too,
+      // and puts back whatever was typed over.
       hits.querySelectorAll('.items > li').forEach(li => {
         li.addEventListener('click', ev => {
-          if (li.classList.contains('editing')) return;
           if (ev.target.closest('.edit-form')) return;
-          li.classList.add('editing');
+          li.classList.contains('editing') ? collapseRow(li) : li.classList.add('editing');
         });
       });
       hits.querySelectorAll('.step').forEach(b => b.addEventListener('click', e => {
         e.stopPropagation();                       // taking stock must not open the form
         adjust(b.closest('li'), b.classList.contains('minus') ? -1 : 1);
       }));
-      hits.querySelectorAll('.cancel').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); b.closest('li').classList.remove('editing'); }));
+      hits.querySelectorAll('.cancel').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); collapseRow(b.closest('li')); }));
       hits.querySelectorAll('.save').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); saveHit(b.closest('li')); }));
       hits.querySelectorAll('.remove').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); removeHit(b.closest('li')); }));
       hits.querySelectorAll('.ask-btn').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); askHit(b.closest('li')); }));
