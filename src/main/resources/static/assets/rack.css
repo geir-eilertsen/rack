@@ -392,6 +392,11 @@ label.field {
 .qa-log { list-style: none; padding: 0; margin: 0 0 .5rem; }
 .qa-log > li { padding: .55rem .7rem; background: var(--bg); border-radius: var(--radius-xs); margin-bottom: .4rem; font-size: .85rem; border: 1px solid var(--border); }
 .qa-log .q { color: var(--muted); margin-bottom: .3rem; font-style: italic; }
+.qa-log .q { display: flex; align-items: flex-start; gap: .5rem; }
+.qa-log .q > span { flex: 1 1 auto; }
+.qa-log .qa-drop { flex: 0 0 auto; background: transparent; border: none; color: var(--error);
+  font-size: 1rem; line-height: 1; cursor: pointer; padding: 0 .3rem; font-style: normal; }
+.qa-log .qa-drop:disabled { opacity: .4; cursor: default; }
 .qa-log .a p { margin: 0 0 .5em; }
 .qa-log .a p:last-child { margin-bottom: 0; }
 .qa-log .a ul { margin: .3em 0; padding-left: 1.4em; }

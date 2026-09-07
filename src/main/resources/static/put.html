@@ -709,6 +709,7 @@
       currentEl.querySelectorAll('.remove').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); removeItem(b.closest('li')); }));
       currentEl.querySelectorAll('.ask-btn').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); askItem(b.closest('li')); }));
       currentEl.querySelectorAll('.ai-q').forEach(inp => inp.addEventListener('click', e => e.stopPropagation()));
+      currentEl.querySelectorAll('li[data-idx]').forEach(wireQaLog);
       // The block replaces itself from the slot the server returns; the count in
       // the resync bar is the only thing out here that cares.
       rackItemDocs.wire(currentEl, slot => { slotItemCount = (slot.items || []).length; });
@@ -895,8 +896,7 @@
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const slot = await res.json();
         const latestItem = slot.items[idx];
-        const latestQA = (latestItem.qa || []).slice(-1)[0];
-        appendQaEntry(li, latestQA);
+        replaceQaLog(li, latestItem.qa);
         if (window.rackUsage) rackUsage.refresh();
       } catch (e) {
         setStatus('error', 'Ask failed: ' + e.message);
@@ -906,20 +906,6 @@
         input.value = '';
         input.focus();
       }
-    }
-
-    function appendQaEntry(li, entry) {
-      if (!entry) return;
-      const ai = li.querySelector('.ai');
-      let log = ai.querySelector('.qa-log');
-      if (!log) {
-        log = document.createElement('ul');
-        log.className = 'qa-log';
-        ai.insertBefore(log, ai.querySelector('.ai-input'));
-      }
-      const item = document.createElement('li');
-      item.innerHTML = '<div class="q">Q: ' + esc(entry.question) + '</div><div class="a">' + md(entry.answer) + '</div>';
-      log.appendChild(item);
     }
 
     function renderItemRow(it, idx) {
@@ -1006,18 +992,55 @@
 
     function renderQaLog(qa) {
       if (!qa.length) return '';
-      const recent = qa.slice(-2);
-      const older = qa.slice(0, -2);
+      // Each entry carries its position in the whole list, because that is
+      // what forgetting one has to name, and the split into recent and older
+      // is only how they are shown.
+      const rows = qa.map((x, n) => qaItem(x, n));
+      const recent = rows.slice(-2);
+      const older = rows.slice(0, -2);
       const olderHtml = older.length
         ? '<details class="qa-history"><summary>Show ' + older.length + ' earlier question' + (older.length === 1 ? '' : 's') + '</summary>' +
-            '<ul class="qa-log">' + older.map(qaItem).join('') + '</ul>' +
+            '<ul class="qa-log">' + older.join('') + '</ul>' +
           '</details>'
         : '';
-      return olderHtml + '<ul class="qa-log">' + recent.map(qaItem).join('') + '</ul>';
+      return olderHtml + '<ul class="qa-log">' + recent.join('') + '</ul>';
     }
 
-    function qaItem(x) {
-      return '<li><div class="q">Q: ' + esc(x.question) + '</div><div class="a">' + md(x.answer) + '</div></li>';
+    // The × is how a wrong answer leaves: it is kept beside the item as if it
+    // were fact, and searched, so a confident mistake needs a way out.
+    function qaItem(x, n) {
+      return '<li><div class="q"><span>Q: ' + esc(x.question) + '</span>' +
+        '<button type="button" class="qa-drop" title="Forget this answer" data-qa="' + n + '">&times;</button></div>' +
+        '<div class="a">' + md(x.answer) + '</div></li>';
+    }
+
+    // Redraws the log from the item the server returned, so what is shown is
+    // what is stored — after a question and after forgetting one alike.
+    function replaceQaLog(li, qa) {
+      const ai = li.querySelector('.ai');
+      ai.querySelectorAll(':scope > .qa-history, :scope > .qa-log').forEach(el => el.remove());
+      ai.querySelector('.ai-input').insertAdjacentHTML('beforebegin', renderQaLog(qa || []));
+      wireQaLog(li);
+    }
+
+    function wireQaLog(li) {
+      li.querySelectorAll('.qa-drop').forEach(b => b.addEventListener('click', e => {
+        e.stopPropagation();
+        forgetAnswer(li, +b.dataset.qa, b);
+      }));
+    }
+
+    async function forgetAnswer(li, n, btn) {
+      btn.disabled = true;
+      try {
+        const res = await fetch('/c/' + selectedContainer.id + '/' + selectedSlot + '/items/' + li.dataset.idx + '/qa/' + n, { method: 'DELETE' });
+        if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+        const slot = await res.json();
+        replaceQaLog(li, (slot.items[+li.dataset.idx] || {}).qa);
+      } catch (e) {
+        btn.disabled = false;
+        setStatus('error', 'Forget failed: ' + e.message);
+      }
     }
 
     function md(text) {

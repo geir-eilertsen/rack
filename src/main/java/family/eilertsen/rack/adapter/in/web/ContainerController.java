@@ -7,6 +7,7 @@ import family.eilertsen.rack.application.ContainerRegistry;
 import family.eilertsen.rack.application.DeleteContainer;
 import family.eilertsen.rack.application.EditItem;
 import family.eilertsen.rack.application.FindCompanions;
+import family.eilertsen.rack.application.ForgetAnswer;
 import family.eilertsen.rack.application.MergeItems;
 import family.eilertsen.rack.application.MoveItem;
 import family.eilertsen.rack.application.RegisterContainer;
@@ -54,6 +55,7 @@ public class ContainerController {
     private final MergeItems mergeItems;
     private final RemovePhoto removePhoto;
     private final AskAboutItem askAboutItem;
+    private final ForgetAnswer forgetAnswer;
     private final KeepDocuments documents;
     private final FindCompanions companions;
 
@@ -62,7 +64,8 @@ public class ContainerController {
                                 DeleteContainer deleteContainer, RemoveItem removeItem,
                                 EditItem editItem, MoveItem moveItem, MergeItems mergeItems,
                                 RemovePhoto removePhoto, AskAboutItem askAboutItem,
-                                KeepDocuments documents, FindCompanions companions, Batches batches) {
+                                ForgetAnswer forgetAnswer, KeepDocuments documents,
+                                FindCompanions companions, Batches batches) {
         this.batches = batches;
         this.registry = registry;
         this.index = index;
@@ -76,6 +79,7 @@ public class ContainerController {
         this.mergeItems = mergeItems;
         this.removePhoto = removePhoto;
         this.askAboutItem = askAboutItem;
+        this.forgetAnswer = forgetAnswer;
         this.documents = documents;
         this.companions = companions;
     }
@@ -353,6 +357,21 @@ public class ContainerController {
     }
 
     public record AskRequest(String question) {}
+
+    /**
+     * Drops one exchange from an item's Q&amp;A. A stored answer is read as fact
+     * every time the row is opened, and searched, so a wrong one needs a way out.
+     * {@code n} is the exchange's position in the item's list.
+     */
+    @DeleteMapping("/{container}/{slot}/items/{index}/qa/{n}")
+    public Slot forgetAnswer(@PathVariable String container,
+                             @PathVariable String slot,
+                             @PathVariable int index,
+                             @PathVariable int n) {
+        ContainerId cid = new ContainerId(container);
+        requireContainerExists(cid);
+        return forgetAnswer.execute(cid, new SlotId(slot), index, n);
+    }
 
     private void requireContainerExists(ContainerId id) {
         registry.get(id)
