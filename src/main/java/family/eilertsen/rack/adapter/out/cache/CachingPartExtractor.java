@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
@@ -55,25 +56,30 @@ public class CachingPartExtractor implements PartExtractor {
     }
 
     @Override
-    public List<Extraction> extract(List<byte[]> images) {
-        String key = fingerprint(images);
-        if (key == null) return delegate.extract(images);
+    public List<Extraction> extract(List<byte[]> images, String note) {
+        String key = fingerprint(images, note);
+        if (key == null) return delegate.extract(images, note);
 
         List<Extraction> cached = byBatch.get(key);
         if (cached != null) {
             log.debug("Reusing the reading of a batch of {} photo(s)", images.size());
             return cached;
         }
-        List<Extraction> extracted = delegate.extract(images);
+        List<Extraction> extracted = delegate.extract(images, note);
         byBatch.put(key, extracted);
         return extracted;
     }
 
-    /** Null when the digest is unavailable — then it is simply not cached. */
-    private static String fingerprint(List<byte[]> images) {
+    /**
+     * Null when the digest is unavailable — then it is simply not cached. The
+     * note is part of the key: the same photos with something different said
+     * about them are a different question, and the reading has to change.
+     */
+    private static String fingerprint(List<byte[]> images, String note) {
         if (images == null || images.isEmpty()) return null;
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            if (note != null && !note.isBlank()) digest.update(note.strip().getBytes(StandardCharsets.UTF_8));
             for (byte[] image : images) {
                 // Length as well as content: without it two batches whose frames
                 // are the same bytes differently divided would collide.

@@ -95,6 +95,9 @@
        drops items and deletes the drawer's old photos, and neither comes back,
        so the whole proposal is on screen and the consequence is spelled out
        above the button that does it. */
+    .note { margin-top: .85rem; }
+    .note label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .3rem; }
+    .note input { width: 100%; box-sizing: border-box; }
     #resyncBar { margin-top: .75rem; }
     /* Filing appends, so topping a drawer up leaves the thing in two rows.
        Joining them is a person's call, made here rather than guessed at. */
@@ -168,6 +171,13 @@
     </label>
 
     <div id="pending" class="pending"></div>
+    <!-- What the camera cannot see. A photograph does not show a thread pitch
+         or a length, and the model guesses them badly; the person holding the
+         screw has just measured it. Sent with the batch and read as fact. -->
+    <div class="note" id="noteWrap" hidden>
+      <label for="note">Anything the camera can't read?</label>
+      <input type="text" id="note" placeholder="e.g. M4 × 20 mm, 0.75 mm², 10 kΩ" autocomplete="off" enterkeyhint="done">
+    </div>
     <button class="btn primary block" id="fileBtn" style="margin-top:.75rem" hidden></button>
     <div class="status" id="status"></div>
 
@@ -223,6 +233,8 @@
     const captureLabel = document.getElementById('captureLabel');
     const photo = document.getElementById('photo');
     const pendingEl = document.getElementById('pending');
+    const noteWrap = document.getElementById('noteWrap');
+    const noteInput = document.getElementById('note');
     const fileBtn = document.getElementById('fileBtn');
     const status = document.getElementById('status');
     const extractedHeading = document.getElementById('extractedHeading');
@@ -428,6 +440,11 @@
       // While a proposal is on screen the confirm button below it is the only
       // thing that may act on this batch — two live actions over one set of
       // photos is how a drawer gets both replaced and re-filed.
+      // The note lives with the batch: shown while there is one, locked while
+      // a proposal read with it is on screen, since changing it then would
+      // send the apply a different batch than the one previewed.
+      noteWrap.hidden = !n;
+      noteInput.disabled = !!resyncProposal;
       if (!n || resyncProposal) {
         fileBtn.hidden = true;
         return;
@@ -491,6 +508,7 @@
     function clearPending() {
       pendingPhotos.forEach(p => window.rackPhotos.drop(p.id));
       pendingPhotos = [];
+      noteInput.value = '';
       renderPending();
     }
 
@@ -1398,6 +1416,13 @@
           + (n === 1 ? 'it' : 'them') + ' now.');
     });
 
+    noteInput.addEventListener('keydown', ev => {
+      if (ev.key !== 'Enter' || fileBtn.hidden || fileBtn.disabled) return;
+      ev.preventDefault();
+      noteInput.blur();
+      fileBtn.click();
+    });
+
     fileBtn.addEventListener('click', () => {
       if (!pendingPhotos.length) return;
       if (resyncMode) {
@@ -1412,6 +1437,10 @@
     function appendPending(form) {
       // One field name repeated: the server binds it as the batch.
       pendingPhotos.forEach(p => form.append('staged', p.id));
+      // And what was said about it, so a suggestion and the file after it
+      // read the same batch — the server's cache keys on both.
+      const note = noteInput.value.trim();
+      if (note) form.append('note', note);
     }
 
     async function suggestAndPick() {

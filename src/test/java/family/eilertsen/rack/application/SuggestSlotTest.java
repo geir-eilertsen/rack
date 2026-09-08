@@ -194,7 +194,7 @@ class SuggestSlotTest {
         }
 
         @Override
-        public List<Extraction> extract(List<byte[]> images) {
+        public List<Extraction> extract(List<byte[]> images, String note) {
             return result;
         }
     }

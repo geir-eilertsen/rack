@@ -57,6 +57,65 @@ class AddPhotoToSlotTest {
     }
 
     @Test
+    void whatWasSaidAboutTheBatchReachesTheReading() {
+        // A photograph does not show a thread pitch or a length; the person
+        // holding the screw has just measured it, and that measurement has to
+        // reach the model as a fact rather than be typed into the row afterwards.
+        extractor.returns(new Extraction(item("M4 × 20 mm hex bolts"), 0));
+
+        addPhoto.execute(RACK, A1, List.of(photo("bag")), "M4 x 20 mm");
+
+        assertThat(extractor.notes).containsExactly("M4 x 20 mm");
+    }
+
+    @Test
+    void aOneItemReadingThatDroppedTheNoteIsGivenItBack() {
+        // The model was asked to write the note into the item. Asking is a guess
+        // about the next reply; a batch that read as one item can only be about
+        // that item, so the note goes on it regardless.
+        extractor.returns(new Extraction(item("M4 hex bolts"), 0));
+
+        addPhoto.execute(RACK, A1, List.of(photo("bag")), "M4 x 20 mm");
+
+        Item filed = index.get(RACK, A1).orElseThrow().items().get(0);
+        assertThat(filed.description()).isEqualTo("M4 hex bolts — M4 x 20 mm");
+    }
+
+    @Test
+    void aNoteTheModelRewroteInItsOwnTypographyIsNotAppendedAgain() {
+        // "M4 x 20 mm" comes back as "M4×20mm"; that is the note, not a reading
+        // that lost it, and printing it twice would say the app did not notice.
+        extractor.returns(new Extraction(item("M4×20mm hex bolts, zinc"), 0));
+
+        addPhoto.execute(RACK, A1, List.of(photo("bag")), "M4 x 20 mm");
+
+        Item filed = index.get(RACK, A1).orElseThrow().items().get(0);
+        assertThat(filed.description()).isEqualTo("M4×20mm hex bolts, zinc");
+    }
+
+    @Test
+    void severalItemsAreLeftToTheModelToPlaceTheNoteOn() {
+        // Which of the two the note describes is the judgement the model was
+        // shown the photos to make; the app has no picture to decide it with.
+        extractor.returns(new Extraction(item("hex bolts"), 0), new Extraction(item("washers"), 0));
+
+        addPhoto.execute(RACK, A1, List.of(photo("bag")), "M4 x 20 mm");
+
+        assertThat(index.get(RACK, A1).orElseThrow().items())
+            .extracting(Item::description)
+            .containsExactly("hex bolts", "washers");
+    }
+
+    @Test
+    void aBlankNoteIsNoNote() {
+        extractor.returns(new Extraction(item("hex bolts"), 0));
+
+        addPhoto.execute(RACK, A1, List.of(photo("bag")), "   ");
+
+        assertThat(index.get(RACK, A1).orElseThrow().items().get(0).description()).isEqualTo("hex bolts");
+    }
+
+    @Test
     void aFrameNothingWasReadFromIsNotKept() {
         // Items own photographs, so a frame the extraction attributed nothing to
         // has nothing to hang off. The model was looking straight at it when it
@@ -218,6 +277,7 @@ class AddPhotoToSlotTest {
 
     private static final class FakeExtractor implements PartExtractor {
         private final List<List<String>> calls = new ArrayList<>();
+        private final List<String> notes = new ArrayList<>();
         private List<Extraction> result = List.of();
 
         void returns(Extraction... extractions) {
@@ -225,8 +285,9 @@ class AddPhotoToSlotTest {
         }
 
         @Override
-        public List<Extraction> extract(List<byte[]> images) {
+        public List<Extraction> extract(List<byte[]> images, String note) {
             calls.add(images.stream().map(b -> new String(b, StandardCharsets.UTF_8)).toList());
+            notes.add(note);
             return result;
         }
     }

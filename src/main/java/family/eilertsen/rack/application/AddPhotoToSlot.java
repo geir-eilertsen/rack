@@ -39,6 +39,16 @@ public class AddPhotoToSlot {
      * a frame nothing on screen explains.
      */
     public Result execute(ContainerId container, SlotId slot, List<Photo> photos) {
+        return execute(container, slot, photos, null);
+    }
+
+    /**
+     * {@code note} is what the person said about the parts that the camera
+     * could not see — the length of the screws, the gauge of the wire. It goes
+     * to the model as fact and {@link FilingNote} makes sure a one-item reading
+     * carries it.
+     */
+    public Result execute(ContainerId container, SlotId slot, List<Photo> photos, String note) {
         if (photos == null || photos.isEmpty()) {
             throw new IllegalArgumentException("at least one photo is required");
         }
@@ -47,7 +57,8 @@ public class AddPhotoToSlot {
             .map(p -> images.store(p.bytes(), p.contentType()))
             .toList();
 
-        List<Extraction> extractions = extractor.extract(photos.stream().map(Photo::bytes).toList());
+        List<Extraction> extractions = FilingNote.ensure(
+            extractor.extract(photos.stream().map(Photo::bytes).toList(), note), note);
         List<Item> extracted = extractions.stream()
             .map(e -> stampSource(e.item(), framesOf(e, filenames)))
             .toList();

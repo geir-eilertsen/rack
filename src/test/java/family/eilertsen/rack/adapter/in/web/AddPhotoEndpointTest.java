@@ -113,6 +113,16 @@ class AddPhotoEndpointTest {
         assertThat(extractor.calls.get(0)).containsExactly("only");
     }
 
+    @Test
+    void aNoteFieldRidesWithTheBatch() throws Exception {
+        extractor.returns(new Extraction(item("M4 × 20 mm hex bolts"), 0));
+
+        mvc.perform(multipart("/c/rack/A1/photo").file(part("bag")).param("note", "M4 x 20 mm"))
+            .andExpect(status().isOk());
+
+        assertThat(extractor.notes).containsExactly("M4 x 20 mm");
+    }
+
     private static MockMultipartFile part(String marker) {
         return new MockMultipartFile("photo", marker + ".jpg", "image/jpeg", marker.getBytes(StandardCharsets.UTF_8));
     }
@@ -156,6 +166,7 @@ class AddPhotoEndpointTest {
 
     private static final class FakeExtractor implements PartExtractor {
         private final List<List<String>> calls = new ArrayList<>();
+        private final List<String> notes = new ArrayList<>();
         private List<Extraction> result = List.of();
 
         void returns(Extraction... extractions) {
@@ -163,8 +174,9 @@ class AddPhotoEndpointTest {
         }
 
         @Override
-        public List<Extraction> extract(List<byte[]> images) {
+        public List<Extraction> extract(List<byte[]> images, String note) {
             calls.add(images.stream().map(b -> new String(b, StandardCharsets.UTF_8)).toList());
+            notes.add(note);
             return result;
         }
     }

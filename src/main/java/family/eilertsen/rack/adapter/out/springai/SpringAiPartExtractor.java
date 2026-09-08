@@ -55,6 +55,28 @@ public class SpringAiPartExtractor implements PartExtractor {
         Return ONLY the JSON array. No prose, no markdown, no code fences.
         """;
 
+    /**
+     * What the person filing said about the parts. A photograph does not show a
+     * thread pitch, a length or a wire gauge, and the model guesses them badly
+     * and confidently — so where the note speaks, it is the measurement and the
+     * picture is the illustration.
+     */
+    private static final String NOTE = """
+
+        The person filing these photos measured or read something the camera
+        cannot show, and says of what is in them:
+
+        %s
+
+        Treat that as fact over anything you infer from the picture — a
+        dimension, thread, gauge, rating or value in it replaces your own
+        estimate of the same thing. Put it in the name and the description of
+        the item it describes, in the form given ("M4 × 20 mm hex bolts"). When
+        the photos hold several items, put it only on the one it plainly
+        describes. It is not a printed marking, so it does not go in
+        part_number unless it plainly is one.
+        """;
+
     private final ChatClient chat;
     private final ObjectMapper mapper;
     private final UsageLog usage;
@@ -76,7 +98,7 @@ public class SpringAiPartExtractor implements PartExtractor {
     }
 
     @Override
-    public List<Extraction> extract(List<byte[]> images) {
+    public List<Extraction> extract(List<byte[]> images, String note) {
         if (images == null || images.isEmpty()) {
             throw new IllegalArgumentException("at least one image is required");
         }
@@ -88,7 +110,8 @@ public class SpringAiPartExtractor implements PartExtractor {
                 .build())
             .toArray(Media[]::new);
 
-        String prompt = PROMPT.formatted(images.size(), images.size() - 1);
+        String prompt = PROMPT.formatted(images.size(), images.size() - 1)
+            + (note == null || note.isBlank() ? "" : NOTE.formatted(note.strip()));
 
         ChatResponse response = chat.prompt()
             .options(options)

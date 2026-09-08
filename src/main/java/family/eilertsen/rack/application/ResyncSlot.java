@@ -50,10 +50,19 @@ public class ResyncSlot {
      * not leave frames behind for the real run to have to clean up.
      */
     public Preview preview(ContainerId container, SlotId slot, List<byte[]> photos) {
+        return preview(container, slot, photos, null);
+    }
+
+    /**
+     * {@code note} is what the person said that the photos cannot show, and
+     * reaches the reading the way it does when filing. A matched item keeps its
+     * own wording, so the note only lands on what the resync adds.
+     */
+    public Preview preview(ContainerId container, SlotId slot, List<byte[]> photos, String note) {
         requireBatch(photos);
 
         List<Item> current = currentItems(container, slot);
-        List<Extraction> extractions = extractor.extract(photos);
+        List<Extraction> extractions = FilingNote.ensure(extractor.extract(photos, note), note);
         int[] pairedWith = pair(current, extractions);
 
         List<Matched> matched = new ArrayList<>();

@@ -342,7 +342,7 @@ class ResyncSlotTest {
         }
 
         @Override
-        public List<Extraction> extract(List<byte[]> images) {
+        public List<Extraction> extract(List<byte[]> images, String note) {
             calls.add(images.stream().map(b -> new String(b, StandardCharsets.UTF_8)).toList());
             return result;
         }

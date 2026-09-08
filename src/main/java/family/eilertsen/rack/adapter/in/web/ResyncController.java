@@ -48,12 +48,13 @@ public class ResyncController {
     public ResyncSlot.Preview preview(@PathVariable String container,
                                        @PathVariable String slot,
                                        @RequestParam(value = "photo", required = false) List<MultipartFile> photos,
-                                       @RequestParam(value = "staged", required = false) List<String> staged) throws IOException {
+                                       @RequestParam(value = "staged", required = false) List<String> staged,
+                                       @RequestParam(value = "note", required = false) String note) throws IOException {
         ContainerId cid = new ContainerId(container);
         SlotId sid = new SlotId(slot);
         requireContainerExists(cid);
         try {
-            return resync.preview(cid, sid, batches.bytes(photos, staged));
+            return resync.preview(cid, sid, batches.bytes(photos, staged), note);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         }

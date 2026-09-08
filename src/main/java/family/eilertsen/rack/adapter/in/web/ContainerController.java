@@ -162,20 +162,22 @@ public class ContainerController {
     /**
      * Repeated {@code photo} parts file a whole batch at once; a single part is
      * just a batch of one. Repeated {@code staged} ids name frames uploaded
-     * when they were shot, and those are released once the batch is filed.
+     * when they were shot, and those are released once the batch is filed. An
+     * optional {@code note} is what the person says the camera cannot see.
      */
     @PostMapping(value = "/{container}/{slot}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AddPhotoToSlot.Result addPhoto(@PathVariable String container,
                                            @PathVariable String slot,
                                            @RequestParam(value = "photo", required = false) List<MultipartFile> photos,
-                                           @RequestParam(value = "staged", required = false) List<String> staged) throws IOException {
+                                           @RequestParam(value = "staged", required = false) List<String> staged,
+                                           @RequestParam(value = "note", required = false) String note) throws IOException {
         ContainerId cid = new ContainerId(container);
         SlotId sid = new SlotId(slot);
         requireContainerExists(cid);
         List<AddPhotoToSlot.Photo> batch = batches.photos(photos, staged);
         AddPhotoToSlot.Result result;
         try {
-            result = addPhoto.execute(cid, sid, batch);
+            result = addPhoto.execute(cid, sid, batch, note);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         }

@@ -21,10 +21,15 @@ public class SuggestController {
         this.batches = batches;
     }
 
-    /** Photo parts or staged ids, as everywhere a batch is taken in. A suggestion files nothing, so the staged copies stay. */
+    /**
+     * Photo parts or staged ids, as everywhere a batch is taken in, plus the
+     * optional {@code note} the file that follows will send again. A suggestion
+     * files nothing, so the staged copies stay.
+     */
     @PostMapping(value = "/suggest", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public SuggestSlot.Result suggest(@RequestParam(value = "photo", required = false) List<MultipartFile> photos,
-                                      @RequestParam(value = "staged", required = false) List<String> staged) throws IOException {
-        return suggest.execute(batches.bytes(photos, staged));
+                                      @RequestParam(value = "staged", required = false) List<String> staged,
+                                      @RequestParam(value = "note", required = false) String note) throws IOException {
+        return suggest.execute(batches.bytes(photos, staged), note);
     }
 }

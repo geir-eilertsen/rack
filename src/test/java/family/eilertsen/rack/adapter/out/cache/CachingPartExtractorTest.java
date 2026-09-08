@@ -44,6 +44,18 @@ class CachingPartExtractorTest {
     }
 
     @Test
+    void theSamePhotosWithSomethingDifferentSaidAboutThemAreADifferentReading() {
+        // The note changes what the model is told is true, so a reading made
+        // without it cannot be handed to a batch that carries it.
+        extractor.extract(batch("bag"));
+        extractor.extract(batch("bag"), "M4 x 20 mm");
+        extractor.extract(batch("bag"), "M4 x 20 mm");
+        extractor.extract(batch("bag"), "M4 x 16 mm");
+
+        assertThat(vision.calls).isEqualTo(3);
+    }
+
+    @Test
     void theSameFramesInADifferentOrderAreADifferentBatch() {
         // Order is what image_indexes point into, so a reading of one order
         // cannot be handed to the other.
@@ -88,7 +100,7 @@ class CachingPartExtractorTest {
         private int calls;
 
         @Override
-        public List<Extraction> extract(List<byte[]> images) {
+        public List<Extraction> extract(List<byte[]> images, String note) {
             calls++;
             return List.of(new Extraction(
                 new Item("thing", "a thing", null, "other", 1, 0.9, List.of(), List.of(), null, null, List.of()), 0));

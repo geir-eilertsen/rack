@@ -47,10 +47,20 @@ public class SuggestSlot {
     }
 
     public Result execute(List<byte[]> photos) {
+        return execute(photos, null);
+    }
+
+    /**
+     * {@code note} is what the person said the camera cannot see. It shapes the
+     * reading here for the same reason it does when filing — and because the
+     * cache keys on it, the file that follows this suggestion reads the same.
+     */
+    public Result execute(List<byte[]> photos, String note) {
         if (photos == null || photos.isEmpty()) {
             throw new IllegalArgumentException("at least one photo is required");
         }
-        List<Item> extracted = extractor.extract(photos).stream().map(Extraction::item).toList();
+        List<Item> extracted = FilingNote.ensure(extractor.extract(photos, note), note)
+            .stream().map(Extraction::item).toList();
         Map<Key, Bucket> buckets = new LinkedHashMap<>();
 
         for (Item queried : extracted) {
