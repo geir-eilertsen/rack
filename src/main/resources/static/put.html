@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/assets/itemdocs.css">
   <link rel="stylesheet" href="/assets/companions.css">
   <script src="/assets/photos.js"></script>
+  <script src="/assets/camera.js"></script>
   <script src="/assets/slots.js"></script>
   <script src="/assets/route.js"></script>
   <script src="/assets/itemdocs.js"></script>
@@ -161,7 +162,7 @@
     </div>
 
     <h2 id="captureHeading">Take a photo</h2>
-    <label class="capture">
+    <label class="capture" id="capture">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
         <circle cx="12" cy="13" r="4"/>
@@ -1381,10 +1382,17 @@
       }
     }
 
-    photo.addEventListener('change', async () => {
-      const files = Array.from(photo.files || []);
+    // The camera is drawn in the page rather than borrowed from the phone (see
+    // assets/camera.js): a photo taken in the camera app was sometimes lost
+    // with the page when the phone reclaimed rack behind it. Each shot lands
+    // here as it is taken, so the strip fills while the viewfinder is still up.
+    rackCamera.claim(document.getElementById('capture'), photo, {
+      title: () => (resyncMode ? 'Everything in ' : '') + (here() || 'Take a photo'),
+      each: takeIn
+    });
+
+    async function takeIn(files) {
       if (!files.length) return;
-      photo.value = '';
       discardProposal();
 
       // Status first so mobile paints before the resize work starts.
@@ -1402,7 +1410,7 @@
           renderPending();
           refreshUiForSelection();
           setStatus('error', 'Upload failed on photo ' + (i + 1) + ' of ' + files.length + ': ' + e.message);
-          return;
+          throw e;        // and the viewfinder, if it is up, says so too
         }
         renderPending();
       }
@@ -1414,7 +1422,7 @@
           + (n === 1 ? 'it' : 'them') + ' against the list now.'
         : n + ' photo' + (n === 1 ? '' : 's') + ' ready — add the label or another angle, or file '
           + (n === 1 ? 'it' : 'them') + ' now.');
-    });
+    }
 
     noteInput.addEventListener('keydown', ev => {
       if (ev.key !== 'Enter' || fileBtn.hidden || fileBtn.disabled) return;

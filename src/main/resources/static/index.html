@@ -10,6 +10,7 @@
   <meta name="theme-color" content="#d97747">
   <link rel="stylesheet" href="/assets/rack.css">
   <script src="/assets/photos.js"></script>
+  <script src="/assets/camera.js"></script>
   <script src="/assets/slots.js"></script>
   <script src="/assets/route.js"></script>
 </head>
@@ -187,21 +188,27 @@
       const input = document.getElementById('addPhoto');
       const hint = document.getElementById('addHint');
       const original = hint.textContent;
-      input.addEventListener('change', async () => {
-        const files = [...input.files];
-        input.value = '';
-        if (!files.length) return;
-        try {
-          await window.rackPhotos.stage(files, null, (n, total) => {
-            hint.textContent = total === 1 ? 'Uploading photo…' : 'Uploading ' + n + ' of ' + total + '…';
-          });
-          location.href = '/put.html';
-        } catch (e) {
-          // The photograph did not arrive, so there is nothing on the other
-          // page to go to. Say so here, where the camera is one tap away.
-          hint.textContent = 'Upload failed: ' + e.message + ' — tap to try again.';
-          setTimeout(() => { hint.textContent = original; }, 8000);
-        }
+      let staged = 0;
+      // The viewfinder is the page's own (assets/camera.js), so a batch of
+      // several is shot without leaving; the filing page is opened once it
+      // closes with something in it.
+      rackCamera.claim(document.getElementById('addCard'), input, {
+        title: 'Add an item',
+        each: async files => {
+          try {
+            await window.rackPhotos.stage(files, null, (n, total) => {
+              hint.textContent = total === 1 ? 'Uploading photo…' : 'Uploading ' + n + ' of ' + total + '…';
+            });
+            staged += files.length;
+          } catch (e) {
+            // The photograph did not arrive, so there is nothing on the other
+            // page to go to. Say so here, where the camera is one tap away.
+            hint.textContent = 'Upload failed: ' + e.message + ' — tap to try again.';
+            setTimeout(() => { hint.textContent = original; }, 8000);
+            throw e;
+          }
+        },
+        done: () => { if (staged) location.href = '/put.html'; }
       });
     })();
 

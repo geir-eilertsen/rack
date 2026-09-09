@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/assets/itemdocs.css">
   <link rel="stylesheet" href="/assets/companions.css">
   <script src="/assets/photos.js"></script>
+  <script src="/assets/camera.js"></script>
   <script src="/assets/slots.js"></script>
   <script src="/assets/route.js"></script>
   <script src="/assets/places.js"></script>
@@ -409,10 +410,18 @@
     // Searching by photo is for the part in your hand that you cannot name, so
     // there is nothing to type and nothing to widen a second time — one request,
     // and the vision model's reading of the part becomes the query.
-    shoot.addEventListener('click', () => photo.click());
-    photo.addEventListener('change', async () => {
-      const files = [...photo.files];
-      photo.value = '';
+    // The viewfinder is the page's own (assets/camera.js) where there is a
+    // touch screen, and the file input elsewhere; both hand the frames here.
+    // Several shots are one search, sent when the viewfinder closes.
+    let held = [];
+    shoot.addEventListener('click', () => { if (!rackCamera.usable()) photo.click(); });
+    rackCamera.claim(shoot, photo, {
+      title: 'What is this?',
+      each: files => { held.push(...files); },
+      done: () => { const files = held; held = []; searchByPhoto(files); }
+    });
+
+    async function searchByPhoto(files) {
       if (!files.length) return;
 
       clearTimeout(debounce);
@@ -441,7 +450,7 @@
       } finally {
         shoot.disabled = false;
       }
-    });
+    }
 
     function renderHits(results, query, expanded) {
       const alsoTried = expanded.length

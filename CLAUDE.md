@@ -397,7 +397,7 @@ Gone items are removed rather than zeroed, and the old photos are deleted — af
 
 ### Deployment
 
-- Frontend: PWA (`getUserMedia` for camera).
+- Frontend: PWA. The camera is `getUserMedia` in the page on touch devices (see *The camera is drawn in the page*), a file input elsewhere.
 - Fronted by Vaier, a home-network reverse proxy that terminates TLS and forwards to the container on the box. The hostname and the address behind it are in the deploy skill under `.claude/`, which is not in the repository — this file is public and an inventory of somebody's garage is not improved by advertising where it lives. It challenges unauthenticated requests, so a **401 from the public URL is the proxy working, not the app failing** — verify against `localhost:8080` and treat the public check as proof only that the proxy still reaches the box.
 - Run with `-v /home/geir/rack/data:/app/data` so slot JSON, photos, and printed label sheets survive restarts.
 
@@ -466,6 +466,14 @@ Photograph a charger and the rack should say which device it charges and which d
 **The server keeps what the camera wrote.** `Jpegs.fit` reads the frame subsampled when it is far larger than 1568px (a 50-megapixel shot is never a 200MB bitmap on the server either), scales it in halvings, turns it the way the EXIF orientation says the camera was held — ImageIO does not, and a drawer shot in portrait would otherwise be filed on its side — and then splices the original's Exif and ICC segments back in with the orientation tag reset to 1. When it was taken, which camera, where: the canvas that used to do this kept none of it, so every photograph filed before this is a picture and nothing else. Only those two segments. **Anything that describes the file's own bytes is a lie about the fitted file**: MPF holds offsets into the one it came from, and on a phone the XMP is a container directory — a Galaxy S24 writes one declaring an Ultra HDR gain map of 20,845 bytes appended after the picture, a Pixel one declaring a motion-photo video. The first photograph filed with its XMP carried over froze the S24 on viewing, because Chrome on Android reads that XMP to render HDR and went looking for a gain map the file had not got. Thumbnails go through the same `fit` without any of it.
 
 **A raw `photo` part is still accepted everywhere, and fitted on arrival.** `find.html`'s photo search sends the frame that way and keeps nothing; a test or a curl can post one to any filing endpoint. Both forms in one batch are fine.
+
+### The camera is drawn in the page
+
+`assets/camera.js`, in front of every file input that takes a photograph — the capture label on `put.html`, *Add an item* on the hub, the camera button on `find.html`. A file input with `capture="environment"` hands the phone over to its camera app, and while that app is in front Android may reclaim rack behind it. When the camera hands the picture back there is no page to receive it, and the app relaunches at the hub with nothing to show for the shot. **Staging could not save it** — the frame was lost before it ever reached the server. Nothing a page does can veto the kill; the only fix is to never leave, so the viewfinder is `getUserMedia` in the page and a shot is a frame off the stream. Several shots are one batch: the viewfinder stays up, each shot goes up to staging behind the next framing, and *Done* closes it.
+
+**A frame is taken at 1568px, the size the rack keeps anyway.** The server fits every photograph to that, so a canvas that size is what the server would have made of a camera-app shot, at the memory cost of one thumbnail decode rather than a 50-megapixel bitmap. `ImageCapture.takePhoto()` would give the camera's full still and is deliberately not used: on some Android builds it returns the frame on its side with no orientation tag, and the page cannot check without decoding it. What is drawn is what was on screen. The trade is the camera app's own HDR and zoom, which the stream does not have; a torch toggle is offered where the track supports one.
+
+**A desktop keeps the file picker**, because a file picker is what you want there — the in-page camera is only used where the pointer is coarse and the context secure. A phone whose camera cannot be opened (permission refused, no rear camera) falls back to the camera app for a day, so a refusal does not become a page that cannot take a photo. `rackCamera.claim(trigger, input, {each, done, title})` is the whole of the contract: every photograph reaches `each([file])` in the order shot whichever way it came, and `done(count)` fires once when the batch is complete, which is when the hub navigates to the filing page and `find.html` runs its one search.
 
 ### Filing a slot as a batch of photos
 
