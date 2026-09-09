@@ -49,6 +49,65 @@ class FindItemsTest {
     }
 
     @Test
+    void leavesOutAWordNoItemContainsWhenNothingElseFindsIt() {
+        // The live case: a Logitech wireless mouse in lab/10, searched for as
+        // "wireless computer mouse". Every word must match and no item says
+        // "computer"; the expander adds words and never takes one away, and
+        // answered with nothing because the other two were already the rack's.
+        index.hits("wireless", hit("10", 0, 3));
+        index.hits("mouse", hit("10", 0, 3));
+        index.hits("wireless mouse", hit("10", 0, 14));
+        expander.returns();
+
+        FindItems.Result result = find.smart("wireless computer mouse");
+
+        assertThat(result.hits()).extracting(SearchHit::slot).containsExactly(new SlotId("10"));
+        assertThat(result.hits().get(0).score()).isEqualTo(14 * 0.8);
+        assertThat(result.ignoredWords()).containsExactly("computer");
+    }
+
+    @Test
+    void doesNotLeaveAWordOutWhenTheWideningAlreadyFoundSomething() {
+        // "isolating tape" widened to the electrical tape must not also drag
+        // in the twenty-two resistors on tape reels: the rest of the query is
+        // only searched when it lands convincingly, or when there was nothing.
+        index.hits("electrical tape", hit("A1", 0, 5));
+        index.hits("tape", hit("B1", 0, 1), hit("B2", 0, 1));
+        expander.returns("electrical tape");
+
+        FindItems.Result result = find.smart("isolating tape");
+
+        assertThat(result.hits()).extracting(SearchHit::slot).containsExactly(new SlotId("A1"));
+        assertThat(result.ignoredWords()).isEmpty();
+    }
+
+    @Test
+    void aConvincingHitOnTheRestOutranksAWeakWidening() {
+        // A weak expansion hit is a lead, not an answer; the mouse itself is.
+        index.hits("wireless", hit("10", 0, 3));
+        index.hits("mouse", hit("10", 0, 3));
+        index.hits("wireless mouse", hit("10", 0, 14));
+        index.hits("peripheral", hit("B7", 0, 1));
+        expander.returns("peripheral");
+
+        FindItems.Result result = find.smart("wireless computer mouse");
+
+        assertThat(result.hits()).extracting(SearchHit::slot)
+            .containsExactly(new SlotId("10"), new SlotId("B7"));
+        assertThat(result.ignoredWords()).containsExactly("computer");
+    }
+
+    @Test
+    void aQueryWhoseEveryWordIsAbsentFindsNothingAndIgnoresNothing() {
+        expander.returns();
+
+        FindItems.Result result = find.smart("flux capacitor");
+
+        assertThat(result.hits()).isEmpty();
+        assertThat(result.ignoredWords()).isEmpty();
+    }
+
+    @Test
     void leavesAQueryThatAlreadyWorksAlone() {
         index.hits("transistor", hit("A1", 0, 4), hit("A2", 0, 3), hit("A3", 0, 3));
 

@@ -44,6 +44,7 @@ public class FindByPhoto {
         Map<Key, SearchHit> merged = new LinkedHashMap<>();
         Set<String> names = new LinkedHashSet<>();
         Set<String> terms = new LinkedHashSet<>();
+        Set<String> ignored = new LinkedHashSet<>();
 
         for (Item photographed : extracted) {
             if (photographed.name() != null && !photographed.name().isBlank()) {
@@ -51,6 +52,7 @@ public class FindByPhoto {
             }
             FindItems.Result result = find.forPhotographed(photographed);
             terms.addAll(result.expandedTerms());
+            ignored.addAll(result.ignoredWords());
             for (SearchHit hit : result.hits()) {
                 // A frame usually holds several things; the same drawer answering
                 // for two of them is one row, at its best score.
@@ -61,7 +63,7 @@ public class FindByPhoto {
 
         List<SearchHit> hits = new ArrayList<>(merged.values());
         hits.sort((a, b) -> Double.compare(b.score(), a.score()));
-        return new FindItems.Result(String.join(", ", names), List.copyOf(terms), hits);
+        return new FindItems.Result(String.join(", ", names), List.copyOf(terms), hits, List.copyOf(ignored));
     }
 
     private record Key(ContainerId container, SlotId slot, int index) {}

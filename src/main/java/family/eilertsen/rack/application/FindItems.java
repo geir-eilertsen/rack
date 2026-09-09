@@ -40,6 +40,12 @@ public class FindItems {
     /** Expanded terms rank below what the user literally typed. */
     private static final double EXPANSION_WEIGHT = 0.6;
 
+    /**
+     * The query with a word left out ranks between the two: it is still the
+     * user's own words, but not all of them.
+     */
+    private static final double IGNORING_WEIGHT = 0.8;
+
     private static final int CACHE_SIZE = 200;
 
     private final PartIndex index;
@@ -76,21 +82,65 @@ public class FindItems {
         }
 
         List<String> terms = expandedTermsFor(query);
-        if (terms.isEmpty()) return new Result(query, List.of(), literal);
 
         Map<Key, SearchHit> merged = new LinkedHashMap<>();
         for (SearchHit hit : literal) merged.put(Key.of(hit), hit);
         for (String term : terms) {
-            for (SearchHit hit : index.searchByKeyword(term)) {
-                SearchHit weighted = weigh(hit, EXPANSION_WEIGHT);
-                merged.merge(Key.of(hit), weighted,
-                    (existing, candidate) -> existing.score() >= candidate.score() ? existing : candidate);
+            for (SearchHit hit : index.searchByKeyword(term)) keepBest(merged, weigh(hit, EXPANSION_WEIGHT));
+        }
+
+        // Neither pass can rescue a query with a word in it the rack never
+        // uses: every word must match, and the expander adds words and never
+        // takes one away. "wireless computer mouse" found nothing for a
+        // Logitech wireless mouse over "computer". So, last: leave out the
+        // words no item contains at all and search the rest — and only keep
+        // that when it lands, or when there was nothing else, so "isolating
+        // tape" widened to the electrical tape does not also drag in the
+        // resistors on tape reels.
+        List<String> ignored = List.of();
+        if (!landed(sorted(merged))) {
+            Ignoring without = withoutAbsentWords(query);
+            if (!without.ignored().isEmpty() && (landed(without.hits()) || merged.isEmpty())) {
+                ignored = without.ignored();
+                for (SearchHit hit : without.hits()) keepBest(merged, hit);
             }
         }
 
+        return new Result(query, terms, sorted(merged), ignored);
+    }
+
+    /**
+     * The query minus the words no item contains at all. A word absent from the
+     * whole index cannot be satisfied by any item, so requiring it is a
+     * guarantee of nothing; the rest of the query is still the user's own words
+     * and is searched under the same all-words rule.
+     */
+    private Ignoring withoutAbsentWords(String query) {
+        List<String> kept = new ArrayList<>();
+        List<String> ignored = new ArrayList<>();
+        for (String word : query.strip().split("\\s+")) {
+            if (word.length() < 2) continue;
+            if (index.searchByKeyword(word).isEmpty()) ignored.add(word);
+            else kept.add(word);
+        }
+        if (ignored.isEmpty() || kept.isEmpty()) return new Ignoring(List.of(), List.of());
+        List<SearchHit> hits = new ArrayList<>();
+        for (SearchHit hit : index.searchByKeyword(String.join(" ", kept))) hits.add(weigh(hit, IGNORING_WEIGHT));
+        hits.sort((a, b) -> Double.compare(b.score(), a.score()));
+        return new Ignoring(List.copyOf(ignored), List.copyOf(hits));
+    }
+
+    private record Ignoring(List<String> ignored, List<SearchHit> hits) {}
+
+    private static void keepBest(Map<Key, SearchHit> merged, SearchHit candidate) {
+        merged.merge(Key.of(candidate), candidate,
+            (existing, incoming) -> existing.score() >= incoming.score() ? existing : incoming);
+    }
+
+    private static List<SearchHit> sorted(Map<Key, SearchHit> merged) {
         List<SearchHit> hits = new ArrayList<>(merged.values());
         hits.sort((a, b) -> Double.compare(b.score(), a.score()));
-        return new Result(query, terms, hits);
+        return hits;
     }
 
     /**
@@ -109,11 +159,13 @@ public class FindItems {
     public Result forPhotographed(Item item) {
         Map<Key, SearchHit> found = new LinkedHashMap<>();
         List<String> terms = new ArrayList<>();
+        List<String> ignored = List.of();
 
         if (notBlank(item.partNumber())) addAll(found, literal(item.partNumber()).hits());
         if (notBlank(item.name())) {
             Result byName = smart(item.name());
             terms = byName.expandedTerms();
+            ignored = byName.ignoredWords();
             addAll(found, byName.hits());
         }
         if (item.tags() != null) {
@@ -127,7 +179,7 @@ public class FindItems {
 
         List<SearchHit> hits = new ArrayList<>(found.values());
         hits.sort((a, b) -> Double.compare(b.score(), a.score()));
-        return new Result(item.name(), terms, hits);
+        return new Result(item.name(), terms, hits, ignored);
     }
 
     /** Two terms agreeing on an item is a stronger signal than either alone. */
@@ -172,5 +224,18 @@ public class FindItems {
         }
     }
 
-    public record Result(String query, List<String> expandedTerms, List<SearchHit> hits) {}
+    /**
+     * {@code ignoredWords} are the words of the query that no item contains and
+     * that were left out to find anything at all — named so the page can say
+     * so, because a hit that does not match every word typed needs explaining.
+     */
+    public record Result(String query, List<String> expandedTerms, List<SearchHit> hits, List<String> ignoredWords) {
+        public Result {
+            ignoredWords = ignoredWords == null ? List.of() : List.copyOf(ignoredWords);
+        }
+
+        public Result(String query, List<String> expandedTerms, List<SearchHit> hits) {
+            this(query, expandedTerms, hits, List.of());
+        }
+    }
 }

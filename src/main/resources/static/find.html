@@ -312,7 +312,7 @@
     }
 
     function renderResult(result) {
-      renderHits(result.hits || [], result.query, result.expanded_terms || []);
+      renderHits(result.hits || [], result.query, result.expanded_terms || [], result.ignored_words || []);
     }
 
     // Taking stock from the result row. Each tap moves the number on screen at
@@ -452,10 +452,16 @@
       }
     }
 
-    function renderHits(results, query, expanded) {
-      const alsoTried = expanded.length
-        ? ' Also searched for ' + expanded.map(t => '"' + esc(t) + '"').join(', ') + '.'
+    function renderHits(results, query, expanded, ignored) {
+      // A hit that does not match every word typed needs explaining: a word no
+      // item contains was left out to find anything at all, and this is where
+      // it says which.
+      const leftOut = (ignored || []).length
+        ? ' Nothing mentions ' + ignored.map(t => '"' + esc(t) + '"').join(' or ') + ', so that was left out.'
         : '';
+      const alsoTried = (expanded.length
+        ? ' Also searched for ' + expanded.map(t => '"' + esc(t) + '"').join(', ') + '.'
+        : '') + leftOut;
       if (!results.length) {
         status.className = 'status';
         status.innerHTML = 'No matches for "' + esc(query) + '".' + alsoTried;

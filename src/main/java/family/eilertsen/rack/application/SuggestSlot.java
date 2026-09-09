@@ -69,9 +69,10 @@ public class SuggestSlot {
             // the only record of what the extractor called the thing and what
             // that name found. An SD card that got no drawer is otherwise
             // indistinguishable from a call that never happened.
-            log.info("Suggest: \"{}\" (pn {}, tags {}) found {} item(s){}",
+            log.info("Suggest: \"{}\" (pn {}, tags {}) found {} item(s){}{}",
                 queried.name(), queried.partNumber(), queried.tags(), found.hits().size(),
-                found.expandedTerms().isEmpty() ? "" : " after widening to " + found.expandedTerms());
+                found.expandedTerms().isEmpty() ? "" : " after widening to " + found.expandedTerms(),
+                found.ignoredWords().isEmpty() ? "" : " leaving out " + found.ignoredWords());
             for (SearchHit hit : found.hits()) {
                 Key k = new Key(hit.container(), hit.slot());
                 Bucket b = buckets.computeIfAbsent(k, key -> new Bucket(key, hit.lastVerified()));
