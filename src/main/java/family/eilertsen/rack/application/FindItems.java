@@ -89,48 +89,64 @@ public class FindItems {
             for (SearchHit hit : index.searchByKeyword(term)) keepBest(merged, weigh(hit, EXPANSION_WEIGHT));
         }
 
-        // Neither pass can rescue a query with a word in it the rack never
-        // uses: every word must match, and the expander adds words and never
-        // takes one away. "wireless computer mouse" found nothing for a
-        // Logitech wireless mouse over "computer". So, last: leave out the
-        // words no item contains at all and search the rest — and only keep
-        // that when it lands, or when there was nothing else, so "isolating
-        // tape" widened to the electrical tape does not also drag in the
-        // resistors on tape reels.
+        // Neither pass can rescue a query with one word too many in it: every
+        // word must match, and the expander adds words and never takes one
+        // away. "wireless computer mouse" found nothing for a Logitech wireless
+        // mouse — "computer" is on the Pi and the case screws, not the mouse.
+        // So, last: leave each word out in turn and search the rest, and keep
+        // that only when it lands, or when there was nothing else at all, so
+        // "isolating tape" widened to the electrical tape does not also drag
+        // in the resistors on tape reels through "tape" alone.
         List<String> ignored = List.of();
         if (!landed(sorted(merged))) {
-            Ignoring without = withoutAbsentWords(query);
-            if (!without.ignored().isEmpty() && (landed(without.hits()) || merged.isEmpty())) {
-                ignored = without.ignored();
-                for (SearchHit hit : without.hits()) keepBest(merged, hit);
-            }
+            Ignoring without = withoutOneWord(query, merged.isEmpty());
+            ignored = without.ignored();
+            for (SearchHit hit : without.hits()) keepBest(merged, hit);
         }
 
         return new Result(query, terms, sorted(merged), ignored);
     }
 
     /**
-     * The query minus the words no item contains at all. A word absent from the
-     * whole index cannot be satisfied by any item, so requiring it is a
-     * guarantee of nothing; the rest of the query is still the user's own words
-     * and is searched under the same all-words rule.
+     * The query with one word left out — each in turn. A rest that lands
+     * convincingly is kept, and the word it did without is reported; when
+     * nothing lands and nothing else was found, the best of the weak rests is
+     * shown rather than nothing, since it is still the user's own words.
      */
-    private Ignoring withoutAbsentWords(String query) {
-        List<String> kept = new ArrayList<>();
-        List<String> ignored = new ArrayList<>();
+    private Ignoring withoutOneWord(String query, boolean nothingElse) {
+        List<String> words = new ArrayList<>();
         for (String word : query.strip().split("\\s+")) {
-            if (word.length() < 2) continue;
-            if (index.searchByKeyword(word).isEmpty()) ignored.add(word);
-            else kept.add(word);
+            if (word.length() >= 2 && !words.contains(word)) words.add(word);
         }
-        if (ignored.isEmpty() || kept.isEmpty()) return new Ignoring(List.of(), List.of());
-        List<SearchHit> hits = new ArrayList<>();
-        for (SearchHit hit : index.searchByKeyword(String.join(" ", kept))) hits.add(weigh(hit, IGNORING_WEIGHT));
-        hits.sort((a, b) -> Double.compare(b.score(), a.score()));
-        return new Ignoring(List.copyOf(ignored), List.copyOf(hits));
+        if (words.size() < 2) return Ignoring.NONE;
+
+        Map<Key, SearchHit> merged = new LinkedHashMap<>();
+        List<String> ignored = new ArrayList<>();
+        Ignoring bestWeak = Ignoring.NONE;
+        for (String left : words) {
+            List<String> rest = new ArrayList<>(words);
+            rest.remove(left);
+            List<SearchHit> hits = new ArrayList<>();
+            for (SearchHit hit : index.searchByKeyword(String.join(" ", rest))) hits.add(weigh(hit, IGNORING_WEIGHT));
+            hits.sort((a, b) -> Double.compare(b.score(), a.score()));
+            if (landed(hits)) {
+                ignored.add(left);
+                for (SearchHit hit : hits) keepBest(merged, hit);
+            } else if (!hits.isEmpty() && hits.get(0).score() > bestWeak.top()) {
+                bestWeak = new Ignoring(List.of(left), List.copyOf(hits));
+            }
+        }
+        if (!ignored.isEmpty()) return new Ignoring(List.copyOf(ignored), sorted(merged));
+        return nothingElse ? bestWeak : Ignoring.NONE;
     }
 
-    private record Ignoring(List<String> ignored, List<SearchHit> hits) {}
+    private record Ignoring(List<String> ignored, List<SearchHit> hits) {
+        static final Ignoring NONE = new Ignoring(List.of(), List.of());
+
+        double top() {
+            return hits.isEmpty() ? 0 : hits.get(0).score();
+        }
+    }
 
     private static void keepBest(Map<Key, SearchHit> merged, SearchHit candidate) {
         merged.merge(Key.of(candidate), candidate,
@@ -225,9 +241,9 @@ public class FindItems {
     }
 
     /**
-     * {@code ignoredWords} are the words of the query that no item contains and
-     * that were left out to find anything at all — named so the page can say
-     * so, because a hit that does not match every word typed needs explaining.
+     * {@code ignoredWords} are the words of the query that were left out to
+     * find anything at all — named so the page can say so, because a hit that
+     * does not match every word typed needs explaining.
      */
     public record Result(String query, List<String> expandedTerms, List<SearchHit> hits, List<String> ignoredWords) {
         public Result {

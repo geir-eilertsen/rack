@@ -457,7 +457,7 @@
       // item contains was left out to find anything at all, and this is where
       // it says which.
       const leftOut = (ignored || []).length
-        ? ' Nothing mentions ' + ignored.map(t => '"' + esc(t) + '"').join(' or ') + ', so that was left out.'
+        ? ' Also searched without ' + ignored.map(t => '"' + esc(t) + '"').join(' and without ') + '.'
         : '';
       const alsoTried = (expanded.length
         ? ' Also searched for ' + expanded.map(t => '"' + esc(t) + '"').join(', ') + '.'

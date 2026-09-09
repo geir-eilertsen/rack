@@ -49,21 +49,38 @@ class FindItemsTest {
     }
 
     @Test
-    void leavesOutAWordNoItemContainsWhenNothingElseFindsIt() {
+    void leavesOneWordOutWhenTheRestLandsConvincingly() {
         // The live case: a Logitech wireless mouse in lab/10, searched for as
-        // "wireless computer mouse". Every word must match and no item says
-        // "computer"; the expander adds words and never takes one away, and
-        // answered with nothing because the other two were already the rack's.
-        index.hits("wireless", hit("10", 0, 3));
-        index.hits("mouse", hit("10", 0, 3));
+        // "wireless computer mouse". Every word must match and the mouse does
+        // not say "computer" — the Raspberry Pi does, so the word is not even
+        // absent from the rack; the expander adds words and never takes one
+        // away, and answered with nothing because the other two were already
+        // the rack's own.
+        index.hits("computer", hit("11", 0, 2));
         index.hits("wireless mouse", hit("10", 0, 14));
+        index.hits("wireless computer", hit("11", 0, 1));
         expander.returns();
 
         FindItems.Result result = find.smart("wireless computer mouse");
 
+        // The weak "wireless computer" rest did not land and is not shown.
         assertThat(result.hits()).extracting(SearchHit::slot).containsExactly(new SlotId("10"));
         assertThat(result.hits().get(0).score()).isEqualTo(14 * 0.8);
         assertThat(result.ignoredWords()).containsExactly("computer");
+    }
+
+    @Test
+    void showsTheBestWeakRestOnlyWhenNothingElseWasFound() {
+        // The expander is down and "tape" alone is the whole of what is left:
+        // the electrical tape and the reels are shown, labelled, rather than
+        // nothing — but only because there was nothing.
+        index.hits("tape", hit("A1", 0, 3), hit("B1", 0, 1));
+        expander.returns();
+
+        FindItems.Result result = find.smart("isolating tape");
+
+        assertThat(result.hits()).extracting(SearchHit::slot).containsExactly(new SlotId("A1"), new SlotId("B1"));
+        assertThat(result.ignoredWords()).containsExactly("isolating");
     }
 
     @Test
@@ -84,8 +101,6 @@ class FindItemsTest {
     @Test
     void aConvincingHitOnTheRestOutranksAWeakWidening() {
         // A weak expansion hit is a lead, not an answer; the mouse itself is.
-        index.hits("wireless", hit("10", 0, 3));
-        index.hits("mouse", hit("10", 0, 3));
         index.hits("wireless mouse", hit("10", 0, 14));
         index.hits("peripheral", hit("B7", 0, 1));
         expander.returns("peripheral");
