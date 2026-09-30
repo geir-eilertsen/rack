@@ -5,6 +5,7 @@
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
+  "launch_handler": { "client_mode": "navigate-existing" },
   "background_color": "#fef8f0",
   "theme_color": "#d97747",
   "icons": [
