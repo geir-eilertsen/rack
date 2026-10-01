@@ -1,5 +1,7 @@
 package family.eilertsen.rack.adapter.out.filesystem;
 
+import family.eilertsen.rack.domain.model.Framing;
+
 import javax.imageio.IIOException;
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
@@ -55,10 +57,24 @@ final class Jpegs {
      * four times the size drops three pixels in four.
      */
     static byte[] fit(byte[] original, int maxEdge, float quality, boolean keepMetadata) throws IOException {
+        return fit(original, maxEdge, quality, keepMetadata, null);
+    }
+
+    /**
+     * The same, told how the viewfinder was held. A still that carries no
+     * orientation of its own and is wider than tall, taken while the screen
+     * showed portrait, is the sensor's frame of a phone held upright: turned
+     * 90° clockwise, which is what the tag would have said. The frame's own
+     * tag, when it has one, is believed over the hint — it was written by
+     * the camera that took the picture.
+     */
+    static byte[] fit(byte[] original, int maxEdge, float quality, boolean keepMetadata, Framing seen) throws IOException {
         BufferedImage source = readNear(original, maxEdge);
         if (source == null) return null;
         BufferedImage scaled = scale(source, maxEdge);
-        BufferedImage oriented = orient(scaled, Exif.orientation(original));
+        int orientation = Exif.orientation(original);
+        if (orientation <= 1 && seen == Framing.PORTRAIT && scaled.getWidth() > scaled.getHeight()) orientation = 6;
+        BufferedImage oriented = orient(scaled, orientation);
         byte[] jpeg = write(oriented, quality);
         return keepMetadata ? Exif.carryOver(original, jpeg) : jpeg;
     }

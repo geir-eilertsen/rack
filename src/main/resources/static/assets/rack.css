@@ -468,7 +468,13 @@ body.has-usage .container { padding-bottom: 4.5rem; }
 .cam { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; background: #000; color: #fff; }
 body.cam-open { overflow: hidden; }
 .cam-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: calc(.6rem + env(safe-area-inset-top)) 1rem .6rem; font-size: .9rem; font-weight: 600; }
+.cam-head { display: flex; flex-direction: column; min-width: 0; gap: .15rem; }
 .cam-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* What the camera actually gave: the answer to "why is this blurred". */
+.cam-info { font-size: .7rem; font-weight: 400; color: rgba(255,255,255,.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cam-tools { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+.cam-tool { height: 40px; padding: 0 .8rem; border: 1px solid rgba(255,255,255,.35); border-radius: 20px; background: transparent; color: #fff; font-size: .85rem; font-weight: 600; cursor: pointer; }
+.cam-tool.on { background: #fff; color: #000; }
 .cam-torch { width: 40px; height: 40px; padding: 8px; border: 1px solid rgba(255,255,255,.35); border-radius: 50%; background: transparent; color: #fff; cursor: pointer; }
 .cam-torch svg { width: 100%; height: 100%; }
 .cam-torch.on { background: #fff; color: #000; }

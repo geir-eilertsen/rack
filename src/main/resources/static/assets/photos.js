@@ -31,6 +31,9 @@
       form.append('photo', file, file.name || 'photo.jpg');
       if (where && where.container) form.append('c', where.container);
       if (where && where.slot) form.append('s', where.slot);
+      // How the viewfinder was held, for a still that came without an
+      // orientation of its own (assets/camera.js); a picked file has none.
+      if (file.seen) form.append('seen', file.seen);
       const res = await fetch('/staging', { method: 'POST', body: form });
       if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
       staged.push(...await res.json());

@@ -4,6 +4,7 @@ import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.model.StagedPhoto;
 import family.eilertsen.rack.domain.model.FittedPhoto;
+import family.eilertsen.rack.domain.model.Framing;
 import family.eilertsen.rack.domain.port.PhotoStaging;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -102,5 +103,16 @@ class FilesystemPhotoStagingTest {
         FittedPhoto fitted = staging.fit(heic, "image/heic");
         assertThat(fitted.bytes()).isEqualTo(heic);
         assertThat(fitted.contentType()).isEqualTo("image/heic");
+    }
+
+    @Test
+    void aStillWithNoOrientationOfItsOwnIsTurnedTheWayTheViewfinderWasHeld() throws IOException {
+        FilesystemPhotoStaging staging = new FilesystemPhotoStaging(dataDir.toString());
+
+        StagedPhoto staged = staging.stage(JpegsTest.jpeg(4000, 2000, Color.RED, Color.BLUE), "image/jpeg", null, null, Framing.PORTRAIT);
+
+        BufferedImage photo = ImageIO.read(new ByteArrayInputStream(staging.read(staged.id())));
+        assertThat(photo.getWidth()).isEqualTo(784);
+        assertThat(photo.getHeight()).isEqualTo(1568);
     }
 }

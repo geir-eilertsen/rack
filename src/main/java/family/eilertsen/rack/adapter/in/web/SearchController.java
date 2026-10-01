@@ -2,6 +2,7 @@ package family.eilertsen.rack.adapter.in.web;
 
 import family.eilertsen.rack.application.FindByPhoto;
 import family.eilertsen.rack.application.FindItems;
+import family.eilertsen.rack.domain.model.Framing;
 import family.eilertsen.rack.domain.port.SearchHistory;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -74,8 +75,9 @@ public class SearchController {
      * photo search and a typed one with the same code.
      */
     @PostMapping(value = "/search/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public FindItems.Result searchByPhoto(@RequestParam("photo") List<MultipartFile> photos) throws IOException {
+    public FindItems.Result searchByPhoto(@RequestParam("photo") List<MultipartFile> photos,
+                                          @RequestParam(value = "seen", required = false) String seen) throws IOException {
         // Fitted on arrival like every other frame, and kept nowhere: a search is asked once.
-        return findByPhoto.execute(batches.bytes(photos, null));
+        return findByPhoto.execute(batches.bytes(photos, null, Framing.parse(seen)));
     }
 }

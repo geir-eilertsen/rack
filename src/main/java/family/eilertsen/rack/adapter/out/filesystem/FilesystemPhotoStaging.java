@@ -4,6 +4,7 @@ import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.model.StagedPhoto;
 import family.eilertsen.rack.domain.model.FittedPhoto;
+import family.eilertsen.rack.domain.model.Framing;
 import family.eilertsen.rack.domain.port.PhotoStaging;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,8 +62,8 @@ public class FilesystemPhotoStaging implements PhotoStaging {
     }
 
     @Override
-    public StagedPhoto stage(byte[] frame, String contentType, ContainerId container, SlotId slot) {
-        FittedPhoto fitted = fit(frame, contentType);
+    public StagedPhoto stage(byte[] frame, String contentType, ContainerId container, SlotId slot, Framing seen) {
+        FittedPhoto fitted = fit(frame, contentType, seen);
         try {
             byte[] preview = Jpegs.fit(fitted.bytes(), PREVIEW_EDGE, 0.8f, false);
             String id = freshId();
@@ -84,9 +85,9 @@ public class FilesystemPhotoStaging implements PhotoStaging {
     }
 
     @Override
-    public FittedPhoto fit(byte[] frame, String contentType) {
+    public FittedPhoto fit(byte[] frame, String contentType, Framing seen) {
         try {
-            byte[] jpeg = Jpegs.fit(frame, PHOTO_EDGE, 0.85f, true);
+            byte[] jpeg = Jpegs.fit(frame, PHOTO_EDGE, 0.85f, true, seen);
             return jpeg == null ? new FittedPhoto(frame, contentType) : new FittedPhoto(jpeg, "image/jpeg");
         } catch (IOException e) {
             throw new UncheckedIOException(e);

@@ -1,6 +1,7 @@
 package family.eilertsen.rack.adapter.in.web;
 
 import family.eilertsen.rack.domain.model.ContainerId;
+import family.eilertsen.rack.domain.model.Framing;
 import family.eilertsen.rack.domain.model.SlotId;
 import family.eilertsen.rack.domain.model.StagedPhoto;
 import family.eilertsen.rack.domain.port.PhotoStaging;
@@ -50,17 +51,22 @@ public class StagingController {
 
     /**
      * Repeated {@code photo} parts, full camera frames; {@code c} and {@code s}
-     * say where the page was pointed, so a relaunch can go back there.
+     * say where the page was pointed, so a relaunch can go back there, and
+     * {@code seen} how the viewfinder was held ({@code portrait} or
+     * {@code landscape}), for a still that came without an orientation of
+     * its own.
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public List<StagedView> stage(@RequestParam("photo") List<MultipartFile> photos,
                                   @RequestParam(value = "c", required = false) String container,
-                                  @RequestParam(value = "s", required = false) String slot) throws IOException {
+                                  @RequestParam(value = "s", required = false) String slot,
+                                  @RequestParam(value = "seen", required = false) String seen) throws IOException {
         ContainerId cid = blank(container) ? null : new ContainerId(container);
         SlotId sid = blank(slot) ? null : new SlotId(slot);
+        Framing framing = Framing.parse(seen);
         List<StagedView> staged = new ArrayList<>(photos.size());
         for (MultipartFile photo : photos) {
-            staged.add(StagedView.of(staging.stage(photo.getBytes(), photo.getContentType(), cid, sid)));
+            staged.add(StagedView.of(staging.stage(photo.getBytes(), photo.getContentType(), cid, sid, framing)));
         }
         return staged;
     }

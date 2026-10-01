@@ -2,6 +2,7 @@ package family.eilertsen.rack.domain.port;
 
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.FittedPhoto;
+import family.eilertsen.rack.domain.model.Framing;
 import family.eilertsen.rack.domain.model.StagedPhoto;
 import family.eilertsen.rack.domain.model.SlotId;
 
@@ -30,10 +31,23 @@ import java.util.List;
 public interface PhotoStaging {
 
     /** Keeps a frame as a photograph, fitted and oriented. */
-    StagedPhoto stage(byte[] frame, String contentType, ContainerId container, SlotId slot);
+    default StagedPhoto stage(byte[] frame, String contentType, ContainerId container, SlotId slot) {
+        return stage(frame, contentType, container, slot, null);
+    }
+
+    /**
+     * The same, told how the viewfinder was held, for a still that may have
+     * come without an orientation of its own (see {@link Framing}). Null
+     * when the page has nothing to say about it — a file from a picker.
+     */
+    StagedPhoto stage(byte[] frame, String contentType, ContainerId container, SlotId slot, Framing seen);
 
     /** The same fitting, for a frame that is used once and not kept — a photo search. */
-    FittedPhoto fit(byte[] frame, String contentType);
+    default FittedPhoto fit(byte[] frame, String contentType) {
+        return fit(frame, contentType, null);
+    }
+
+    FittedPhoto fit(byte[] frame, String contentType, Framing seen);
 
     /** Every photograph waiting, oldest first. */
     List<StagedPhoto> all();

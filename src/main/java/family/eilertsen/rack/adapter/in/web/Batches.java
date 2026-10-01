@@ -2,6 +2,7 @@ package family.eilertsen.rack.adapter.in.web;
 
 import family.eilertsen.rack.application.AddPhotoToSlot;
 import family.eilertsen.rack.domain.model.FittedPhoto;
+import family.eilertsen.rack.domain.model.Framing;
 import family.eilertsen.rack.domain.port.PhotoStaging;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -31,9 +32,14 @@ public class Batches {
     }
 
     public List<AddPhotoToSlot.Photo> photos(List<MultipartFile> parts, List<String> staged) throws IOException {
+        return photos(parts, staged, null);
+    }
+
+    /** {@code seen} is how the viewfinder was held when the parts were shot, for a still with no orientation of its own. */
+    public List<AddPhotoToSlot.Photo> photos(List<MultipartFile> parts, List<String> staged, Framing seen) throws IOException {
         List<AddPhotoToSlot.Photo> batch = new ArrayList<>();
         for (MultipartFile part : orEmpty(parts)) {
-            FittedPhoto fitted = staging.fit(part.getBytes(), part.getContentType());
+            FittedPhoto fitted = staging.fit(part.getBytes(), part.getContentType(), seen);
             batch.add(new AddPhotoToSlot.Photo(fitted.bytes(), fitted.contentType()));
         }
         for (String id : orEmpty(staged)) batch.add(new AddPhotoToSlot.Photo(read(id), "image/jpeg"));
@@ -42,7 +48,11 @@ public class Batches {
     }
 
     public List<byte[]> bytes(List<MultipartFile> parts, List<String> staged) throws IOException {
-        return photos(parts, staged).stream().map(AddPhotoToSlot.Photo::bytes).toList();
+        return bytes(parts, staged, null);
+    }
+
+    public List<byte[]> bytes(List<MultipartFile> parts, List<String> staged, Framing seen) throws IOException {
+        return photos(parts, staged, seen).stream().map(AddPhotoToSlot.Photo::bytes).toList();
     }
 
     /** Once a batch is filed, the staged copies are spoken for and go. */

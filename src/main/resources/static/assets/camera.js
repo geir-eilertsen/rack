@@ -6,25 +6,42 @@
 // app relaunches at the hub with nothing to show for the shot — the photograph
 // was lost before it ever reached the server, which is why staging could not
 // save it. Nothing a page does can veto that kill; the only fix is to never
-// leave. So the viewfinder is drawn here, with getUserMedia, and a shot is a
-// frame off the stream.
+// leave. So the viewfinder is drawn here, with getUserMedia.
 //
-// Frames are taken at the size the rack keeps anyway. The server fits every
-// photograph to 1568px on its longest edge, so a canvas that size is not a
-// lower-quality copy of what the camera app would have sent — it is what the
-// server would have made of it — and it is the size of one thumbnail-decode
-// rather than a 50-megapixel bitmap. ImageCapture.takePhoto() would give the
-// camera's full still, and is not used: on some Android builds it returns the
-// frame turned on its side with no orientation tag to say so, and the page
-// cannot check without decoding it, which is the memory cost this exists to
-// avoid. What is drawn is what was on screen.
+// A shot is a still from the camera's own photo pipeline where the browser
+// offers one (ImageCapture.takePhoto, Chromium on Android), and a frame off
+// the stream where it does not. The first build took the frame only, and a
+// preview frame is the wrong thing to read a part number off: it is the video
+// path, noise-reduced and small, focused by whatever continuous autofocus had
+// settled on, and small print up close came out blurred. The still is asked
+// for at about twice the size the rack keeps, so the server's fit averages
+// pixels rather than keeping them, and it is never decoded on the phone — the
+// thumbnail in the corner is drawn from the stream, not from the file. The
+// objection to takePhoto was that some Android builds hand the still over on
+// its side with no orientation tag; the server turns a frame by its tag now,
+// and for a frame without one the page sends how the viewfinder was held
+// (`seen`), which is the one thing the page knows that the file does not.
+//
+// Close-up and zoom are the two controls the camera app has that a stream
+// lacks, and both are what photographing a small part needs: the main lens
+// cannot focus inside about ten centimetres, so the honest way to fill the
+// frame with a 3mm part number is to hold the phone where it can focus and
+// zoom. Close-up sets manual focus at the lens's nearest distance; zoom is a
+// crop on the sensor, so on the still it costs nothing. Both are offered only
+// where the track reports the capability. A line under the title says what
+// the camera actually gave — stream size, still size, focus range, zoom —
+// because what a phone negotiates is not what the page asked for, and a
+// blurred photo is a question that line answers.
 //
 // A desktop without a touch screen keeps the file picker, because a file picker
 // is what you want there. A phone whose camera cannot be opened — permission
 // refused, no rear camera, an old WebView — falls back to the camera app for a
 // day, so a refusal does not become a page that cannot take a photo.
 (function () {
-  const LONGEST_EDGE = 1568;
+  const LONGEST_EDGE = 1568;           // what the rack keeps
+  const STILL_EDGE = 2 * LONGEST_EDGE; // asked of the camera's still, so the fit has something to average
+  const THUMB = 104;                   // the corner thumbnail at 2× for a 52px box
+  const ZOOMS = [1, 2, 4];
   const OFF_KEY = 'rack.camera.off-until';
   const OFF_FOR = 24 * 60 * 60 * 1000;
 
@@ -52,6 +69,10 @@
    * `done(count)` is told once when the batch is complete — on closing the
    * viewfinder, or as soon as the input has answered. `title` is what to say
    * over the viewfinder, a string or a function of none.
+   *
+   * A File from the viewfinder carries `seen` — 'portrait' or 'landscape',
+   * how the screen was held when it was shot — for the uploader to send
+   * beside it; a File from the input has nothing to say about that.
    */
   function claim(trigger, input, handlers) {
     const each = handlers.each || (() => {});
@@ -84,10 +105,14 @@
     root.className = 'cam';
     root.hidden = true;
     root.innerHTML =
-      '<div class="cam-top"><span class="cam-title"></span>' +
-        '<button type="button" class="cam-torch" hidden aria-label="Torch" title="Torch">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>' +
-        '</button></div>' +
+      '<div class="cam-top"><div class="cam-head"><span class="cam-title"></span><span class="cam-info"></span></div>' +
+        '<div class="cam-tools">' +
+          '<button type="button" class="cam-tool cam-near" hidden aria-pressed="false" title="Focus as close as the lens can">Close-up</button>' +
+          '<button type="button" class="cam-tool cam-zoom" hidden title="Zoom">1×</button>' +
+          '<button type="button" class="cam-torch" hidden aria-label="Torch" title="Torch">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>' +
+          '</button>' +
+        '</div></div>' +
       '<div class="cam-stage"><video autoplay playsinline muted></video><div class="cam-flash"></div>' +
         '<div class="cam-trouble" hidden><p class="cam-why"></p><button type="button" class="btn cam-fallback">Use the camera app instead</button></div></div>' +
       '<div class="cam-bar">' +
@@ -100,6 +125,9 @@
     return {
       root,
       title: root.querySelector('.cam-title'),
+      info: root.querySelector('.cam-info'),
+      near: root.querySelector('.cam-near'),
+      zoom: root.querySelector('.cam-zoom'),
       torch: root.querySelector('.cam-torch'),
       video: root.querySelector('video'),
       flash: root.querySelector('.cam-flash'),
@@ -116,17 +144,25 @@
 
   let stream = null;
   let session = null;
+  let caps = {};          // what the track says it can do
+  let still = null;       // ImageCapture on the track, or null for a frame grab
+  let photoCaps = null;   // the still sizes on offer
+  let zooms = [];
+  let zoomAt = 0;
 
   async function open(opts) {
     if (!ui) ui = build();
     if (session) return;
     session = { shots: 0, chain: Promise.resolve(), opts };
     ui.title.textContent = opts.title || 'Take a photo';
+    ui.info.textContent = '';
     ui.trouble.hidden = true;
     ui.status.hidden = true;
     ui.thumb.hidden = true;
     ui.count.hidden = true;
     ui.torch.hidden = true;
+    ui.near.hidden = true;
+    ui.zoom.hidden = true;
     ui.close.textContent = 'Cancel';
     ui.shutter.disabled = true;
     ui.root.hidden = false;
@@ -136,14 +172,17 @@
     ui.shutter.onclick = shoot;
     ui.fallback.onclick = () => { const f = session.opts.fallback; close(); if (f) f(); };
     ui.torch.onclick = toggleTorch;
+    ui.near.onclick = toggleNear;
+    ui.zoom.onclick = cycleZoom;
 
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        // The rear camera, at more than the rack keeps so the frame is
-        // downscaled rather than up. Ideal, not exact: a phone that offers
+        // The rear camera, at the largest stream it offers: the viewfinder is
+        // what focus is judged on, and where there is no still pipeline the
+        // frame grabbed is this. Ideal, not exact: a phone that offers
         // 1920×1080 is a phone that can take the photo.
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 2560 }, height: { ideal: 1920 } }
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 4032 }, height: { ideal: 3024 } }
       });
     } catch (e) {
       // A refusal is remembered for a day so the label goes straight to the
@@ -165,9 +204,58 @@
     try { await ui.video.play(); } catch (e) { /* autoplay muted; a tap will do */ }
     ui.shutter.disabled = false;
 
-    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    caps = track.getCapabilities ? track.getCapabilities() : {};
     ui.torch.hidden = !caps.torch;
     ui.torch.classList.remove('on');
+
+    // Close-up wants manual focus with a distance to set it to; zoom wants a
+    // range that goes somewhere. Either absent, the button is not offered.
+    const modes = caps.focusMode || [];
+    ui.near.hidden = !(modes.includes('manual') && caps.focusDistance && isFinite(caps.focusDistance.min));
+    setNear(false);
+    zooms = caps.zoom && caps.zoom.max > 1 ? ZOOMS.filter(z => z >= caps.zoom.min && z <= caps.zoom.max) : [];
+    zoomAt = 0;
+    ui.zoom.hidden = zooms.length < 2;
+    ui.zoom.textContent = '1×';
+
+    still = null;
+    photoCaps = null;
+    if (window.ImageCapture) {
+      try {
+        still = new ImageCapture(track);
+        photoCaps = await still.getPhotoCapabilities();
+        if (!photoCaps || !photoCaps.imageWidth) still = null;   // nothing to size it by: a frame is the safer answer
+      } catch (e) {
+        still = null;
+      }
+    }
+    if (!session) { stopStream(); return; }
+    report(track);
+  }
+
+  /** What the camera actually gave, under the title and on the console. */
+  function report(track, extra) {
+    const parts = [];
+    const vw = ui.video.videoWidth, vh = ui.video.videoHeight;
+    const s = track.getSettings ? track.getSettings() : {};
+    if (vw && vh) parts.push(vw + '×' + vh);
+    else if (s.width) parts.push(s.width + '×' + s.height);
+    parts.push(still ? 'still ' + photoCaps.imageWidth.max + '×' + photoCaps.imageHeight.max : 'frames only');
+    if (caps.focusMode) {
+      let f = 'focus ' + caps.focusMode.join('/');
+      if (caps.focusDistance) f += ' ' + metres(caps.focusDistance.min) + '–' + metres(caps.focusDistance.max);
+      parts.push(f);
+    }
+    if (caps.zoom) parts.push('zoom ' + caps.zoom.min + '–' + caps.zoom.max);
+    if (extra) parts.push(extra);
+    const text = parts.join(' · ');
+    ui.info.textContent = text;
+    try { console.log('rack camera: ' + text, { settings: s, capabilities: caps, photo: photoCaps }); } catch (e) { /* no console */ }
+  }
+
+  function metres(m) {
+    if (!isFinite(m)) return '∞';
+    return m < 1 ? Math.round(m * 100) + 'cm' : (Math.round(m * 10) / 10) + 'm';
   }
 
   function trouble(why) {
@@ -186,17 +274,86 @@
     } catch (e) { ui.torch.hidden = true; }
   }
 
+  function setNear(on) {
+    ui.near.classList.toggle('on', on);
+    ui.near.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+
+  /**
+   * Manual focus at the nearest distance the lens reports, or back to the
+   * camera's own autofocus. Reported in metres, nearest first, so `min` is
+   * the close end.
+   */
+  async function toggleNear() {
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    const on = !ui.near.classList.contains('on');
+    const modes = caps.focusMode || [];
+    const back = modes.includes('continuous') ? 'continuous' : modes.find(m => m !== 'manual');
+    try {
+      await track.applyConstraints({ advanced: [on
+        ? { focusMode: 'manual', focusDistance: caps.focusDistance.min }
+        : (back ? { focusMode: back } : {})] });
+      setNear(on);
+    } catch (e) {
+      ui.near.hidden = true;
+      say('Close-up is not available on this camera: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  async function cycleZoom() {
+    if (!stream || !zooms.length) return;
+    const track = stream.getVideoTracks()[0];
+    const next = (zoomAt + 1) % zooms.length;
+    try {
+      await track.applyConstraints({ advanced: [{ zoom: zooms[next] }] });
+      zoomAt = next;
+      ui.zoom.textContent = zooms[next] + '×';
+    } catch (e) {
+      ui.zoom.hidden = true;
+      say('Zoom is not available on this camera: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  /** Which way the screen was held: what the server needs to turn a still that does not say. */
+  function seen() {
+    return ui.video.videoWidth >= ui.video.videoHeight ? 'landscape' : 'portrait';
+  }
+
+  /**
+   * A still from the camera's photo pipeline, at about twice the size the
+   * rack keeps and the stream's aspect. The sizes on offer are the sensor's,
+   * wider than tall, whichever way the phone is held.
+   */
+  function takeStill() {
+    const vw = ui.video.videoWidth, vh = ui.video.videoHeight;
+    const long = Math.max(vw, vh) || 4, short = Math.min(vw, vh) || 3;
+    const width = clamp(STILL_EDGE, photoCaps.imageWidth);
+    const height = clamp(Math.round(width * short / long), photoCaps.imageHeight);
+    return still.takePhoto({ imageWidth: width, imageHeight: height }).then(blob =>
+      new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' }));
+  }
+
+  function clamp(wanted, range) {
+    if (!range) return wanted;
+    return Math.max(range.min || 1, Math.min(range.max || wanted, wanted));
+  }
+
   /** One frame off the stream, fitted, as a File the pages already know how to send. */
   function grab() {
     const video = ui.video;
     const w = video.videoWidth, h = video.videoHeight;
     if (!w || !h) return Promise.reject(new Error('No picture from the camera yet'));
     const scale = Math.min(1, LONGEST_EDGE / Math.max(w, h));
+    return fromVideo(Math.round(w * scale), Math.round(h * scale), 0.92);
+  }
+
+  function fromVideo(width, height, quality) {
     const canvas = document.createElement('canvas');
-    canvas.width = Math.round(w * scale);
-    canvas.height = Math.round(h * scale);
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(ui.video, 0, 0, width, height);
     return new Promise((resolve, reject) => {
       canvas.toBlob(blob => {
         // Let the bitmap go before the upload starts rather than when the
@@ -204,8 +361,35 @@
         canvas.width = canvas.height = 0;
         if (!blob) return reject(new Error('Could not encode the photo'));
         resolve(new File([blob], 'photo.jpg', { type: 'image/jpeg' }));
-      }, 'image/jpeg', 0.92);
+      }, 'image/jpeg', quality);
     });
+  }
+
+  /** The corner thumbnail, from the stream: the still itself is never decoded here. */
+  function thumbnail() {
+    const w = ui.video.videoWidth, h = ui.video.videoHeight;
+    if (!w || !h) return Promise.resolve(null);
+    const scale = THUMB / Math.max(w, h);
+    return fromVideo(Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale)), 0.7).catch(() => null);
+  }
+
+  /** The still where there is one, the frame where there is not or the still failed. */
+  async function take() {
+    const held = seen();
+    let file;
+    if (still) {
+      try {
+        file = await takeStill();
+      } catch (e) {
+        // A camera that promised a still and did not give one: say so on the
+        // info line, and take frames for the rest of this session.
+        still = null;
+        if (stream) report(stream.getVideoTracks()[0], 'still failed: ' + (e && e.message ? e.message : e));
+      }
+    }
+    if (!file) file = await grab();
+    file.seen = held;
+    return file;
   }
 
   async function shoot() {
@@ -214,9 +398,10 @@
     ui.flash.classList.remove('go');
     void ui.flash.offsetWidth;                  // restart the animation
     ui.flash.classList.add('go');
+    const small = thumbnail();                  // the frame on screen now, before the still is asked for
     let file;
     try {
-      file = await grab();
+      file = await take();
     } catch (e) {
       say('Could not take the photo: ' + e.message);
       ui.shutter.disabled = false;
@@ -227,10 +412,13 @@
     ui.count.textContent = String(session.shots);
     ui.count.hidden = false;
     ui.close.textContent = 'Done';
-    const url = URL.createObjectURL(file);
-    ui.thumb.onload = () => URL.revokeObjectURL(url);
-    ui.thumb.src = url;
-    ui.thumb.hidden = false;
+    small.then(thumb => {
+      if (!thumb) return;
+      const url = URL.createObjectURL(thumb);
+      ui.thumb.onload = () => URL.revokeObjectURL(url);
+      ui.thumb.src = url;
+      ui.thumb.hidden = false;
+    });
     // Handed over in the order shot, one at a time, while the viewfinder stays
     // up for the next: the upload runs behind the next framing.
     const s = session;
@@ -249,6 +437,7 @@
   function stopStream() {
     if (stream) stream.getTracks().forEach(t => t.stop());
     stream = null;
+    still = null;
     if (ui) ui.video.srcObject = null;
   }
 

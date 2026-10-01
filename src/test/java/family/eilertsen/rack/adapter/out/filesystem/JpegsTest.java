@@ -1,5 +1,6 @@
 package family.eilertsen.rack.adapter.out.filesystem;
 
+import family.eilertsen.rack.domain.model.Framing;
 import org.junit.jupiter.api.Test;
 
 import javax.imageio.ImageIO;
@@ -53,6 +54,33 @@ class JpegsTest {
         assertThat(near(image.getRGB(100, 380), Color.BLUE)).isTrue();
         // And the tag now says "as is", so nothing turns it a second time.
         assertThat(Jpegs.Exif.orientation(Jpegs.fit(tagged, 1568, 0.85f, true))).isEqualTo(1);
+    }
+
+    @Test
+    void anUntaggedLandscapeStillShotWithThePhoneUprightIsTurnedTheWayTheScreenWas() throws IOException {
+        // The sensor's frame with no tag, taken while the viewfinder showed
+        // portrait: what the tag would have said is orientation 6.
+        BufferedImage image = read(Jpegs.fit(jpeg(400, 200, Color.RED, Color.BLUE), 1568, 0.85f, true, Framing.PORTRAIT));
+        assertThat(image.getWidth()).isEqualTo(200);
+        assertThat(image.getHeight()).isEqualTo(400);
+        assertThat(near(image.getRGB(100, 20), Color.RED)).isTrue();
+        assertThat(near(image.getRGB(100, 380), Color.BLUE)).isTrue();
+    }
+
+    @Test
+    void theHintGivesWayToTheFramesOwnTagAndToAFrameAlreadyTheRightShape() throws IOException {
+        // Tagged "as is" by the camera: believed, whatever the screen showed.
+        BufferedImage asIs = read(Jpegs.fit(withOrientation(jpeg(400, 200, Color.RED, Color.BLUE), 3), 1568, 0.85f, true, Framing.PORTRAIT));
+        assertThat(asIs.getWidth()).isEqualTo(400);
+        assertThat(near(asIs.getRGB(20, 100), Color.BLUE)).isTrue();      // turned by its own tag, upside down
+        // Already portrait: nothing to turn.
+        BufferedImage upright = read(Jpegs.fit(jpeg(200, 400, Color.RED, Color.BLUE), 1568, 0.85f, true, Framing.PORTRAIT));
+        assertThat(upright.getWidth()).isEqualTo(200);
+        assertThat(near(upright.getRGB(20, 200), Color.RED)).isTrue();
+        // Landscape on screen, landscape frame: the hint has nothing to say.
+        BufferedImage wide = read(Jpegs.fit(jpeg(400, 200, Color.RED, Color.BLUE), 1568, 0.85f, true, Framing.LANDSCAPE));
+        assertThat(wide.getWidth()).isEqualTo(400);
+        assertThat(near(wide.getRGB(20, 100), Color.RED)).isTrue();
     }
 
     @Test
