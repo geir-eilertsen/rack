@@ -33,10 +33,20 @@
 // because what a phone negotiates is not what the page asked for, and a
 // blurred photo is a question that line answers.
 //
-// A desktop without a touch screen keeps the file picker, because a file picker
-// is what you want there. A phone whose camera cannot be opened — permission
-// refused, no rear camera, an old WebView — falls back to the camera app for a
-// day, so a refusal does not become a page that cannot take a photo.
+// A desktop opens the viewfinder too, when the browser lists a camera (#34):
+// a desktop browser ignores capture="environment" and shows a file dialog,
+// which has no way to take a picture, so a PC with a webcam had no path from
+// its camera to the rack at all. The file picker stays one tap away in the
+// viewfinder, because a desktop is also where photographs already on disk get
+// filed from. A desktop without a camera keeps the file picker as before.
+// A laptop with an external webcam has two cameras and the browser's pick is
+// arbitrary, so where the pointer is fine a Switch button cycles them and the
+// choice is remembered; a phone's list is the lenses behind one rear camera
+// and is left to facingMode.
+//
+// A camera that cannot be opened — permission refused, none found, an old
+// WebView — falls back to the file input for a day, so a refusal does not
+// become a page that cannot take a photo.
 (function () {
   const LONGEST_EDGE = 1568;           // what the rack keeps
   const STILL_EDGE = 2 * LONGEST_EDGE; // asked of the camera's still, so the fit has something to average
@@ -44,12 +54,43 @@
   const ZOOMS = [1, 2, 4];
   const OFF_KEY = 'rack.camera.off-until';
   const OFF_FOR = 24 * 60 * 60 * 1000;
+  const DEVICE_KEY = 'rack.camera.device';
+
+  let cameras = [];       // the video inputs the browser lists, kept current
+  let watching = false;
+
+  /** A touch screen: a phone, where the camera app is the alternative and the rear camera is the one. */
+  function coarse() {
+    return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  }
+
+  /**
+   * The cameras on offer. Before permission is given the list carries kinds
+   * and no labels, which is enough to know a desktop has a webcam at all;
+   * after it, the labels are what the info line and the Switch button show.
+   */
+  async function listCameras() {
+    try {
+      const all = await navigator.mediaDevices.enumerateDevices();
+      cameras = all.filter(d => d.kind === 'videoinput');
+    } catch (e) { cameras = []; }
+    return cameras;
+  }
+
+  /** Keep the list current: a webcam plugged in after the page loaded is a webcam. */
+  function watchCameras() {
+    if (watching || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    watching = true;
+    listCameras();
+    if (navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', listCameras);
+  }
 
   /** Whether the in-page camera is the right thing here at all. */
   function usable() {
     if (!window.isSecureContext) return false;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
-    if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return false;
+    // A phone has a camera; a desktop has one when the browser lists one.
+    if (!coarse() && !cameras.length) return false;
     try {
       const until = +localStorage.getItem(OFF_KEY) || 0;
       if (until > Date.now()) return false;
@@ -86,6 +127,7 @@
       done(files.length);
     });
 
+    watchCameras();
     trigger.addEventListener('click', ev => {
       if (!usable()) return;                    // the input opens as it always did
       ev.preventDefault();
@@ -109,6 +151,8 @@
         '<div class="cam-tools">' +
           '<button type="button" class="cam-tool cam-near" hidden aria-pressed="false" title="Focus as close as the lens can">Close-up</button>' +
           '<button type="button" class="cam-tool cam-zoom" hidden title="Zoom">1×</button>' +
+          '<button type="button" class="cam-tool cam-switch" hidden title="Switch to the other camera">Switch</button>' +
+          '<button type="button" class="cam-tool cam-file" hidden title="Choose a photograph from disk instead">File…</button>' +
           '<button type="button" class="cam-torch" hidden aria-label="Torch" title="Torch">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>' +
           '</button>' +
@@ -128,6 +172,8 @@
       info: root.querySelector('.cam-info'),
       near: root.querySelector('.cam-near'),
       zoom: root.querySelector('.cam-zoom'),
+      switch: root.querySelector('.cam-switch'),
+      file: root.querySelector('.cam-file'),
       torch: root.querySelector('.cam-torch'),
       video: root.querySelector('video'),
       flash: root.querySelector('.cam-flash'),
@@ -163,43 +209,72 @@
     ui.torch.hidden = true;
     ui.near.hidden = true;
     ui.zoom.hidden = true;
+    ui.switch.hidden = true;
     ui.close.textContent = 'Cancel';
     ui.shutter.disabled = true;
     ui.root.hidden = false;
     document.body.classList.add('cam-open');
 
+    // On a phone the alternative is the camera app; on a desktop it is a
+    // photograph already on disk, and that wants offering before anything
+    // has gone wrong, so the File button sits with the tools there.
+    const desk = !coarse();
+    ui.fallback.textContent = desk ? 'Choose a file instead' : 'Use the camera app instead';
+    ui.file.hidden = !desk;
+
     ui.close.onclick = close;
     ui.shutter.onclick = shoot;
-    ui.fallback.onclick = () => { const f = session.opts.fallback; close(); if (f) f(); };
+    ui.fallback.onclick = ui.file.onclick = () => { const f = session.opts.fallback; close(); if (f) f(); };
     ui.torch.onclick = toggleTorch;
     ui.near.onclick = toggleNear;
     ui.zoom.onclick = cycleZoom;
+    ui.switch.onclick = switchCamera;
 
+    // A desktop remembers which camera was picked last time; a stale id (the
+    // webcam was unplugged) is forgotten and the browser's own pick taken.
+    const wanted = desk ? remembered() : null;
+    if (!(await start(wanted)) && wanted && session && !stream) {
+      forget();
+      await start(null);
+    }
+  }
+
+  /**
+   * Opens the stream and reads what the camera can do. `deviceId` names a
+   * camera exactly; null asks for the rear camera and takes what comes.
+   * Returns whether a stream is up; a refusal is reported on the viewfinder.
+   */
+  async function start(deviceId) {
+    stopStream();
+    ui.shutter.disabled = true;
+    // The largest stream it offers: the viewfinder is what focus is judged
+    // on, and where there is no still pipeline the frame grabbed is this.
+    // Ideal, not exact: a phone that offers 1920×1080 is a phone that can
+    // take the photo.
+    const video = { width: { ideal: 4032 }, height: { ideal: 3024 } };
+    if (deviceId) video.deviceId = { exact: deviceId };
+    else video.facingMode = { ideal: 'environment' };
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        // The rear camera, at the largest stream it offers: the viewfinder is
-        // what focus is judged on, and where there is no still pipeline the
-        // frame grabbed is this. Ideal, not exact: a phone that offers
-        // 1920×1080 is a phone that can take the photo.
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 4032 }, height: { ideal: 3024 } }
-      });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: false, video });
     } catch (e) {
-      // A refusal is remembered for a day so the label goes straight to the
-      // camera app tomorrow instead of asking again; anything else is tried
-      // afresh next time, since a busy camera is not a missing one.
+      // A named camera that is not there any more is not a refusal: the
+      // caller tries again without the name. A refusal is remembered for a
+      // day so the trigger goes straight to the input tomorrow instead of
+      // asking again; anything else is tried afresh next time, since a busy
+      // camera is not a missing one.
+      if (deviceId && e && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) return false;
       if (e && (e.name === 'NotAllowedError' || e.name === 'NotFoundError' || e.name === 'SecurityError')) giveUpForADay();
       trouble(e && e.name === 'NotAllowedError'
         ? 'rack was not allowed to use the camera.'
         : 'The camera could not be opened' + (e && e.message ? ': ' + e.message : '.'));
-      return;
+      return false;
     }
-    if (!session) { stopStream(); return; }           // closed while asking
+    if (!session) { stopStream(); return false; }     // closed while asking
 
     const track = stream.getVideoTracks()[0];
     // A stream can end under the page: the phone went to sleep, another app
     // took the camera. What was shot is on the server; the rest is a fresh open.
-    track.onended = () => { if (session) close(); };
+    track.onended = () => { if (session && stream && stream.getVideoTracks()[0] === track) close(); };
     ui.video.srcObject = stream;
     try { await ui.video.play(); } catch (e) { /* autoplay muted; a tap will do */ }
     ui.shutter.disabled = false;
@@ -229,8 +304,43 @@
         still = null;
       }
     }
-    if (!session) { stopStream(); return; }
+    if (!session) { stopStream(); return false; }
+
+    // Permission has been given now, so the list carries labels — and says
+    // whether there is another camera to switch to. A phone's several entries
+    // are the lenses behind the rear camera facingMode already chose between.
+    await listCameras();
+    if (!session) { stopStream(); return false; }
+    ui.switch.hidden = coarse() || cameras.length < 2;
     report(track);
+    return true;
+  }
+
+  /** The next camera in the browser's list, and remembered for next time. */
+  async function switchCamera() {
+    if (!stream || !session) return;
+    const now = stream.getVideoTracks()[0].getSettings().deviceId;
+    await listCameras();
+    if (cameras.length < 2) { ui.switch.hidden = true; return; }
+    const at = cameras.findIndex(c => c.deviceId === now);
+    const next = cameras[(at + 1) % cameras.length];
+    ui.switch.disabled = true;
+    try {
+      if (await start(next.deviceId)) remember(next.deviceId);
+      else if (session && !stream) { forget(); await start(null); }
+    } finally {
+      ui.switch.disabled = false;
+    }
+  }
+
+  function remembered() {
+    try { return localStorage.getItem(DEVICE_KEY) || null; } catch (e) { return null; }
+  }
+  function remember(id) {
+    try { localStorage.setItem(DEVICE_KEY, id); } catch (e) { /* fine */ }
+  }
+  function forget() {
+    try { localStorage.removeItem(DEVICE_KEY); } catch (e) { /* fine */ }
   }
 
   /** What the camera actually gave, under the title and on the console. */
@@ -247,6 +357,8 @@
       parts.push(f);
     }
     if (caps.zoom) parts.push('zoom ' + caps.zoom.min + '–' + caps.zoom.max);
+    const cam = cameras.find(c => c.deviceId === s.deviceId);
+    if (cam && cam.label) parts.push(cam.label);
     if (extra) parts.push(extra);
     const text = parts.join(' · ');
     ui.info.textContent = text;
