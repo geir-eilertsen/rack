@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rack — shopping list</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/rack.svg">
+  <link rel="apple-touch-icon" href="/assets/rack.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#d97747">
+  <link rel="stylesheet" href="/assets/rack.css">
+  <script src="/assets/camera.js"></script>
+  <script src="/assets/route.js"></script>
+  <script src="/assets/shopping.js"></script>
+  <style>
+    /* At the store, the store is the filter: tap "Leroy" and the page is what
+       to pick up there, plus what can be bought anywhere. */
+    .stores { display: flex; flex-wrap: wrap; gap: .3rem; margin: 0 0 1rem; }
+    .stores .container-btn.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .stores .n { opacity: .7; font-weight: 400; margin-left: .25rem; }
+
+    .add { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
+      box-shadow: var(--shadow); padding: .8rem 1rem; margin-bottom: 1.25rem; }
+    .add summary { cursor: pointer; font-weight: 700; list-style: none; }
+    .add summary::-webkit-details-marker { display: none; }
+    .add[open] summary { margin-bottom: .7rem; }
+    .add form { display: flex; flex-direction: column; gap: .45rem; }
+    .add input, .add textarea { font-size: 1rem; padding: .6rem .7rem; width: 100%; box-sizing: border-box; }
+    .add .pair { display: flex; gap: .45rem; }
+    .add .pair > * { flex: 1; min-width: 0; }
+    .add .photo-line { display: flex; align-items: center; gap: .6rem; font-size: .9rem; color: var(--muted); }
+    .add .photo-line .drop { border: none; background: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; }
+
+    .group-title { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+      color: var(--muted); margin: 1.1rem 0 .4rem; }
+    .entries { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: .5rem; }
+    .entry { display: flex; gap: .75rem; padding: .7rem; border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--card); box-shadow: var(--shadow); align-items: flex-start; }
+    .entry .tick { width: 1.6rem; height: 1.6rem; flex-shrink: 0; margin: .15rem 0 0; accent-color: var(--success); }
+    .entry .pic { flex-shrink: 0; width: 88px; height: 88px; border-radius: var(--radius-sm); overflow: hidden;
+      background: var(--primary-soft); display: block; }
+    .entry .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .entry .body { flex: 1; min-width: 0; }
+    .entry .what { font-weight: 700; }
+    .entry .qty { font-weight: 400; color: var(--muted); }
+    .entry .pn { display: inline-block; margin-top: .15rem; font-size: .95rem; }
+    .entry .details { font-size: .88rem; margin-top: .2rem; white-space: pre-line; overflow-wrap: anywhere; }
+    .entry .meta { font-size: .78rem; color: var(--muted); margin-top: .3rem; }
+    .entry .meta a { color: var(--primary-hover); }
+    .entry .drop { border: none; background: none; color: var(--muted); font-size: 1.3rem; line-height: 1; cursor: pointer; padding: 0 .2rem; }
+    .entry.bought { opacity: .55; }
+    .entry.bought .what { text-decoration: line-through; }
+
+    .done-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 1.5rem; }
+    .empty { color: var(--muted); }
+    .brands { margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+    .brands summary { cursor: pointer; font-weight: 700; }
+    .brands p { font-size: .85rem; color: var(--muted); margin: .5rem 0; }
+    .brands ul { list-style: none; padding: 0; margin: .5rem 0; }
+    .brands li { display: flex; align-items: center; gap: .5rem; padding: .35rem 0; border-top: 1px solid var(--border); }
+    .brands li:first-child { border-top: none; }
+    .brands li span { flex: 1; }
+    .brands li button { border: none; background: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; }
+    .brands form { display: flex; gap: .4rem; flex-wrap: wrap; }
+    .brands form input { flex: 1; min-width: 7rem; font-size: 1rem; padding: .5rem .6rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="app-header">
+      <a class="back" href="/">← Home</a>
+      <a class="brand" href="/">
+        <img class="logo" src="/assets/rack.svg" alt="">
+        <span class="name">rack</span>
+      </a>
+    </header>
+
+    <h1>Shopping list</h1>
+    <p class="subtitle">With a photo and part number on each line, so you come home with the right one. Add from any item with <em>Add to shopping list…</em>, or here.</p>
+
+    <details class="add" id="add">
+      <summary>+ Add something</summary>
+      <form id="addForm">
+        <input id="fWhat" type="text" placeholder="What (e.g. wall plugs)" required>
+        <div class="pair">
+          <input id="fStore" type="text" placeholder="Store (e.g. Leroy)" list="storeList" autocomplete="off">
+          <input id="fQty" type="text" placeholder="How many">
+        </div>
+        <datalist id="storeList"></datalist>
+        <input id="fPn" type="text" placeholder="Part number / article no.">
+        <textarea id="fDetails" rows="2" placeholder="Size, colour, the one that fits…"></textarea>
+        <div class="photo-line">
+          <label class="btn" id="shoot">📷 Photo
+            <input type="file" accept="image/*" capture="environment" id="photoInput" hidden>
+          </label>
+          <span id="photoState">No photo</span>
+          <button type="button" class="drop" id="photoDrop" hidden title="Drop the photo">&times;</button>
+        </div>
+        <button class="btn primary" type="submit" id="addBtn">Add to list</button>
+      </form>
+    </details>
+
+    <div class="stores" id="stores" hidden></div>
+    <p class="status" id="status"></p>
+    <div id="list"></div>
+
+    <!-- The item says its brand; this says which shop the brand means. -->
+    <details class="brands" id="brands">
+      <summary>Which store sells which brand</summary>
+      <p>House brands tell rack where to buy more: an item whose text says the brand gets that store filled in when you add it to the list. An item that names a store outright (e.g. "Farnell 876-7670") needs no rule.</p>
+      <ul id="brandList"></ul>
+      <form id="brandForm">
+        <input id="bBrand" type="text" placeholder="Brand (e.g. Anslut)" required>
+        <input id="bStore" type="text" placeholder="Store (e.g. Jula)" list="storeList" required>
+        <button class="btn" type="submit">Add</button>
+      </form>
+    </details>
+  </div>
+
+  <script>
+    (function () {
+      const ANYWHERE = '';            // the chip for lines with no store
+      let entries = [];
+      let photo = null;               // the one picture for the line being typed
+
+      const $ = id => document.getElementById(id);
+      const status = $('status');
+
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g,
+          c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+      const key = s => (s || '').trim().toLowerCase();
+
+      // The store you are at is in the address, so a home-screen shortcut or a
+      // reload in the aisle comes back to the same filter.
+      function chosen() {
+        const p = rackRoute.params();
+        return p.has('store') ? p.get('store') : null;    // null: everything
+      }
+
+      async function load() {
+        try {
+          const res = await fetch('/shopping');
+          if (!res.ok) throw new Error(res.statusText);
+          entries = await res.json();
+          status.textContent = '';
+          draw();
+        } catch (e) {
+          status.className = 'status error';
+          status.textContent = 'Could not load the list: ' + e.message;
+        }
+      }
+
+      function draw() {
+        const stores = rackShopping.storesOf(entries);
+        $('storeList').innerHTML = stores.map(n => '<option value="' + esc(n) + '">').join('');
+        drawChips(stores);
+
+        const at = chosen();
+        const open = entries.filter(e => !e.bought_at);
+        const bought = entries.filter(e => e.bought_at);
+        // At a store: that store's lines, then whatever has no store at all.
+        const here = e => at === null || key(e.store) === key(at) || !e.store;
+
+        const host = $('list');
+        let html = '';
+        const shown = open.filter(here);
+        if (!entries.length) {
+          html = '<p class="empty">Nothing on the list.</p>';
+        } else if (!shown.length) {
+          html = '<p class="empty">Nothing left to get' + (at ? ' at ' + esc(at) : '') + '.</p>';
+        } else {
+          groups(shown, at).forEach(g => {
+            html += '<div class="group-title">' + esc(g.title) + '</div>'
+              + '<ul class="entries">' + g.items.map(entry).join('') + '</ul>';
+          });
+        }
+        const boughtHere = bought.filter(here);
+        if (boughtHere.length) {
+          html += '<div class="done-bar"><div class="group-title">In the basket (' + boughtHere.length + ')</div>'
+            + '<button type="button" class="btn" id="clear">Clear bought</button></div>'
+            + '<ul class="entries">' + boughtHere.map(entry).join('') + '</ul>';
+        }
+        host.innerHTML = html;
+
+        host.querySelectorAll('.tick').forEach(cb => cb.addEventListener('change', () => tick(cb.dataset.id, cb.checked)));
+        host.querySelectorAll('.entry .drop').forEach(b => b.addEventListener('click', () => drop(b.dataset.id)));
+        const clear = $('clear');
+        if (clear) clear.addEventListener('click', clearBought);
+      }
+
+      function drawChips(stores) {
+        const host = $('stores');
+        const open = entries.filter(e => !e.bought_at);
+        const count = name => open.filter(e => key(e.store) === key(name)).length;
+        const anywhere = open.filter(e => !e.store).length;
+        if (!stores.length) { host.hidden = true; return; }
+        const at = chosen();
+        const chip = (label, value, n) => '<button type="button" class="container-btn' +
+          ((value === null ? at === null : at !== null && key(at) === key(value)) ? ' on' : '') +
+          '" data-store="' + (value === null ? '' : esc(value)) + '" data-all="' + (value === null) + '">' +
+          esc(label) + (n != null ? '<span class="n">' + n + '</span>' : '') + '</button>';
+        host.innerHTML = chip('All', null, open.length)
+          + stores.slice().sort((a, b) => a.localeCompare(b)).map(s => chip(s, s, count(s))).join('')
+          + (anywhere ? chip('Anywhere', ANYWHERE, anywhere) : '');
+        host.hidden = false;
+        host.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+          rackRoute.go(b.dataset.all === 'true' ? '' : 'store=' + encodeURIComponent(b.dataset.store));
+          draw();
+        }));
+      }
+
+      /** By store, in name order, with the no-store lines last. */
+      function groups(list, at) {
+        const by = new Map();
+        list.forEach(e => {
+          const k = key(e.store);
+          if (!by.has(k)) by.set(k, { title: e.store || 'Anywhere', items: [] });
+          by.get(k).items.push(e);
+        });
+        return [...by.entries()]
+          .sort(([a], [b]) => (a === '') - (b === '') || a.localeCompare(b))
+          .map(([, g]) => g);
+      }
+
+      function entry(e) {
+        const pic = e.photo
+          ? '<a class="pic" href="/shopping/photos/' + encodeURIComponent(e.photo) + '" target="_blank">' +
+              '<img loading="lazy" alt="" src="/shopping/photos/' + encodeURIComponent(e.photo) + '?w=320"></a>'
+          : '';
+        const from = e.container
+          ? 'Same as in <a href="' + rackRoute.slotHref(e.container, e.slot) + '">' + esc(e.container) + (e.slot ? '/' + esc(e.slot) : '') + '</a>'
+          : '';
+        const added = e.added_at ? 'added ' + new Date(e.added_at).toLocaleDateString() : '';
+        return '<li class="entry' + (e.bought_at ? ' bought' : '') + '">' +
+          '<input type="checkbox" class="tick" data-id="' + esc(e.id) + '"' + (e.bought_at ? ' checked' : '') + ' title="Got it">' +
+          pic +
+          '<div class="body">' +
+            '<div class="what">' + esc(e.what) + (e.qty ? ' <span class="qty">× ' + esc(e.qty) + '</span>' : '') + '</div>' +
+            (e.part_number ? '<div class="pn">' + esc(e.part_number) + '</div>' : '') +
+            (e.details ? '<div class="details">' + esc(e.details) + '</div>' : '') +
+            '<div class="meta">' + [from, added].filter(Boolean).join(' · ') + '</div>' +
+          '</div>' +
+          '<button type="button" class="drop" data-id="' + esc(e.id) + '" title="Remove from the list">&times;</button>' +
+        '</li>';
+      }
+
+      async function tick(id, bought) {
+        await change(fetch('/shopping/' + encodeURIComponent(id), {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bought })
+        }));
+      }
+
+      async function drop(id) {
+        const e = entries.find(x => x.id === id);
+        if (e && !e.bought_at && !confirm('Remove "' + e.what + '" from the list?')) return;
+        await change(fetch('/shopping/' + encodeURIComponent(id), { method: 'DELETE' }));
+      }
+
+      async function clearBought() {
+        await change(fetch('/shopping?bought=true', { method: 'DELETE' }));
+      }
+
+      async function change(request) {
+        try {
+          const res = await request;
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+        } catch (e) {
+          status.className = 'status error';
+          status.textContent = 'Did not save: ' + e.message;
+        }
+        await load();
+      }
+
+      // One picture per line: the last one taken is the one kept.
+      rackCamera.claim($('shoot'), $('photoInput'), {
+        title: 'What to buy',
+        each: files => { photo = files[files.length - 1]; showPhoto(); }
+      });
+      $('photoDrop').addEventListener('click', () => { photo = null; showPhoto(); });
+      function showPhoto() {
+        $('photoState').textContent = photo ? 'Photo attached' : 'No photo';
+        $('photoDrop').hidden = !photo;
+      }
+
+      // Typing a line while filtered to a store means it is for that store.
+      $('add').addEventListener('toggle', () => {
+        const at = chosen();
+        if ($('add').open && at && !$('fStore').value) $('fStore').value = at;
+      });
+
+      $('addForm').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const btn = $('addBtn');
+        const form = new FormData();
+        form.append('what', $('fWhat').value);
+        form.append('store', $('fStore').value);
+        form.append('qty', $('fQty').value);
+        form.append('part_number', $('fPn').value);
+        form.append('details', $('fDetails').value);
+        if (photo) {
+          form.append('photo', photo, photo.name || 'photo.jpg');
+          if (photo.seen) form.append('seen', photo.seen);
+        }
+        btn.disabled = true;
+        status.className = 'status';
+        status.textContent = 'Adding…';
+        try {
+          const res = await fetch('/shopping', { method: 'POST', body: form });
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+          ['fWhat', 'fQty', 'fPn', 'fDetails'].forEach(id => { $(id).value = ''; });
+          photo = null; showPhoto();
+          status.textContent = '';
+          await load();
+          $('fWhat').focus();
+        } catch (e) {
+          status.className = 'status error';
+          status.textContent = 'Could not add: ' + e.message;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      async function loadBrands(request) {
+        try {
+          const res = await (request || fetch('/shopping/brands'));
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+          const rules = await res.json();
+          $('brandList').innerHTML = rules.length
+            ? rules.map(r => '<li><span><b>' + esc(r.brand) + '</b> → ' + esc(r.store) + '</span>' +
+                '<button type="button" data-brand="' + esc(r.brand) + '" title="Forget this rule">&times;</button></li>').join('')
+            : '<li><span class="empty">No rules yet.</span></li>';
+          $('brandList').querySelectorAll('button').forEach(b => b.addEventListener('click', () =>
+            loadBrands(fetch('/shopping/brands?brand=' + encodeURIComponent(b.dataset.brand), { method: 'DELETE' }))));
+        } catch (e) {
+          status.className = 'status error';
+          status.textContent = 'Brand rules: ' + e.message;
+        }
+      }
+      $('brandForm').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        await loadBrands(fetch('/shopping/brands', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brand: $('bBrand').value, store: $('bStore').value })
+        }));
+        $('bBrand').value = ''; $('bStore').value = '';
+      });
+      loadBrands();
+
+      rackRoute.onChange(draw);
+      load();
+      // Ticked off on another phone in the same shop.
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+    })();
+  </script>
+  <script src="/assets/usage.js" defer></script>
+</body>
+</html>

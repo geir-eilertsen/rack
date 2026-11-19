@@ -241,6 +241,7 @@ Committing after each write gives history, per-drawer undo, and free multi-site 
 - `/discuss.html`, `POST /discuss` → talk a build through against the shelf: the whole conversation goes with each message, every suggestion cites a drawer and is verified against the index (see *Talking a build through*)
 - `/find.html`, `GET /search?q=` → search; `&smart=true` widens a query that came up short (see Search above). `POST /search/photo` searches by photo instead of by typing. All three return `{query, expanded_terms, hits}`
 - `/put.html`, `GET /c`, `GET /c/{container}`, `GET /c/{container}/{slot}`, `POST /c/{container}/{slot}/photo` → drawer-scoped photo capture and slot state. The photo endpoint (and `POST /suggest`, both resync endpoints) take **repeated `photo` parts** — one part is just a batch of one — **or repeated `staged` ids** naming frames already uploaded (see *Staging*). `Batches` reads either form for all of them, fitting a raw part on arrival.
+- `/shopping.html`, `GET|POST /shopping`, `PATCH|DELETE /shopping/{id}`, `DELETE /shopping?bought=true`, `GET /shopping/photos/{name}` (`?w=`), `GET|POST /c/{c}/{s}/items/{i}/shopping` (GET: which store, read off the item), `GET|POST|DELETE /shopping/brands` → the shopping list (see *The shopping list*)
 - `POST /staging` (repeated `photo` parts, optional `c` and `s`), `GET /staging`, `GET /staging/{id}` (`?w=` for the small copy), `DELETE /staging/{id}` → photographs shot and not yet filed
 - `/containers.html`, `POST /c` (register), `PATCH /c/{container}` (name + label scale), `DELETE /c/{container}` → maintain containers; also hosts registration and the label flow below
 - `GET /labels/{container}` (preview), `POST /labels/{container}` (mark + archive), `GET /labels/{container}/status` → QR label sheets
@@ -367,6 +368,18 @@ Documents live flat in one folder with one owner, exactly like photographs: `Kee
 **Normalise both sides of a path guard.** `FilesystemDocumentStore` checked `resolved.startsWith(dir)` with `dir` built by `toAbsolutePath()` and `resolved` by `normalize()`. `rack.data-dir` is `./data`, so the `.` survived on one side and not the other, and the guard rejected *every* legal filename in the container while passing every test — `@TempDir` hands out a path with no `.` in it. The test now builds a store on `…/./sub/../nested` deliberately.
 
 **Every change writes to the log.** That is most of the reason to store a project at all: "when did the transistors arrive" and "why did I skip step nine" are the questions, and neither is answerable from current state. A part's status says where it is; the log says how it got there. `ProjectNote.by` separates what the app did from what the user wrote.
+
+### The shopping list
+
+`/shopping.html`, reached from the hub, and **Add to shopping list…** on every expanded item row (`assets/shopping.js`, shared by `put.html` and `find.html`). The problem it solves is the aisle: forty kinds of wall plug, and "plugs" written on a list does not say which. So every line carries a picture, a part number and the details that tell the right one from its neighbour, and the page filters by the store you are standing in — tap *Leroy* and it shows what to get there plus whatever has no store at all (`#store=Leroy` in the address, so a reload in the aisle stays put).
+
+**An entry made from an item is a copy, not a reference.** Running out is usually why something is on the list, so the item may be used up, deleted or moved before the trip; the entry keeps its name, part number, description and a copy of its source photograph regardless. `container`/`slot` are kept only as a *Same as in lab/10* link. Adding one does not stamp `lastVerified` — wanting more of something is not looking in the drawer.
+
+**The list owns its pictures, outside the rack's photo folder.** `data/shopping/list.json` and `data/shopping/photos/` (`FilesystemShoppingList`). Kept apart because the rack deletes any photograph no item names, and an entry must not lose the picture of what to buy because the last one left the drawer. Removing a line (or *Clear bought*) deletes its picture; strays are swept at boot. Thumbnails (`?w=`) are made per request, not cached — a list is a dozen lines.
+
+**Which store is read off the item, the way `PlanPurchases` reads suppliers off the rack.** Most of the time a drawer does not say where something came from, but the box it was photographed in says its brand — and a house brand is a store: Anslut is Jula's, Lexman is Leroy Merlin's. `data/shopping/brands.json` holds those rules (`BrandStore`), edited at the foot of the list page, and `Shopping.storeFor` matches a brand as a whole word in the item's name, description, part number or tags. Failing a brand, a store already used on the list named in the item's own text ("Farnell 876-7670") is its own answer. The panel fills the store box in and says why; what the person types wins. The rules are kept by hand rather than shipped as a table: which brands matter, and what this household calls the shop, are the owner's to say.
+
+Store names are free text, offered back from the ones already used (a `<datalist>`), grouped ignoring case — the same reasoning as container locations. No store list is maintained, and no model is involved.
 
 ### Resyncing a drawer
 

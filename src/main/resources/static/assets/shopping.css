@@ -1,0 +1,12 @@
+/* Add to shopping list, on an expanded item row. */
+.shop-panel { margin-top: .6rem; }
+.shop-panel summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--primary-hover); padding: .3rem 0; }
+.shop-body { padding: .4rem 0 .2rem; display: flex; flex-direction: column; gap: .4rem; }
+.shop-hint { margin: 0; font-size: .8rem; color: var(--muted); }
+.shop-row { display: flex; gap: .4rem; }
+.shop-row .shop-store { flex: 2; min-width: 0; }
+.shop-row .shop-qty { flex: 1; min-width: 0; }
+.shop-body input { font-size: .95rem; padding: .5rem .6rem; }
+.shop-status { margin: 0; font-size: .85rem; color: var(--muted); min-height: 1em; }
+.shop-status.error { color: var(--error); }
+.shop-status a { color: var(--primary-hover); font-weight: 600; }

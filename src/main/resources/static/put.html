@@ -11,12 +11,14 @@
   <link rel="stylesheet" href="/assets/rack.css">
   <link rel="stylesheet" href="/assets/itemdocs.css">
   <link rel="stylesheet" href="/assets/companions.css">
+  <link rel="stylesheet" href="/assets/shopping.css">
   <script src="/assets/photos.js"></script>
   <script src="/assets/camera.js"></script>
   <script src="/assets/slots.js"></script>
   <script src="/assets/route.js"></script>
   <script src="/assets/itemdocs.js"></script>
   <script src="/assets/companions.js"></script>
+  <script src="/assets/shopping.js"></script>
   <style>
     .current { list-style: none; padding: 0; margin: .5rem 0 0; }
     .current li { padding: .75rem .9rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: .5rem; background: var(--card); cursor: pointer; transition: background .12s ease, border-color .12s ease; }
@@ -743,6 +745,7 @@
       rackItemDocs.wire(currentEl, slot => { slotItemCount = (slot.items || []).length; });
       currentEl.querySelectorAll('.merge-panel').forEach(panel => wireMergePanel(panel, list));
       currentEl.querySelectorAll('.move-panel').forEach(panel => wireMovePanel(panel));
+      rackShopping.wire(currentEl);
       rackCompanions.wire(currentEl, {
         place: placeLabel,
         room: id => { const c = containers.find(c => c.id === id); return c && c.location ? c.location : ''; },
@@ -999,6 +1002,7 @@
             '</div>' +
           '</details>' +
           rackCompanions.render({ container: selectedContainer.id, slot: selectedSlot, index: idx }) +
+          rackShopping.render({ container: selectedContainer.id, slot: selectedSlot, index: idx }) +
           '<details class="move-panel">' +
             '<summary>Move to another place…</summary>' +
             '<div class="move-body">' +
