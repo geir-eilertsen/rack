@@ -47,14 +47,10 @@ public class Shopping {
     private final Clock clock;
 
     public Shopping(ShoppingList list, PartIndex index, ImageStore images) {
-        this(list, index, images, Clock.systemUTC());
-    }
-
-    Shopping(ShoppingList list, PartIndex index, ImageStore images, Clock clock) {
         this.list = list;
         this.index = index;
         this.images = images;
-        this.clock = clock;
+        this.clock = Clock.systemUTC();
     }
 
     public record Text(String what, String store, String partNumber, String details, String qty) {}

@@ -24,7 +24,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 /**
- * {@code data/shopping/list.json} and {@code data/shopping/photos/}. One file
+ * {@code data/shopping.json}, {@code data/shopping-brands.json} and {@code data/shopping-photos/}. One file
  * for the list, because it is a handful of lines edited one at a time; written
  * to a {@code .tmp} and moved atomically, the way slot state is.
  *
@@ -47,10 +47,13 @@ public class FilesystemShoppingList implements ShoppingList {
     private final List<BrandStore> brands = new ArrayList<>();
 
     public FilesystemShoppingList(@Value("${rack.data-dir}") String dataDir, ObjectMapper mapper) throws IOException {
-        Path dir = Path.of(dataDir).toAbsolutePath().normalize().resolve("shopping");
-        this.file = dir.resolve("list.json");
-        this.brandsFile = dir.resolve("brands.json");
-        this.photoDir = dir.resolve("photos");
+        // Beside label-runs.json and searches.json rather than in a folder of
+        // its own: every directory under data/ is read as a container, and its
+        // *.json as slot files — data/shopping/list.json took the app down.
+        Path dir = Path.of(dataDir).toAbsolutePath().normalize();
+        this.file = dir.resolve("shopping.json");
+        this.brandsFile = dir.resolve("shopping-brands.json");
+        this.photoDir = dir.resolve("shopping-photos");
         this.mapper = mapper;
         Files.createDirectories(photoDir);
         load();
@@ -110,7 +113,7 @@ public class FilesystemShoppingList implements ShoppingList {
 
     private void write(List<ShoppingEntry> next) {
         try {
-            Path tmp = file.resolveSibling("list.json.tmp");
+            Path tmp = file.resolveSibling("shopping.json.tmp");
             mapper.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), next);
             Files.move(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             entries.clear();
@@ -179,7 +182,7 @@ public class FilesystemShoppingList implements ShoppingList {
     @Override
     public synchronized void saveBrands(List<BrandStore> next) {
         try {
-            Path tmp = brandsFile.resolveSibling("brands.json.tmp");
+            Path tmp = brandsFile.resolveSibling("shopping-brands.json.tmp");
             mapper.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), next);
             Files.move(tmp, brandsFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             brands.clear();

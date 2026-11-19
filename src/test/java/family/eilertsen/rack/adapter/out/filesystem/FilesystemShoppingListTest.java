@@ -111,16 +111,37 @@ class FilesystemShoppingListTest {
         assertThat(shopping.clearBought()).isEqualTo(1);
 
         assertThat(shopping.all()).extracting(ShoppingEntry::id).containsExactly(still.id());
-        assertThat(Files.exists(dataDir.resolve("shopping/photos").resolve(bought.photo()))).isFalse();
-        assertThat(Files.exists(dataDir.resolve("shopping/photos").resolve(still.photo()))).isTrue();
+        assertThat(Files.exists(dataDir.resolve("shopping-photos").resolve(bought.photo()))).isFalse();
+        assertThat(Files.exists(dataDir.resolve("shopping-photos").resolve(still.photo()))).isTrue();
     }
 
     @Test
     void aPictureNothingNamesIsSweptAtBoot() throws IOException {
-        Files.createDirectories(dataDir.resolve("shopping/photos"));
-        Files.write(dataDir.resolve("shopping/photos/stray.jpg"), new byte[] {1});
+        Files.createDirectories(dataDir.resolve("shopping-photos"));
+        Files.write(dataDir.resolve("shopping-photos/stray.jpg"), new byte[] {1});
         store();
-        assertThat(Files.exists(dataDir.resolve("shopping/photos/stray.jpg"))).isFalse();
+        assertThat(Files.exists(dataDir.resolve("shopping-photos/stray.jpg"))).isFalse();
+    }
+
+    @Test
+    void theRackStillLoadsBesideAFullList() throws Exception {
+        // Every directory under data/ is a container to the index and its *.json
+        // are slots. The first deploy kept the list in data/shopping/ and the
+        // index read list.json as a slot and refused to boot.
+        Shopping shopping = new Shopping(store(), index, images);
+        shopping.add(new Shopping.Text("Fuse", "Jula", null, null, null), jpeg(), null);
+        shopping.setBrand("Anslut", "Jula");
+
+        family.eilertsen.rack.adapter.out.json.JsonFilePartIndex rack =
+            new family.eilertsen.rack.adapter.out.json.JsonFilePartIndex(dataDir.toString(), mapper);
+        rack.load();
+        try (var dirs = Files.list(dataDir)) {
+            for (Path d : dirs.filter(Files::isDirectory).toList()) {
+                try (var files = Files.list(d)) {
+                    assertThat(files.map(f -> f.getFileName().toString())).noneMatch(n -> n.endsWith(".json"));
+                }
+            }
+        }
     }
 
     @Test
