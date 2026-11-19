@@ -2,6 +2,7 @@ package family.eilertsen.rack.adapter.in.web;
 
 import family.eilertsen.rack.application.Shopping;
 import family.eilertsen.rack.domain.model.BrandStore;
+import family.eilertsen.rack.domain.model.ShopPlace;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Framing;
 import family.eilertsen.rack.domain.model.ShoppingEntry;
@@ -83,6 +84,24 @@ public class ShoppingController {
     @DeleteMapping("/shopping/brands")
     public List<BrandStore> forgetBrand(@RequestParam("brand") String brand) {
         return shopping.forgetBrand(brand);
+    }
+
+    @GetMapping("/shopping/places")
+    public List<ShopPlace> places() {
+        return shopping.places();
+    }
+
+    public record NewPlace(String store, Double lat, Double lon, Double accuracy) {}
+
+    @PostMapping("/shopping/places")
+    public ShopPlace savePlace(@RequestBody NewPlace body) {
+        if (body.lat() == null || body.lon() == null) throw new IllegalArgumentException("No position given");
+        return shopping.savePlace(body.store(), body.lat(), body.lon(), body.accuracy());
+    }
+
+    @DeleteMapping("/shopping/places/{id}")
+    public List<ShopPlace> forgetPlace(@PathVariable String id) {
+        return shopping.forgetPlace(id);
     }
 
     /** Any of the text fields, and {@code bought}; absent means unchanged. */

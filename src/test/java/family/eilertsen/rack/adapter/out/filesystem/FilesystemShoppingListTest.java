@@ -145,6 +145,27 @@ class FilesystemShoppingListTest {
     }
 
     @Test
+    void shopSpotsSurviveARestartAndCanBeForgotten() throws IOException {
+        Shopping shopping = new Shopping(store(), index, images);
+        var jula = shopping.savePlace("Jula", 59.91, 10.75, 12.0);
+        shopping.savePlace("Jula", 60.39, 5.32, null);       // another branch, same name
+        shopping.forgetPlace(jula.id());
+
+        var back = new Shopping(store(), index, images).places();
+        assertThat(back).hasSize(1);
+        assertThat(back.get(0).store()).isEqualTo("Jula");
+        assertThat(back.get(0).lat()).isEqualTo(60.39);
+    }
+
+    @Test
+    void aSpotHasToBeSomewhere() throws IOException {
+        Shopping shopping = new Shopping(store(), index, images);
+        assertThatThrownBy(() -> shopping.savePlace("Jula", 91, 0, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> shopping.savePlace(" ", 59, 10, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(shopping.places()).isEmpty();
+    }
+
+    @Test
     void refusesAPathForAPhotoName() throws IOException {
         FilesystemShoppingList list = store();
         assertThatThrownBy(() -> list.photo("../list.json")).isInstanceOf(IllegalArgumentException.class);

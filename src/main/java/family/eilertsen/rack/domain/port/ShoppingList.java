@@ -2,6 +2,7 @@ package family.eilertsen.rack.domain.port;
 
 import family.eilertsen.rack.domain.model.BrandStore;
 import family.eilertsen.rack.domain.model.Framing;
+import family.eilertsen.rack.domain.model.ShopPlace;
 import family.eilertsen.rack.domain.model.ShoppingEntry;
 
 import java.util.List;
@@ -36,4 +37,9 @@ public interface ShoppingList {
     List<BrandStore> brands();
 
     void saveBrands(List<BrandStore> brands);
+
+    /** Where the shops are, as saved from inside them. */
+    List<ShopPlace> places();
+
+    void savePlaces(List<ShopPlace> places);
 }

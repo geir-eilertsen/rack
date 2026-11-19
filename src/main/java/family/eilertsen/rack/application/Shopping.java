@@ -4,6 +4,7 @@ import family.eilertsen.rack.domain.model.BrandStore;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Framing;
 import family.eilertsen.rack.domain.model.Item;
+import family.eilertsen.rack.domain.model.ShopPlace;
 import family.eilertsen.rack.domain.model.ShoppingEntry;
 import family.eilertsen.rack.domain.model.Slot;
 import family.eilertsen.rack.domain.model.SlotId;
@@ -175,6 +176,28 @@ public class Shopping {
         list.saveBrands(list.brands().stream()
             .filter(b -> !b.brand().equalsIgnoreCase(brand == null ? "" : brand.trim())).toList());
         return list.brands();
+    }
+
+    /**
+     * The saved shop spots. Which one the phone is at is worked out on the
+     * phone, so its position never has to reach the server.
+     */
+    public List<ShopPlace> places() {
+        return list.places();
+    }
+
+    /** "I'm at Jula": the phone's position, saved as one of Jula's spots. */
+    public ShopPlace savePlace(String store, double lat, double lon, Double accuracy) {
+        ShopPlace place = new ShopPlace(newId(), store, lat, lon, accuracy, Instant.now(clock));
+        List<ShopPlace> next = new ArrayList<>(list.places());
+        next.add(place);
+        list.savePlaces(next);
+        return place;
+    }
+
+    public List<ShopPlace> forgetPlace(String id) {
+        list.savePlaces(list.places().stream().filter(p -> !p.id().equals(id)).toList());
+        return list.places();
     }
 
     public ShoppingEntry edit(String id, Text text) {

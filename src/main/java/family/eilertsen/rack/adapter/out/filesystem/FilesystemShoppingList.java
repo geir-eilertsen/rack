@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import family.eilertsen.rack.domain.model.BrandStore;
 import family.eilertsen.rack.domain.model.Framing;
+import family.eilertsen.rack.domain.model.ShopPlace;
 import family.eilertsen.rack.domain.model.ShoppingEntry;
 import family.eilertsen.rack.domain.port.ShoppingList;
 import org.slf4j.Logger;
@@ -41,10 +42,12 @@ public class FilesystemShoppingList implements ShoppingList {
 
     private final Path file;
     private final Path brandsFile;
+    private final Path placesFile;
     private final Path photoDir;
     private final ObjectMapper mapper;
     private final List<ShoppingEntry> entries = new ArrayList<>();
     private final List<BrandStore> brands = new ArrayList<>();
+    private final List<ShopPlace> places = new ArrayList<>();
 
     public FilesystemShoppingList(@Value("${rack.data-dir}") String dataDir, ObjectMapper mapper) throws IOException {
         // Beside label-runs.json and searches.json rather than in a folder of
@@ -53,6 +56,7 @@ public class FilesystemShoppingList implements ShoppingList {
         Path dir = Path.of(dataDir).toAbsolutePath().normalize();
         this.file = dir.resolve("shopping.json");
         this.brandsFile = dir.resolve("shopping-brands.json");
+        this.placesFile = dir.resolve("shopping-places.json");
         this.photoDir = dir.resolve("shopping-photos");
         this.mapper = mapper;
         Files.createDirectories(photoDir);
@@ -71,6 +75,11 @@ public class FilesystemShoppingList implements ShoppingList {
             brands.addAll(mapper.readValue(brandsFile.toFile(), new TypeReference<List<BrandStore>>() {}));
         } catch (IOException | IllegalArgumentException e) {
             log.warn("Ignoring unreadable brand list {}: {}", brandsFile, e.toString());
+        }
+        if (Files.exists(placesFile)) try {
+            places.addAll(mapper.readValue(placesFile.toFile(), new TypeReference<List<ShopPlace>>() {}));
+        } catch (IOException | IllegalArgumentException e) {
+            log.warn("Ignoring unreadable shop places {}: {}", placesFile, e.toString());
         }
     }
 
@@ -187,6 +196,24 @@ public class FilesystemShoppingList implements ShoppingList {
             Files.move(tmp, brandsFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             brands.clear();
             brands.addAll(next);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    @Override
+    public synchronized List<ShopPlace> places() {
+        return List.copyOf(places);
+    }
+
+    @Override
+    public synchronized void savePlaces(List<ShopPlace> next) {
+        try {
+            Path tmp = placesFile.resolveSibling("shopping-places.json.tmp");
+            mapper.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), next);
+            Files.move(tmp, placesFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            places.clear();
+            places.addAll(next);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

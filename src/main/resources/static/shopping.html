@@ -63,6 +63,9 @@
     .brands li button { border: none; background: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; }
     .brands form { display: flex; gap: .4rem; flex-wrap: wrap; }
     .brands form input { flex: 1; min-width: 7rem; font-size: 1rem; padding: .5rem .6rem; }
+    .here { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin: 0 0 .7rem; font-size: .95rem; }
+    .here .btn { padding: .35rem .7rem; font-size: .85rem; }
+    .here .quiet { color: var(--muted); font-size: .85rem; }
   </style>
 </head>
 <body>
@@ -100,9 +103,22 @@
       </form>
     </details>
 
+    <p class="here" id="here" hidden></p>
     <div class="stores" id="stores" hidden></div>
     <p class="status" id="status"></p>
     <div id="list"></div>
+
+    <!-- Learned from inside each shop, and matched on the phone: the phone's
+         position is never sent anywhere, only the spots you chose to save. -->
+    <details class="brands" id="placesBox">
+      <summary>Shops and where they are</summary>
+      <p>Standing in a shop, save the spot once. After that, opening the list there shows that shop's things. Your position is only compared on this phone; the shop spots are all rack keeps.</p>
+      <ul id="placeList"></ul>
+      <form id="placeForm">
+        <input id="pStore" type="text" placeholder="Which shop are you in?" list="storeList" required>
+        <button class="btn" type="submit" id="placeBtn">📍 Save my location</button>
+      </form>
+    </details>
 
     <!-- The item says its brand; this says which shop the brand means. -->
     <details class="brands" id="brands">
@@ -206,8 +222,10 @@
           + (anywhere ? chip('Anywhere', ANYWHERE, anywhere) : '');
         host.hidden = false;
         host.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+          autoPicked = false;                 // a tap is a decision; stop following the GPS
           rackRoute.go(b.dataset.all === 'true' ? '' : 'store=' + encodeURIComponent(b.dataset.store));
           draw();
+          drawHere();
         }));
       }
 
@@ -349,10 +367,144 @@
       });
       loadBrands();
 
-      rackRoute.onChange(draw);
+      // ---- Where am I? -------------------------------------------------
+      // A shop spot counts within 150 m, plus the fix's own uncertainty up to
+      // another 100: a big store is a hundred metres across, and indoors a
+      // phone is rarely sure to better than a few tens.
+      const NEAR = 150;
+      let places = [];
+      let fix = null;                 // the phone's last position, kept on the phone
+      let near = null;                // {store, metres} when inside a saved shop
+      let autoPicked = false;         // the filter was set by location, not a tap
+
+      function metres(a, b) {
+        const R = 6371000, rad = Math.PI / 180;
+        const dLat = (b.lat - a.lat) * rad, dLon = (b.lon - a.lon) * rad;
+        const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+        return 2 * R * Math.asin(Math.sqrt(h));
+      }
+
+      function position() {
+        return new Promise((resolve, reject) => {
+          if (!navigator.geolocation) return reject(new Error('this browser cannot tell where it is'));
+          navigator.geolocation.getCurrentPosition(
+            p => resolve({ lat: p.coords.latitude, lon: p.coords.longitude, accuracy: p.coords.accuracy }),
+            e => reject(new Error(e.code === 1 ? 'location permission was refused' : 'no position (' + e.message + ')')),
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+        });
+      }
+
+      async function loadPlaces(request) {
+        try {
+          const res = await (request || fetch('/shopping/places'));
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+          const body = await res.json();
+          if (Array.isArray(body)) places = body;
+        } catch (e) {
+          status.className = 'status error';
+          status.textContent = 'Shop spots: ' + e.message;
+        }
+        drawPlaces();
+      }
+
+      function drawPlaces() {
+        $('placeList').innerHTML = places.length
+          ? places.map(p => '<li><span><b>' + esc(p.store) + '</b>' +
+              (fix ? ' <span class="quiet">' + distance(metres(fix, p)) + ' away</span>' : '') +
+              '</span><button type="button" data-id="' + esc(p.id) + '" title="Forget this spot">&times;</button></li>').join('')
+          : '<li><span class="empty">No shops saved yet.</span></li>';
+        $('placeList').querySelectorAll('button').forEach(b => b.addEventListener('click', async () => {
+          await loadPlaces(fetch('/shopping/places/' + encodeURIComponent(b.dataset.id), { method: 'DELETE' }));
+          decide();
+        }));
+      }
+
+      function distance(m) {
+        return m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(m < 10000 ? 1 : 0) + ' km';
+      }
+
+      /** Only asks the phone when there is something to compare against. */
+      async function locate() {
+        if (!places.length) return;
+        try {
+          fix = await position();
+        } catch (e) {
+          fix = null;
+        }
+        decide();
+      }
+
+      function decide() {
+        near = null;
+        if (fix) {
+          const radius = NEAR + Math.min(fix.accuracy || 0, 100);
+          places.forEach(p => {
+            const m = metres(fix, p);
+            if (m <= radius && (!near || m < near.metres)) near = { store: p.store, metres: m };
+          });
+        }
+        // Follows the GPS only while nobody has chosen otherwise: an address
+        // with no store, or a store the location put there itself.
+        const at = chosen();
+        if (near && (at === null || autoPicked) && (at === null || key(at) !== key(near.store))) {
+          autoPicked = true;
+          rackRoute.go('store=' + encodeURIComponent(near.store), { replace: true });
+          draw();
+        }
+        drawPlaces();
+        drawHere();
+      }
+
+      function drawHere() {
+        const host = $('here');
+        const at = chosen();
+        if (near && at !== null && key(at) === key(near.store)) {
+          host.innerHTML = '📍 You\'re at <b>' + esc(near.store) + '</b>';
+        } else if (fix && at) {
+          // Filtered to a shop the phone is not near any saved spot of: the
+          // moment to teach it, if this is where you are.
+          host.innerHTML = '<button type="button" class="btn" id="hereSave">📍 I\'m at ' + esc(at) + ' — save this spot</button>';
+          $('hereSave').addEventListener('click', () => savePlace(at));
+        } else if (!places.length && at) {
+          host.innerHTML = '<button type="button" class="btn" id="hereSave">📍 I\'m at ' + esc(at) + ' — save this spot</button>' +
+            '<span class="quiet">so the list opens on ' + esc(at) + ' next time</span>';
+          $('hereSave').addEventListener('click', () => savePlace(at));
+        } else {
+          host.innerHTML = '';
+        }
+        host.hidden = !host.innerHTML;
+      }
+
+      async function savePlace(store) {
+        status.className = 'status';
+        status.textContent = 'Finding where you are…';
+        try {
+          const p = await position();
+          await loadPlaces(fetch('/shopping/places', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ store, lat: p.lat, lon: p.lon, accuracy: p.accuracy })
+          }));
+          fix = p;
+          status.textContent = 'Saved: this is ' + store + (p.accuracy ? ' (to within ' + Math.round(p.accuracy) + ' m)' : '') + '.';
+          decide();
+        } catch (e) {
+          status.className = 'status error';
+          status.textContent = 'Could not save the spot: ' + e.message;
+        }
+      }
+
+      $('placeForm').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        await savePlace($('pStore').value.trim());
+        $('pStore').value = '';
+      });
+
+      loadPlaces().then(locate);
+
+      rackRoute.onChange(() => { autoPicked = false; draw(); drawHere(); });
       load();
       // Ticked off on another phone in the same shop.
-      document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) { load(); locate(); } });
     })();
   </script>
   <script src="/assets/usage.js" defer></script>
