@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/assets/rack.css">
   <script src="/assets/route.js"></script>
   <script src="/assets/places.js"></script>
+  <script src="/assets/dialog.js"></script>
   <style>
     .cbox { padding: 1.1rem 1.15rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); margin-bottom: .75rem; }
     .cbox h3 { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
@@ -450,8 +451,10 @@
         }
       });
 
-      q('.c-delete').addEventListener('click', async () => {
-        if (!confirm('Delete "' + (c.name || c.id) + '"? Its labels stop resolving, and any QR codes already stuck on it become dead.')) return;
+      q('.c-delete').addEventListener('click', async ev => {
+        // Its labels stop resolving, and QR codes already stuck on it go dead:
+        // a second click on "Really?" is the confirmation.
+        if (!rackDialog.really(ev.currentTarget)) return;
         note('Deleting…');
         try {
           const res = await fetch('/c/' + encodeURIComponent(c.id), { method: 'DELETE' });

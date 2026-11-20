@@ -496,3 +496,24 @@ body.cam-open { overflow: hidden; }
 .cam-count img { width: 52px; height: 52px; object-fit: cover; border-radius: var(--radius-sm); border: 2px solid #fff; }
 .cam-count b { position: absolute; top: -8px; right: -8px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--primary); color: #fff; font-size: .8rem; line-height: 22px; text-align: center; }
 .cam-status { position: absolute; left: 1rem; right: 1rem; bottom: calc(7.5rem + env(safe-area-inset-bottom)); padding: .5rem .8rem; border-radius: var(--radius-sm); background: rgba(184,67,53,.9); font-size: .85rem; text-align: center; }
+
+/* rack's own dialogs (assets/dialog.js), in place of the browser's popups. */
+.rack-dialog { border: none; padding: 0; border-radius: var(--radius); background: var(--card); color: var(--text);
+  width: min(26rem, calc(100vw - 2rem)); box-shadow: var(--shadow-lg); }
+.rack-dialog::backdrop { background: rgba(42, 31, 24, .45); }
+.rack-dialog form { padding: 1.1rem 1.2rem 1rem; display: flex; flex-direction: column; gap: .8rem; }
+.rack-dialog .rd-title { margin: 0; font-size: 1.1rem; font-family: var(--font-display); }
+.rack-dialog .rd-msg { margin: 0; font-size: .95rem; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
+.rack-dialog .rd-field { display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; color: var(--muted); }
+.rack-dialog .rd-value { font-size: 1rem; padding: .6rem .7rem; width: 100%; box-sizing: border-box;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm); color: var(--text); background: var(--card); }
+.rack-dialog .rd-choices { display: flex; flex-wrap: wrap; gap: .4rem; }
+.rack-dialog .rd-chip { border: 1px solid var(--border-strong); background: var(--card); color: var(--text);
+  border-radius: 999px; padding: .4rem .85rem; font-size: .95rem; cursor: pointer; }
+.rack-dialog .rd-chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.rack-dialog .rd-acts { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .2rem; }
+.btn.danger-fill { background: var(--error); border-color: var(--error); color: #fff; }
+.btn.danger-fill:hover { background: #9c3328; border-color: #9c3328; color: #fff; }
+/* The first click on a delete button (rackDialog.really): it now says "Really?" and waits for a second. */
+button.really, .btn.really { background: var(--error) !important; border-color: var(--error) !important; color: #fff !important;
+  font-size: .85rem; font-weight: 600; padding: .3rem .65rem; border-radius: var(--radius-sm); white-space: nowrap; }

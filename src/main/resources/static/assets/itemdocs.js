@@ -113,7 +113,8 @@
 
     block.querySelectorAll('.ddrop').forEach(btn => btn.addEventListener('click', async e => {
       e.stopPropagation();
-      if (!confirm('Remove this? A stored file goes unless something else keeps it too.')) return;
+      // A stored file goes unless something else keeps it too.
+      if (!rackDialog.really(btn)) return;
       status.className = 'dstatus';
       status.textContent = 'Removing…';
       await send(() => fetch(base + '?ref=' + encodeURIComponent(btn.dataset.drop),

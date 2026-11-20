@@ -247,6 +247,12 @@ Committing after each write gives history, per-drawer undo, and free multi-site 
 - `GET /labels/{container}` (preview), `POST /labels/{container}` (mark + archive), `GET /labels/{container}/status` → QR label sheets
 - Phone photos are uploaded as the camera made them and fitted on the server; `max-file-size` is 60MB and `max-request-size` 100MB, since a batch is one request.
 
+### rack asks on its own terms
+
+**Anything that deletes asks on the button itself.** The first click turns *Delete* (or the × on a line) into a red *Really?*; a second click on it within four seconds does it, and waiting or clicking anywhere else puts it back (`rackDialog.really(button)` in `assets/dialog.js`). A dialog for a yes/no is a second place to look and a second thing to tap; a button that changes under your finger asks the same question where you are already looking, and one stray tap cannot delete. Used for deleting a container or a project, removing a document from either, removing a line still to be bought, and settling a project up — which takes stock out of the drawers, so it asks like a delete.
+
+**Where something has to be typed, rack draws its own dialog** — renaming a project, the order number when a line is ordered — `rackDialog.prompt` and `.ask`, a native `<dialog>` opened modally in rack's style, never the browser's `prompt()`, which looks like a different program and on a phone is a system sheet over the page. Cancel, Esc and a tap on the shade all answer no. `ask` takes a row of choices with the text box, so marking a line for several online shops as ordered asks which shop and the order number in one box. No page calls the browser's `confirm()` or `prompt()`.
+
 ### Where you are is in the address
 
 Every page used to read its state once out of a query string and never mention it again. Pick a different drawer and the address still named the one you arrived at: Back left the page instead of going back a drawer, a reload put you somewhere else, and a search was a thing you could not send anybody. The state was real and only the address was wrong. `assets/route.js` puts each page's own state in the hash and makes the page follow it — `put.html#rack/A1`, `find.html#q=BC547`, `project.html#quad-606`, `containers.html#rack/labels`, and the container opened on the hub.

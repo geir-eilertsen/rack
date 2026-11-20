@@ -198,6 +198,7 @@
 
   <script src="/assets/route.js"></script>
   <script src="/assets/places.js"></script>
+  <script src="/assets/dialog.js"></script>
   <script src="/assets/usage.js"></script>
   <script src="/assets/project.js"></script>
   <script src="/assets/advice.js"></script>
@@ -545,13 +546,13 @@
       document.getElementById('statusPick').addEventListener('change', e =>
         send('', 'PATCH', { status: e.target.value }));
 
-      document.getElementById('renameBtn').addEventListener('click', () => {
-        const name = prompt('Name this project', project.name);
+      document.getElementById('renameBtn').addEventListener('click', async () => {
+        const name = await rackDialog.prompt({ title: 'Name this project', value: project.name, ok: 'Rename', required: true });
         if (name && name.trim() && name.trim() !== project.name) send('', 'PATCH', { name: name.trim() });
       });
 
-      document.getElementById('deleteBtn').addEventListener('click', async () => {
-        if (!confirm('Delete "' + project.name + '"? The drawers are untouched; only the project goes.')) return;
+      document.getElementById('deleteBtn').addEventListener('click', async ev => {
+        if (!rackDialog.really(ev.currentTarget)) return;     // the drawers are untouched; only the project goes
         const res = await fetch('/projects/' + encodeURIComponent(id), { method: 'DELETE' });
         if (res.ok) location.href = '/projects.html';
         else setStatus('error', 'Could not delete it.');
@@ -568,9 +569,8 @@
       const docFile = document.getElementById('docFile');
       if (docFile) docFile.addEventListener('change', () => upload(docFile));
       document.querySelectorAll('[data-doc]').forEach(b => b.addEventListener('click', () => {
-        if (confirm('Remove this? A stored file goes unless another project keeps it too.')) {
-          send('/documents?ref=' + encodeURIComponent(b.dataset.doc), 'DELETE');
-        }
+        // A stored file goes unless another project keeps it too.
+        if (rackDialog.really(b)) send('/documents?ref=' + encodeURIComponent(b.dataset.doc), 'DELETE');
       }));
 
       const linkForm = document.getElementById('docLinkForm');
@@ -804,16 +804,17 @@
               + ' <button class="btn" id="doSettleOnly">Apply, keep it open</button>'
             : '');
         if (changes.length) {
-          document.getElementById('doSettle').addEventListener('click', () => applySettlement(true));
-          document.getElementById('doSettleOnly').addEventListener('click', () => applySettlement(false));
+          document.getElementById('doSettle').addEventListener('click', ev => applySettlement(true, ev.currentTarget));
+          document.getElementById('doSettleOnly').addEventListener('click', ev => applySettlement(false, ev.currentTarget));
         }
       } catch (e) {
         out.innerHTML = '<p class="status error">Could not work it out: ' + esc(e.message) + '</p>';
       }
     }
 
-    async function applySettlement(finish) {
-      if (!confirm('Reduce the drawers as shown? This changes your inventory.')) return;
+    async function applySettlement(finish, btn) {
+      // Takes stock out of the drawers, so it asks twice, like a delete.
+      if (!rackDialog.really(btn)) return;
       setStatus('', 'Settling up…');
       try {
         const res = await fetch('/projects/' + encodeURIComponent(id) + '/settle', {

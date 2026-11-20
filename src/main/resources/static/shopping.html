@@ -13,6 +13,7 @@
   <script src="/assets/route.js"></script>
   <script src="/assets/shopping.js"></script>
   <script src="/assets/brands.js"></script>
+  <script src="/assets/dialog.js"></script>
   <style>
     /* At the store, the store is the filter: tap "Leroy" and the page is what
        to pick up there, plus what can be bought anywhere. */
@@ -260,7 +261,7 @@
         host.querySelectorAll('.tick').forEach(cb => cb.addEventListener('change', () => tick(cb.dataset.id, cb.checked)));
         host.querySelectorAll('.entry .unorder').forEach(b => b.addEventListener('click', () => unorder(b.dataset.id)));
         host.querySelectorAll('.entry .reorder').forEach(b => b.addEventListener('click', () => orderRef(b.dataset.id)));
-        host.querySelectorAll('.entry .drop').forEach(b => b.addEventListener('click', () => drop(b.dataset.id)));
+        host.querySelectorAll('.entry .drop').forEach(b => b.addEventListener('click', () => drop(b.dataset.id, b)));
         const clear = $('clear');
         if (clear) clear.addEventListener('click', clearBought);
       }
@@ -392,21 +393,28 @@
           const shops = shopsOf(e);
           // Several online shops and nothing filtered: ask which, since the
           // line narrows to it — once it is coming from Amazon, Komplett is not.
-          if (shops.length > 1 && !(chosen() !== null && soldAt(e, chosen()))) {
-            const named = prompt('Ordered from which shop? ' + shops.join(' / '), from);
-            if (named === null) { draw(); return; }
-            from = shops.find(st => key(st) === key(named)) || named.trim() || from;
-          }
-          const ref = prompt('Ordered from ' + from + '. Order number or tracking link? (optional)', '');
-          if (ref === null) { draw(); return; }        // cancelled: leave it as it was
-          return patch(id, { ordered: true, order_ref: ref.trim() || null, ordered_from: from });
+          const pick = shops.length > 1 && !(chosen() !== null && soldAt(e, chosen()));
+          const r = await rackDialog.ask({
+            title: 'Ordered',
+            message: pick ? 'Which shop is “' + e.what + '” coming from?' : '“' + e.what + '” from ' + from + '.',
+            choices: pick ? shops : null,
+            choice: from,
+            input: { label: 'Order number or tracking link (optional)', placeholder: 'e.g. 302-1234567' },
+            ok: 'Ordered'
+          });
+          if (r === null) { draw(); return; }          // cancelled: leave it as it was
+          if (pick) from = r.choice;
+          return patch(id, { ordered: true, order_ref: r.value.trim() || null, ordered_from: from });
         }
         await patch(id, { bought: checked });
       }
 
       async function orderRef(id) {
         const e = entries.find(x => x.id === id);
-        const ref = prompt('Order number or tracking link', (e && e.order_ref) || '');
+        const ref = await rackDialog.prompt({
+          title: e ? e.what : 'Order', label: 'Order number or tracking link',
+          value: (e && e.order_ref) || '', ok: 'Save'
+        });
         if (ref === null) return;
         await patch(id, { ordered: true, order_ref: ref.trim() || null });
       }
@@ -422,9 +430,10 @@
         }));
       }
 
-      async function drop(id) {
+      async function drop(id, btn) {
         const e = entries.find(x => x.id === id);
-        if (e && !e.bought_at && !confirm('Remove "' + e.what + '" from the list?')) return;
+        // Something already got goes on one click; one still wanted asks twice.
+        if (e && !e.bought_at && !rackDialog.really(btn)) return;
         await change(fetch('/shopping/' + encodeURIComponent(id), { method: 'DELETE' }));
       }
 
