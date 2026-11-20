@@ -371,9 +371,33 @@ class FilesystemShoppingListTest {
             assertThat(h.stores()).containsExactly("Komplett", "Amazon.es");
             assertThat(h.because()).isEqualTo("Logitech is sold at Komplett and Amazon.es");
         });
-        // With nothing typed, the line goes to the first; typed, to what was typed.
-        assertThat(shopping.addFromItem(GARAGE, A1, 0, null, null, null).store()).isEqualTo("Komplett");
-        assertThat(shopping.addFromItem(GARAGE, A1, 0, "Amazon.es", null, null).store()).isEqualTo("Amazon.es");
+        // Nothing to pick: the line goes on the list for every shop that sells it.
+        ShoppingEntry both = shopping.addFromItem(GARAGE, A1, 0, null, null, null);
+        assertThat(both.stores()).containsExactly("Komplett", "Amazon.es");
+        // A shop typed as well comes first, and the others are kept.
+        ShoppingEntry three = shopping.addFromItem(GARAGE, A1, 0, List.of("Elkjøp"), null, null, true);
+        assertThat(three.stores()).containsExactly("Elkjøp", "Komplett", "Amazon.es");
+        assertThat(shopping.brands()).hasSize(3);           // and Elkjøp is remembered beside them
+
+        // Survives a restart, and every one of them is a known store.
+        Shopping reopened = new Shopping(store(), index, images);
+        assertThat(reopened.all().get(0).stores()).containsExactly("Komplett", "Amazon.es");
+        assertThat(reopened.stores()).contains("Amazon.es", "Elkjøp", "Komplett");
+
+        // Ordered from one, it narrows to that one.
+        ShoppingEntry ordered = reopened.setOrdered(both.id(), true, "302-1", "amazon.es");
+        assertThat(ordered.stores()).containsExactly("amazon.es");
+        assertThat(ordered.ordered()).isTrue();
+    }
+
+    @Test
+    void aLineForSeveralShopsKeepsEachOnce() {
+        ShoppingEntry e = new ShoppingEntry("x1", "Mouse", null, null, null, null, null, null, null,
+            java.time.Instant.EPOCH, null, null, null, List.of(" Komplett", "komplett", "", "Amazon.es"));
+        assertThat(e.store()).isEqualTo("Komplett");
+        assertThat(e.alsoAt()).containsExactly("Amazon.es");
+        assertThat(e.soldAt("amazon.es ")).isTrue();
+        assertThat(e.soldAt("Jula")).isFalse();
     }
 
     private static Item branded(String name, String description, String brand) {

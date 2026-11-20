@@ -92,19 +92,38 @@ public class Shopping {
      */
     public ShoppingEntry addFromItem(ContainerId container, SlotId slotId, int itemIndex,
                                      String store, String qty, String note, boolean rememberBrand) {
+        return addFromItem(container, slotId, itemIndex, store == null ? List.of() : List.of(store), qty, note,
+            rememberBrand);
+    }
+
+    /**
+     * To be bought at any shop that sells it: {@code stores} — what the person
+     * typed — and every store the item's brand is sold at, all of them, since
+     * which one gets there first is decided in the aisle or at the checkout,
+     * not when the line is written. Typed stores come first. None at all:
+     * anywhere.
+     */
+    public ShoppingEntry addFromItem(ContainerId container, SlotId slotId, int itemIndex,
+                                     List<String> stores, String qty, String note, boolean rememberBrand) {
         Item item = item(container, slotId, itemIndex);
-        if (rememberBrand && store != null && !store.isBlank() && item.brand() != null
-                && !sells(item.brand(), store)) {
-            setBrand(item.brand(), store);
+        List<String> chosen = stores == null ? List.of()
+            : stores.stream().filter(st -> st != null && !st.isBlank()).map(String::strip).toList();
+        if (rememberBrand && item.brand() != null) {
+            for (String st : chosen) if (!sells(item.brand(), st)) setBrand(item.brand(), st);
         }
-        if (store == null || store.isBlank()) store = storeFor(item).map(StoreHint::store).orElse(null);
+        List<String> all = new ArrayList<>(chosen);
+        storeFor(item).ifPresent(h -> h.stores().forEach(st -> {
+            if (all.stream().noneMatch(st::equalsIgnoreCase)) all.add(st);
+        }));
+        String store = all.isEmpty() ? null : all.get(0);
+        List<String> alsoAt = all.size() > 1 ? all.subList(1, all.size()) : List.of();
         String what = item.name() != null && !item.name().isBlank() ? item.name() : item.description();
         if (what == null || what.isBlank()) what = "Item from " + container.value() + "/" + slotId.value();
         if (what.length() > 120) what = what.substring(0, 120) + "…";
 
         String details = join(note, item.name() != null && !item.name().isBlank() ? item.description() : null);
         ShoppingEntry entry = new ShoppingEntry(newId(), what, store, item.partNumber(), details, qty,
-            null, container.value(), slotId.value(), Instant.now(clock), null);
+            null, container.value(), slotId.value(), Instant.now(clock), null, null, null, alsoAt);
 
         String source = item.sourcePhoto();
         if (source != null) {
@@ -251,7 +270,7 @@ public class Shopping {
      */
     public List<String> stores() {
         Map<String, Map<String, Integer>> spellings = new HashMap<>();
-        list.all().forEach(e -> countSpelling(spellings, e.store()));
+        list.all().forEach(e -> e.stores().forEach(st -> countSpelling(spellings, st)));
         list.brands().forEach(b -> countSpelling(spellings, b.store()));
         list.places().forEach(p -> countSpelling(spellings, p.store()));
         list.shops().forEach(s -> countSpelling(spellings, s.name()));
@@ -373,7 +392,17 @@ public class Shopping {
      * line that arrives is in hand exactly as a ticked-off one is.
      */
     public ShoppingEntry setOrdered(String id, boolean ordered, String ref) {
+        return setOrdered(id, ordered, ref, null);
+    }
+
+    /**
+     * {@code from}, when given, is the store it was ordered from, and the
+     * line narrows to it: once it is on its way from Amazon, Komplett is no
+     * longer where it comes from.
+     */
+    public ShoppingEntry setOrdered(String id, boolean ordered, String ref, String from) {
         ShoppingEntry e = get(id);
+        if (ordered && from != null && !from.isBlank()) e = e.narrowedTo(from.strip());
         ShoppingEntry next = ordered
             ? e.withOrdered(e.orderedAt() != null ? e.orderedAt() : Instant.now(clock), ref != null ? ref : e.orderRef())
             : e.withOrdered(null, null);

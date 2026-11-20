@@ -68,13 +68,16 @@ public class ShoppingController {
         return shopping.add(new Shopping.Text(what, store, partNumber, details, qty), bytes, Framing.parse(seen));
     }
 
-    public record FromItem(String store, String qty, String note, Boolean rememberBrand) {}
+    /** {@code stores}, when given, is every store it may be bought at; {@code store} is the one-store form. */
+    public record FromItem(String store, String qty, String note, Boolean rememberBrand, List<String> stores) {}
 
     @PostMapping("/c/{container}/{slot}/items/{index}/shopping")
     public ShoppingEntry addFromItem(@PathVariable String container, @PathVariable String slot,
                                      @PathVariable int index, @RequestBody(required = false) FromItem body) {
-        FromItem b = body == null ? new FromItem(null, null, null, null) : body;
-        return shopping.addFromItem(new ContainerId(container), new SlotId(slot), index, b.store(), b.qty(), b.note(),
+        FromItem b = body == null ? new FromItem(null, null, null, null, null) : body;
+        List<String> stores = b.stores() != null && !b.stores().isEmpty() ? b.stores()
+            : b.store() == null ? List.of() : List.of(b.store());
+        return shopping.addFromItem(new ContainerId(container), new SlotId(slot), index, stores, b.qty(), b.note(),
             Boolean.TRUE.equals(b.rememberBrand()));
     }
 
@@ -148,7 +151,7 @@ public class ShoppingController {
     /** Any of the text fields, and {@code bought}; absent means unchanged. */
     /** {@code ordered} with {@code orderRef}: on its way; {@code bought}: in hand, or arrived. */
     public record Patch(String what, String store, String partNumber, String details, String qty, Boolean bought,
-                        Boolean ordered, String orderRef) {}
+                        Boolean ordered, String orderRef, String orderedFrom) {}
 
     @PatchMapping("/shopping/{id}")
     public ShoppingEntry update(@PathVariable String id, @RequestBody Patch body) {
@@ -157,7 +160,7 @@ public class ShoppingController {
             || body.details() != null || body.qty() != null) {
             e = shopping.edit(id, new Shopping.Text(body.what(), body.store(), body.partNumber(), body.details(), body.qty()));
         }
-        if (body.ordered() != null) e = shopping.setOrdered(id, body.ordered(), body.orderRef());
+        if (body.ordered() != null) e = shopping.setOrdered(id, body.ordered(), body.orderRef(), body.orderedFrom());
         if (body.bought() != null) e = shopping.setBought(id, body.bought());
         if (e == null) throw new IllegalArgumentException("Nothing to change");
         return e;

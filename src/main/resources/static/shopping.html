@@ -181,6 +181,10 @@
       const key = s => (s || '').trim().toLowerCase();
       const shopOf = store => store ? shops.find(s => key(s.name) === key(store)) : undefined;
       const isOnline = store => !!(shopOf(store) || {}).online;
+      // A line may come from several shops — a Logitech mouse from Komplett
+      // or Amazon, whichever gets there first — and shows under each.
+      const shopsOf = e => [e.store].concat(e.also_at || []).filter(Boolean);
+      const soldAt = (e, store) => shopsOf(e).some(st => key(st) === key(store));
       // Still to get: not in hand, not on its way.
       const isOpen = e => !e.bought_at && !e.ordered_at;
       const isOrdered = e => !e.bought_at && !!e.ordered_at;
@@ -225,7 +229,7 @@
         const ordered = entries.filter(isOrdered);
         const bought = entries.filter(e => e.bought_at);
         // At a store: that store's lines, then whatever has no store at all.
-        const here = e => at === null || key(e.store) === key(at) || !e.store;
+        const here = e => at === null || soldAt(e, at) || !e.store;
 
         const host = $('list');
         let html = '';
@@ -264,7 +268,7 @@
       function drawChips(stores) {
         const host = $('stores');
         const open = entries.filter(isOpen);
-        const count = name => open.filter(e => key(e.store) === key(name)).length;
+        const count = name => open.filter(e => soldAt(e, name)).length;
         const anywhere = open.filter(e => !e.store).length;
         if (!stores.length) { host.hidden = true; return; }
         const at = chosen();
@@ -284,12 +288,17 @@
         }));
       }
 
-      /** By store, in name order, with the no-store lines last. */
+      /**
+       * By store, in name order, with the no-store lines last. A line for
+       * several shops is grouped under all of them ("Komplett or Amazon.es"),
+       * or under the one the list is filtered to.
+       */
       function groups(list, at) {
         const by = new Map();
         list.forEach(e => {
-          const k = key(e.store);
-          if (!by.has(k)) by.set(k, { title: e.store || 'Anywhere', items: [] });
+          const names = at !== null && e.store && soldAt(e, at) ? [shopsOf(e).find(st => key(st) === key(at))] : shopsOf(e);
+          const k = names.map(key).join('|');
+          if (!by.has(k)) by.set(k, { title: names.join(' or ') || 'Anywhere', items: [] });
           by.get(k).items.push(e);
         });
         return [...by.entries()]
@@ -315,9 +324,13 @@
               ? '<a class="ref" href="' + esc(e.order_ref) + '" target="_blank" rel="noopener noreferrer">track</a>'
               : '<span class="ref">order ' + esc(e.order_ref) + '</span>')
           : '';
-        const shop = shopOf(e.store);
+        const at = chosen();
+        // Filtered to one of its shops, that is the one in play; otherwise all of them.
+        const inPlay = at !== null && soldAt(e, at) ? shopsOf(e).filter(st => key(st) === key(at)) : shopsOf(e);
+        const others = at !== null && soldAt(e, at) ? shopsOf(e).filter(st => key(st) !== key(at)) : [];
+        const also = others.length ? 'also at ' + others.map(esc).join(', ') : '';
         const acts = [];
-        if (isOpen(e) && shop && shop.search_url) {
+        inPlay.map(shopOf).filter(shop => isOpen(e) && shop && shop.search_url).forEach(shop => {
           // The shop's own search, never a product page rack made up. By name
           // first: a name always says what the thing is, where a part number
           // read off it may be a certification ID or a batch code that no shop
@@ -329,9 +342,9 @@
             + '">🔎 Search ' + esc(shop.name) + '</a>');
           if (e.part_number && key(e.part_number) !== key(e.what)) {
             acts.push('<a class="btn" target="_blank" rel="noopener noreferrer" href="' + search(e.part_number)
-              + '">🔎 ' + esc(e.part_number) + '</a>');
+              + '">🔎 ' + esc(e.part_number) + (inPlay.length > 1 ? ' at ' + esc(shop.name) : '') + '</a>');
           }
-        }
+        });
         if (isOrdered(e)) {
           acts.push('<button type="button" class="link reorder" data-id="' + esc(e.id) + '">' + (e.order_ref ? 'change order no.' : 'add order no.') + '</button>');
           acts.push('<button type="button" class="link unorder" data-id="' + esc(e.id) + '">not ordered after all</button>');
@@ -339,7 +352,7 @@
         if (e.bought_at && e.container) {
           acts.push('<a class="btn primary" href="' + href + '">Put it in ' + where + '</a>');
         }
-        const online = isOnline(e.store);
+        const online = orderFrom(e) !== null;
         const tickTitle = e.bought_at ? 'Got it' : isOrdered(e) ? 'Arrived' : online ? 'Ordered' : 'Got it';
         return '<li class="entry' + (e.bought_at ? ' bought' : '') + (isOrdered(e) ? ' ordered' : '') + '">' +
           '<input type="checkbox" class="tick" data-id="' + esc(e.id) + '"' + (e.bought_at ? ' checked' : '') + ' title="' + tickTitle + '" aria-label="' + tickTitle + '">' +
@@ -348,7 +361,7 @@
             '<div class="what">' + esc(e.what) + (e.qty ? ' <span class="qty">× ' + esc(e.qty) + '</span>' : '') + '</div>' +
             (e.part_number ? '<div class="pn">' + esc(e.part_number) + '</div>' : '') +
             (e.details ? '<div class="details">' + esc(e.details) + '</div>' : '') +
-            '<div class="meta">' + [from, sent || added, ref].filter(Boolean).join(' · ') + '</div>' +
+            '<div class="meta">' + [from, also, sent || added, ref].filter(Boolean).join(' · ') + '</div>' +
             (acts.length ? '<div class="acts">' + acts.join('') + '</div>' : '') +
           '</div>' +
           '<button type="button" class="drop" data-id="' + esc(e.id) + '" title="Remove from the list">&times;</button>' +
@@ -358,12 +371,35 @@
       // One box, three meanings. A line for an online shop is ticked once when
       // it is ordered and again when it arrives; unticking an arrived line puts
       // it back on its way, since it was ordered all the same.
+      /**
+       * Which online shop ticking this line means it was ordered from, or
+       * null when ticking means it is in hand. Filtered to one of its shops,
+       * that shop decides. Otherwise it is an order only when every shop it
+       * may come from is online — one of them having a door means it may be
+       * picked up — and the first of them stands for the rest until asked.
+       */
+      function orderFrom(e) {
+        const at = chosen();
+        if (at !== null && soldAt(e, at)) return isOnline(at) ? shopsOf(e).find(st => key(st) === key(at)) : null;
+        const shops = shopsOf(e);
+        return shops.length && shops.every(isOnline) ? shops[0] : null;
+      }
+
       async function tick(id, checked) {
         const e = entries.find(x => x.id === id);
-        if (checked && e && isOpen(e) && isOnline(e.store)) {
-          const ref = prompt('Ordered from ' + e.store + '. Order number or tracking link? (optional)', '');
+        let from = e && checked && isOpen(e) ? orderFrom(e) : null;
+        if (from) {
+          const shops = shopsOf(e);
+          // Several online shops and nothing filtered: ask which, since the
+          // line narrows to it — once it is coming from Amazon, Komplett is not.
+          if (shops.length > 1 && !(chosen() !== null && soldAt(e, chosen()))) {
+            const named = prompt('Ordered from which shop? ' + shops.join(' / '), from);
+            if (named === null) { draw(); return; }
+            from = shops.find(st => key(st) === key(named)) || named.trim() || from;
+          }
+          const ref = prompt('Ordered from ' + from + '. Order number or tracking link? (optional)', '');
           if (ref === null) { draw(); return; }        // cancelled: leave it as it was
-          return patch(id, { ordered: true, order_ref: ref.trim() || null });
+          return patch(id, { ordered: true, order_ref: ref.trim() || null, ordered_from: from });
         }
         await patch(id, { bought: checked });
       }

@@ -12,7 +12,3 @@
 .shop-status a { color: var(--primary-hover); font-weight: 600; }
 .shop-remember:not([hidden]) { display: flex; align-items: center; gap: .45rem; font-size: .85rem; color: var(--muted); }
 .shop-remember input { width: auto; padding: 0; margin: 0; }
-.shop-choices:not([hidden]) { display: flex; flex-wrap: wrap; gap: .35rem; }
-.shop-choices .chip { border: 1px solid var(--border); background: var(--card); border-radius: 999px;
-  padding: .25rem .7rem; font-size: .85rem; cursor: pointer; color: inherit; }
-.shop-choices .chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }

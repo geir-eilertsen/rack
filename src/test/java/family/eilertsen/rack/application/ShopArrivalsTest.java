@@ -85,6 +85,15 @@ class ShopArrivalsTest {
     }
 
     @Test
+    void aLineForSeveralShopsIsOneToPickUpAtEach() {
+        list.save(new ShoppingEntry("multi1", "Wall plugs", "Jula", null, null, null, null, null, null,
+            Instant.EPOCH, null, null, null, List.of("Leroy")));
+
+        assertThat(arrivals.position("pixel", "geir", LEROY_A_LAT, LEROY_A_LON, 10.0))
+            .contains("At Leroy: 1 thing on the list — Wall plugs.");
+    }
+
+    @Test
     void anyBranchSavedUnderTheNameCounts() {
         need("GU10 bulb", "Leroy", null);
         arrivals.position("pixel", "geir", LEROY_B_LAT, LEROY_B_LON, 15.0);

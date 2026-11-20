@@ -110,7 +110,8 @@ public class ShopArrivals {
     Optional<String> message(String store) {
         // An ordered line is on its way, not something to pick up here.
         List<ShoppingEntry> open = list.all().stream().filter(ShoppingEntry::open).toList();
-        List<ShoppingEntry> here = open.stream().filter(e -> e.store() != null && key(e.store()).equals(key(store))).toList();
+        // A line that may come from several shops is one to pick up at each of them.
+        List<ShoppingEntry> here = open.stream().filter(e -> e.soldAt(store)).toList();
         if (here.isEmpty()) return Optional.empty();
         long anywhere = open.stream().filter(e -> e.store() == null).count();
         StringBuilder text = new StringBuilder("At ").append(store).append(": ")
