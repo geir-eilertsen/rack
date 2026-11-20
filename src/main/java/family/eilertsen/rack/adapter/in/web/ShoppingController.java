@@ -62,10 +62,11 @@ public class ShoppingController {
                              @RequestParam(value = "part_number", required = false) String partNumber,
                              @RequestParam(value = "details", required = false) String details,
                              @RequestParam(value = "qty", required = false) String qty,
+                             @RequestParam(value = "brand", required = false) String brand,
                              @RequestParam(value = "photo", required = false) MultipartFile photo,
                              @RequestParam(value = "seen", required = false) String seen) throws IOException {
         byte[] bytes = photo == null || photo.isEmpty() ? null : photo.getBytes();
-        return shopping.add(new Shopping.Text(what, store, partNumber, details, qty), bytes, Framing.parse(seen));
+        return shopping.add(new Shopping.Text(what, store, partNumber, details, qty, brand), bytes, Framing.parse(seen));
     }
 
     /** {@code stores}, when given, is every store it may be bought at; {@code store} is the one-store form. */

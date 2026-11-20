@@ -427,6 +427,51 @@ class FilesystemShoppingListTest {
         assertThat(now.get(gone.id()).stores()).containsExactly("Biltema");          // already bought
     }
 
+    @Test
+    void aPhotoForALineIsReadAndItsBrandSaysWhichShops() throws IOException {
+        Shopping shopping = new Shopping(store(), index, images);
+        shopping.setBrand("Energizer", "Leroy");
+        shopping.setBrand("Energizer", "Jula");
+        Item cells = new Item("CR2016 coin cells", "Energizer lithium 3V, blister of 2", "CR2016", "Energizer",
+            "other", 2, 0.92, List.of(), null, null, null, List.of());
+        Item blur = new Item("battery", "something round", null, null, "other", 1, 0.3, List.of(), null, null, null, List.of());
+        family.eilertsen.rack.domain.port.PartExtractor extractor = (photos, note) -> List.of(
+            new family.eilertsen.rack.domain.model.Extraction(blur, 0),
+            new family.eilertsen.rack.domain.model.Extraction(cells, 0));
+
+        var reading = new family.eilertsen.rack.application.ReadForShopping(extractor, shopping).read(jpeg());
+
+        // The one it was surest about, with the shops its brand is sold at.
+        assertThat(reading.what()).isEqualTo("CR2016 coin cells");
+        assertThat(reading.partNumber()).isEqualTo("CR2016");
+        assertThat(reading.brand()).isEqualTo("Energizer");
+        assertThat(reading.details()).isEqualTo("Energizer lithium 3V, blister of 2");
+        assertThat(reading.stores()).containsExactly("Leroy", "Jula");
+        assertThat(reading.others()).isEqualTo(1);
+        assertThat(shopping.all()).isEmpty();                    // reading writes nothing
+    }
+
+    @Test
+    void aTypedLineWithABrandGoesToEveryShopThatSellsIt() throws IOException {
+        Shopping shopping = new Shopping(store(), index, images);
+        shopping.setBrand("Energizer", "Leroy");
+        shopping.setBrand("Energizer", "Jula");
+
+        ShoppingEntry plain = shopping.add(new Shopping.Text("CR2016", null, null, null, "2", "energizer"), null, null);
+        ShoppingEntry typed = shopping.add(new Shopping.Text("CR2032", "Biltema", null, null, null, "Energizer"), null, null);
+
+        assertThat(plain.stores()).containsExactly("Leroy", "Jula");
+        assertThat(plain.brand()).isEqualTo("energizer");
+        assertThat(typed.stores()).containsExactly("Biltema", "Leroy", "Jula");
+    }
+
+    @Test
+    void aPhotoTheCameraCannotReadSaysSo() {
+        Shopping shopping = new Shopping(null, index, images);
+        var reader = new family.eilertsen.rack.application.ReadForShopping((photos, note) -> List.of(), shopping);
+        assertThatThrownBy(() -> reader.read(new byte[] {1})).isInstanceOf(IllegalArgumentException.class);
+    }
+
     private static Item branded(String name, String description, String brand) {
         return new Item(name, description, null, brand, null, 3, 0.9, List.of(), List.of(), "b.jpg",
             List.of("b.jpg"), List.of());

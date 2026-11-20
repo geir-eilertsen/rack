@@ -31,6 +31,8 @@
     .add .pair { display: flex; gap: .45rem; }
     .add .pair > * { flex: 1; min-width: 0; }
     .add .photo-line { display: flex; align-items: center; gap: .6rem; font-size: .9rem; color: var(--muted); }
+    .add .read-hint { margin: 0; font-size: .85rem; color: var(--muted); }
+    .add .read-hint b { color: var(--text); }
     .add .photo-line .drop { border: none; background: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; }
 
     .group-title { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
@@ -107,7 +109,10 @@
           <input id="fQty" type="text" placeholder="How many">
         </div>
         <datalist id="storeList"></datalist>
-        <input id="fPn" type="text" placeholder="Part number / article no.">
+        <div class="pair">
+          <input id="fPn" type="text" placeholder="Part number / article no.">
+          <input id="fBrand" type="text" placeholder="Brand" list="rack-brands" autocomplete="off">
+        </div>
         <textarea id="fDetails" rows="2" placeholder="Size, colour, the one that fits…"></textarea>
         <div class="photo-line">
           <label class="btn" id="shoot">📷 Photo
@@ -116,6 +121,7 @@
           <span id="photoState">No photo</span>
           <button type="button" class="drop" id="photoDrop" hidden title="Drop the photo">&times;</button>
         </div>
+        <p class="read-hint" id="readHint" hidden></p>
         <button class="btn primary" type="submit" id="addBtn">Add to list</button>
       </form>
     </details>
@@ -455,12 +461,54 @@
       // One picture per line: the last one taken is the one kept.
       rackCamera.claim($('shoot'), $('photoInput'), {
         title: 'What to buy',
-        each: files => { photo = files[files.length - 1]; showPhoto(); }
+        each: files => { photo = files[files.length - 1]; showPhoto(); readPhoto(photo); }
       });
-      $('photoDrop').addEventListener('click', () => { photo = null; showPhoto(); });
+      $('photoDrop').addEventListener('click', () => { photo = null; reading = null; showPhoto(); $('readHint').hidden = true; });
       function showPhoto() {
         $('photoState').textContent = photo ? 'Photo attached' : 'No photo';
         $('photoDrop').hidden = !photo;
+      }
+
+      // The photo is read as soon as it is taken, the way a drawer's is, and
+      // fills in whatever boxes are still empty — never one already typed in.
+      // Nothing is stored until Add: the reading is a suggestion to check.
+      let reading = null;                    // the photo being read; a newer one makes an older answer stale
+      async function readPhoto(file) {
+        reading = file;
+        const hint = $('readHint');
+        $('photoState').textContent = 'Reading the photo…';
+        hint.hidden = true;
+        const form = new FormData();
+        form.append('photo', file, file.name || 'photo.jpg');
+        if (file.seen) form.append('seen', file.seen);
+        try {
+          const res = await fetch('/shopping/read', { method: 'POST', body: form });
+          if (reading !== file) return;
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+          const r = await res.json();
+          if (reading !== file) return;
+          const fill = (id, v) => { if (v && !$(id).value.trim()) $(id).value = v; };
+          fill('fWhat', r.what);
+          fill('fPn', r.part_number);
+          fill('fBrand', r.brand);
+          fill('fDetails', r.details);
+          $('photoState').textContent = 'Photo read';
+          const lines = [];
+          if (r.stores && r.stores.length && !$('fStore').value.trim()) {
+            lines.push('Goes on the list for <b>' + r.stores.map(esc).join('</b> and <b>') + '</b> — ' + esc(r.because) + '.');
+          }
+          if (r.others) lines.push('The photo showed ' + (r.others + 1) + ' things; this is the clearest. Check it is the one you meant.');
+          lines.push('Read by the camera — check before adding.');
+          hint.innerHTML = lines.join(' ');
+          hint.hidden = false;
+        } catch (e) {
+          if (reading !== file) return;
+          $('photoState').textContent = 'Photo attached';
+          hint.textContent = 'Could not read it (' + e.message + ') — fill it in by hand.';
+          hint.hidden = false;
+        } finally {
+          if (window.rackUsage) rackUsage.refresh();
+        }
       }
 
       // Typing a line while filtered to a store means it is for that store.
@@ -477,6 +525,7 @@
         form.append('store', $('fStore').value);
         form.append('qty', $('fQty').value);
         form.append('part_number', $('fPn').value);
+        form.append('brand', $('fBrand').value);
         form.append('details', $('fDetails').value);
         if (photo) {
           form.append('photo', photo, photo.name || 'photo.jpg');
@@ -488,8 +537,10 @@
         try {
           const res = await fetch('/shopping', { method: 'POST', body: form });
           if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-          ['fWhat', 'fQty', 'fPn', 'fDetails'].forEach(id => { $(id).value = ''; });
-          photo = null; showPhoto();
+          ['fWhat', 'fQty', 'fPn', 'fBrand', 'fDetails'].forEach(id => { $(id).value = ''; });
+          photo = null; reading = null; showPhoto();
+          $('readHint').hidden = true;
+          rackBrands.refresh();
           status.textContent = '';
           await load();
           $('fWhat').focus();

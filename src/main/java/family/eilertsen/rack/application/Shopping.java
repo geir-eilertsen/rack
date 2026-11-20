@@ -57,16 +57,33 @@ public class Shopping {
         this.clock = Clock.systemUTC();
     }
 
-    public record Text(String what, String store, String partNumber, String details, String qty) {}
+    /** {@code brand}: who made it, typed or read off the photo — it decides the shops, as an item's does. */
+    public record Text(String what, String store, String partNumber, String details, String qty, String brand) {
+        public Text(String what, String store, String partNumber, String details, String qty) {
+            this(what, store, partNumber, details, qty, null);
+        }
+    }
 
     public List<ShoppingEntry> all() {
         return list.all();
     }
 
-    /** Typed in, with or without a picture taken for it. */
+    /**
+     * Typed in, with or without a picture taken for it. With a brand, every
+     * shop that sells it is a shop for the line, after the one typed — the
+     * same as a line made from an item.
+     */
     public ShoppingEntry add(Text text, byte[] photo, Framing seen) {
-        ShoppingEntry entry = new ShoppingEntry(newId(), text.what(), text.store(), text.partNumber(),
-            text.details(), text.qty(), null, null, null, Instant.now(clock), null);
+        List<String> stores = new ArrayList<>();
+        if (text.store() != null && !text.store().isBlank()) stores.add(text.store().strip());
+        if (text.brand() != null && !text.brand().isBlank()) {
+            for (String st : storesOf(rulesFor(text.brand()))) {
+                if (stores.stream().noneMatch(st::equalsIgnoreCase)) stores.add(st);
+            }
+        }
+        ShoppingEntry entry = new ShoppingEntry(newId(), text.what(), stores.isEmpty() ? null : stores.get(0),
+            text.partNumber(), text.details(), text.qty(), null, null, null, Instant.now(clock), null, null, null,
+            stores.size() > 1 ? stores.subList(1, stores.size()) : List.of(), text.brand());
         if (photo != null && photo.length > 0) entry = entry.withPhoto(list.keepPhoto(photo, seen));
         list.save(entry);
         return entry;
