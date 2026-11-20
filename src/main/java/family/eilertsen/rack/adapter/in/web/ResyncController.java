@@ -3,6 +3,7 @@ package family.eilertsen.rack.adapter.in.web;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import family.eilertsen.rack.application.ContainerRegistry;
+import family.eilertsen.rack.application.FccLinks;
 import family.eilertsen.rack.application.ResyncSlot;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Slot;
@@ -35,9 +36,12 @@ public class ResyncController {
     private final ObjectMapper mapper;
 
     private final Batches batches;
+    private final FccLinks fccLinks;
 
-    public ResyncController(ResyncSlot resync, ContainerRegistry registry, ObjectMapper mapper, Batches batches) {
+    public ResyncController(ResyncSlot resync, ContainerRegistry registry, ObjectMapper mapper, Batches batches,
+                            FccLinks fccLinks) {
         this.batches = batches;
+        this.fccLinks = fccLinks;
         this.resync = resync;
         this.registry = registry;
         this.mapper = mapper;
@@ -76,7 +80,7 @@ public class ResyncController {
         try {
             Slot result = resync.apply(cid, sid, batches.bytes(photos, staged), read(decisions));
             batches.release(staged);
-            return result;
+            return fccLinks.link(cid, sid).orElse(result);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         } catch (IndexOutOfBoundsException e) {

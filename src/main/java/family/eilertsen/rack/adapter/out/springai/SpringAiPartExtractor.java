@@ -47,7 +47,8 @@ public class SpringAiPartExtractor implements PartExtractor {
           certification or regulatory ID (FCC ID, IC, CE, UL file number), a
           serial number, a barcode, or a date or batch code — those identify a
           certificate or one unit, not what to buy, and belong in the
-          description. When the only code printed is one of those, null.
+          description. When the only code printed is one of those, null. Write
+          an FCC ID into the description exactly as "FCC ID <the ID>".
         - brand (string or null): the maker or brand as printed on the item, its
           bag, box or label — "Anslut", "Wago", "Panasonic", "Biltema". Spelled
           as printed, without "AB", "GmbH" or a product line. A shop's own name

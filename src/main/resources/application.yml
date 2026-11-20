@@ -50,6 +50,11 @@ rack:
     mqtt-url: ${RACK_MQTT_URL:}
     mqtt-username: ${RACK_MQTT_USERNAME:}
     mqtt-password: ${RACK_MQTT_PASSWORD:}
+  fcc:
+    # Check an FCC ID found in an item's text against fccid.io and link the
+    # page when it is there. The one thing rack fetches from the web; off sends
+    # nothing anywhere.
+    lookup: ${RACK_FCC_LOOKUP:true}
   data-dir: ${RACK_DATA_DIR:./data}
   public-base-url: ${RACK_PUBLIC_BASE_URL:}
   ai:

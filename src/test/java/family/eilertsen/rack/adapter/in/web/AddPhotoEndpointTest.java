@@ -74,7 +74,8 @@ class AddPhotoEndpointTest {
         ContainerController controller = new ContainerController(
             new ContainerRegistry(store), index, addPhoto,
             null, null, null, null, null, null, null, null, null, null, null, null,
-            new Batches(new FilesystemPhotoStaging(stagingDir.toString())));
+            new Batches(new FilesystemPhotoStaging(stagingDir.toString())),
+            new family.eilertsen.rack.application.FccLinks(index, new ContainerRegistry(store), null, false));
         // Match the app's snake_case output so the assertions below are the
         // wire contract the browser sees, not a MockMvc default.
         ObjectMapper mapper = new ObjectMapper()

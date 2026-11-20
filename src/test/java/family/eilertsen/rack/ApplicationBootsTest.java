@@ -24,6 +24,7 @@ class ApplicationBootsTest {
     static void dataDir(DynamicPropertyRegistry registry) {
         registry.add("rack.data-dir", () -> dataDir.toString());
         registry.add("spring.ai.anthropic.api-key", () -> "test-key-not-used");
+        registry.add("rack.fcc.lookup", () -> "false");   // a test does not ask the web
     }
 
     @Test

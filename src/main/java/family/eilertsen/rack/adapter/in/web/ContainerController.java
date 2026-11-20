@@ -6,6 +6,7 @@ import family.eilertsen.rack.application.AskAboutItem;
 import family.eilertsen.rack.application.ContainerRegistry;
 import family.eilertsen.rack.application.DeleteContainer;
 import family.eilertsen.rack.application.EditItem;
+import family.eilertsen.rack.application.FccLinks;
 import family.eilertsen.rack.application.FindCompanions;
 import family.eilertsen.rack.application.ForgetAnswer;
 import family.eilertsen.rack.application.MergeItems;
@@ -43,6 +44,7 @@ import java.util.List;
 public class ContainerController {
 
     private final Batches batches;
+    private final FccLinks fccLinks;
     private final ContainerRegistry registry;
     private final PartIndex index;
     private final AddPhotoToSlot addPhoto;
@@ -65,8 +67,9 @@ public class ContainerController {
                                 EditItem editItem, MoveItem moveItem, MergeItems mergeItems,
                                 RemovePhoto removePhoto, AskAboutItem askAboutItem,
                                 ForgetAnswer forgetAnswer, KeepDocuments documents,
-                                FindCompanions companions, Batches batches) {
+                                FindCompanions companions, Batches batches, FccLinks fccLinks) {
         this.batches = batches;
+        this.fccLinks = fccLinks;
         this.registry = registry;
         this.index = index;
         this.addPhoto = addPhoto;
@@ -181,6 +184,7 @@ public class ContainerController {
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         }
+        fccLinks.link(cid, sid);
         batches.release(staged);
         return result;
     }
@@ -208,7 +212,8 @@ public class ContainerController {
         SlotId sid = new SlotId(slot);
         requireContainerExists(cid);
         try {
-            return editItem.execute(cid, sid, index, fields);
+            Slot saved = editItem.execute(cid, sid, index, fields);
+            return fccLinks.link(cid, sid).orElse(saved);
         } catch (IndexOutOfBoundsException | java.util.NoSuchElementException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
         }
