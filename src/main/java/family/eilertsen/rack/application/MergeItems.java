@@ -59,7 +59,8 @@ public class MergeItems {
         Item drop = items.get(dropIndex);
 
         Item merged = new Item(
-            keep.name(), keep.description(), keep.partNumber(), keep.category(),
+            keep.name(), keep.description(), keep.partNumber(),
+            keep.brand() != null ? keep.brand() : drop.brand(), keep.category(),
             qty(keep) + qty(drop),
             keep.confidence(), keep.tags(), keep.qa(),
             keep.sourcePhoto() != null ? keep.sourcePhoto() : drop.sourcePhoto(),

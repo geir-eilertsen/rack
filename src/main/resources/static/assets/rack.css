@@ -295,6 +295,7 @@ label.field {
 /* Mono / tags */
 .mono { font-family: var(--font-mono); }
 .pn { font-family: var(--font-mono); color: #6b5a4d; font-size: .85rem; }
+.pn-line .item-brand { font-size: .8rem; font-weight: 600; color: var(--muted); margin-right: .5rem; }
 .tag {
   display: inline-block;
   background: var(--primary-soft);

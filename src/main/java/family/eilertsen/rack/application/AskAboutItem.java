@@ -72,6 +72,7 @@ public class AskAboutItem {
             current.name(),
             current.description(),
             current.partNumber(),
+            current.brand(),
             current.category(),
             current.qtyEstimate(),
             current.confidence(),
@@ -106,6 +107,7 @@ public class AskAboutItem {
         ctx.append("- Name: ").append(orUnknown(item.name())).append('\n');
         ctx.append("- Description: ").append(orUnknown(item.description())).append('\n');
         ctx.append("- Part number: ").append(orUnknown(item.partNumber())).append('\n');
+        ctx.append("- Brand: ").append(orUnknown(item.brand())).append('\n');
         ctx.append("- Category: ").append(orUnknown(item.category())).append('\n');
         ctx.append("- Quantity: ").append(item.qtyEstimate() == null ? "unknown" : item.qtyEstimate()).append('\n');
         ctx.append("- Tags: ").append(item.tags() == null || item.tags().isEmpty() ? "none" : String.join(", ", item.tags())).append("\n\n");

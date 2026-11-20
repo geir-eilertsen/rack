@@ -10,3 +10,5 @@
 .shop-status { margin: 0; font-size: .85rem; color: var(--muted); min-height: 1em; }
 .shop-status.error { color: var(--error); }
 .shop-status a { color: var(--primary-hover); font-weight: 600; }
+.shop-remember:not([hidden]) { display: flex; align-items: center; gap: .45rem; font-size: .85rem; color: var(--muted); }
+.shop-remember input { width: auto; padding: 0; margin: 0; }

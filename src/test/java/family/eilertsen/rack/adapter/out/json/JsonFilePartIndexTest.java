@@ -83,6 +83,18 @@ class JsonFilePartIndexTest {
     }
 
     @Test
+    void theBrandIsKeptAndSearched() throws IOException {
+        writeSlot("C3", """
+            {"id":"C3","items":[{"name":"GU10 LED bulb","description":"dimmable, 5W","brand":"Anslut","category":"other","qty_estimate":2,"confidence":0.9,"tags":[]}],"last_verified":null,"printed_at":null}
+            """);
+
+        JsonFilePartIndex index = load();
+        assertThat(index.get(RACK, new SlotId("C3")).orElseThrow().items().get(0).brand()).isEqualTo("Anslut");
+        assertThat(index.searchByKeyword("anslut")).hasSize(1);
+        assertThat(index.searchByKeyword("anslut bulb")).hasSize(1);
+    }
+
+    @Test
     void searchReachesWhatWasAskedAboutAnItem() throws IOException {
         // The Q&A is the only part of an item written by the person who owns it.
         // Asking "is this a good selection for an audio amp" is how you know the

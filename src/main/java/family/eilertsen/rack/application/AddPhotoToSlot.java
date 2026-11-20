@@ -86,7 +86,7 @@ public class AddPhotoToSlot {
 
     /** Source stays the first frame, so the thumbnail is unchanged. */
     private static Item stampSource(Item i, List<String> frames) {
-        return new Item(i.name(), i.description(), i.partNumber(), i.category(), i.qtyEstimate(),
+        return new Item(i.name(), i.description(), i.partNumber(), i.brand(), i.category(), i.qtyEstimate(),
             i.confidence(), i.tags(), i.qa(), frames.get(0), frames, i.documents());
     }
 

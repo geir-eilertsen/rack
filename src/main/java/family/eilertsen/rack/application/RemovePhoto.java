@@ -74,7 +74,7 @@ public class RemovePhoto {
         List<String> remaining = frames == null || frames.isEmpty() ? null : List.copyOf(frames);
         String source = wasSource ? (remaining == null ? null : remaining.get(0)) : item.sourcePhoto();
 
-        return new Item(item.name(), item.description(), item.partNumber(), item.category(),
+        return new Item(item.name(), item.description(), item.partNumber(), item.brand(), item.category(),
             item.qtyEstimate(), item.confidence(), item.tags(), item.qa(),
             source, remaining, item.documents());
     }

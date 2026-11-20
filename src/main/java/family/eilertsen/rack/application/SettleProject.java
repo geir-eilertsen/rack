@@ -124,7 +124,7 @@ public class SettleProject {
                 if (c.index() < 0 || c.index() >= items.size()) continue;
                 Item was = items.get(c.index());
                 items.set(c.index(), new Item(was.name(), was.description(), was.partNumber(),
-                    was.category(), c.after(), was.confidence(), was.tags(), was.qa(),
+                    was.brand(), was.category(), c.after(), was.confidence(), was.tags(), was.qa(),
                     was.sourcePhoto(), was.seenIn(), was.documents()));
                 touched++;
             }

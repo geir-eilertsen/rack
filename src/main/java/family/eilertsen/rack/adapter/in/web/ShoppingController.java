@@ -67,19 +67,20 @@ public class ShoppingController {
         return shopping.add(new Shopping.Text(what, store, partNumber, details, qty), bytes, Framing.parse(seen));
     }
 
-    public record FromItem(String store, String qty, String note) {}
+    public record FromItem(String store, String qty, String note, Boolean rememberBrand) {}
 
     @PostMapping("/c/{container}/{slot}/items/{index}/shopping")
     public ShoppingEntry addFromItem(@PathVariable String container, @PathVariable String slot,
                                      @PathVariable int index, @RequestBody(required = false) FromItem body) {
-        FromItem b = body == null ? new FromItem(null, null, null) : body;
-        return shopping.addFromItem(new ContainerId(container), new SlotId(slot), index, b.store(), b.qty(), b.note());
+        FromItem b = body == null ? new FromItem(null, null, null, null) : body;
+        return shopping.addFromItem(new ContainerId(container), new SlotId(slot), index, b.store(), b.qty(), b.note(),
+            Boolean.TRUE.equals(b.rememberBrand()));
     }
 
     /** Where to buy another of this item, if its own words say; {@code null} store when they do not. */
     @GetMapping("/c/{container}/{slot}/items/{index}/shopping")
     public Shopping.StoreHint storeFor(@PathVariable String container, @PathVariable String slot, @PathVariable int index) {
-        return shopping.storeFor(new ContainerId(container), new SlotId(slot), index)
+        return shopping.hintFor(new ContainerId(container), new SlotId(slot), index)
             .orElse(new Shopping.StoreHint(null, null));
     }
 

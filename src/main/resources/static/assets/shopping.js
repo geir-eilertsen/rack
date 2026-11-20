@@ -48,6 +48,8 @@
       +   '</div>'
       +   '<datalist id="' + list + '"></datalist>'
       +   '<input class="shop-note" type="text" placeholder="Anything to remember? (e.g. the 6mm, not 8)">'
+      +   '<label class="shop-remember" hidden><input type="checkbox" checked> '
+      +     'Remember that <b class="shop-brand"></b> is sold at this store</label>'
       +   '<button type="button" class="btn primary shop-add">Add to list</button>'
       +   '<p class="shop-status"></p>'
       + '</div>'
@@ -68,6 +70,7 @@
     const add = panel.querySelector('.shop-add');
     const status = panel.querySelector('.shop-status');
     const datalist = panel.querySelector('datalist');
+    const remember = panel.querySelector('.shop-remember');
 
     panel.addEventListener('click', ev => ev.stopPropagation());
     panel.addEventListener('keydown', ev => ev.stopPropagation());
@@ -87,7 +90,14 @@
           + '/items/' + encodeURIComponent(index) + '/shopping')
         .then(r => r.ok ? r.json() : null).catch(() => null)
         .then(h => {
-          if (!h || !h.store || store.value) return;
+          if (!h) return;
+          // A brand nobody has said a shop for yet: once the person names
+          // the shop, offer to remember it, so the next one fills itself in.
+          if (h.unplaced_brand) {
+            remember.querySelector('.shop-brand').textContent = h.unplaced_brand;
+            remember.hidden = false;
+          }
+          if (!h.store || store.value) return;
           store.value = h.store;
           hint.textContent = 'Store filled in because ' + h.because + '. Keeps this item\'s photo and part number on the list.';
         });
@@ -103,13 +113,21 @@
           + '/items/' + encodeURIComponent(index) + '/shopping', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ store: store.value, qty: qty.value, note: note.value })
+          body: JSON.stringify({
+            store: store.value, qty: qty.value, note: note.value,
+            remember_brand: !remember.hidden && remember.querySelector('input').checked
+          })
         });
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
         const entry = await res.json();
         stores = null;                       // a new store name is now a known one
         status.innerHTML = 'On the list' + (entry.store ? ' for <b>' + esc(entry.store) + '</b>' : '')
           + '. <a href="/shopping.html' + (entry.store ? '#store=' + encodeURIComponent(entry.store) : '') + '">Open list</a>';
+        if (!remember.hidden && store.value.trim() && remember.querySelector('input').checked) {
+          status.innerHTML += ' · Remembered ' + esc(remember.querySelector('.shop-brand').textContent)
+            + ' → ' + esc(store.value.trim()) + '.';
+          remember.hidden = true;            // the rule exists now
+        }
         note.value = '';
         qty.value = '';
       } catch (e) {

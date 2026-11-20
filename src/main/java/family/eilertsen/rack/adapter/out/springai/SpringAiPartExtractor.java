@@ -43,6 +43,11 @@ public class SpringAiPartExtractor implements PartExtractor {
         - description (string): a fuller line — packaging, markings, condition,
           what distinguishes this from a similar part in the same drawer
         - part_number (string or null): printed markings if legible, otherwise null
+        - brand (string or null): the maker or brand as printed on the item, its
+          bag, box or label — "Anslut", "Wago", "Panasonic", "Biltema". Spelled
+          as printed, without "AB", "GmbH" or a product line. A shop's own name
+          printed as the seller of a house brand ("Clas Ohlson") is the brand.
+          Null when nothing legible says — do not infer it from shape or style.
         - category (string): one of "ic", "transistor", "resistor", "capacitor", "diode", "connector", "module", "fastener", "cable", "other"
         - qty_estimate (integer): count visible across the photos, counting a thing once even when it shows up in several; 1 if unclear
         - confidence (number between 0 and 1): how sure you are of the identification
@@ -133,6 +138,7 @@ public class SpringAiPartExtractor implements PartExtractor {
         String name,
         String description,
         String partNumber,
+        String brand,
         String category,
         Integer qtyEstimate,
         double confidence,
@@ -140,7 +146,7 @@ public class SpringAiPartExtractor implements PartExtractor {
         List<Integer> imageIndexes
     ) {
         Extraction toExtraction(int imageCount) {
-            Item item = new Item(name, description, partNumber, category, qtyEstimate, confidence, tags,
+            Item item = new Item(name, description, partNumber, brand, category, qtyEstimate, confidence, tags,
                 null, null, null, List.of());
             return new Extraction(item, inRange(imageIndexes, imageCount));
         }

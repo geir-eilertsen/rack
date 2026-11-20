@@ -77,7 +77,23 @@ public class Shopping {
      */
     public ShoppingEntry addFromItem(ContainerId container, SlotId slotId, int itemIndex,
                                      String store, String qty, String note) {
+        return addFromItem(container, slotId, itemIndex, store, qty, note, false);
+    }
+
+    /**
+     * With {@code rememberBrand}, the store the person named is also written
+     * down as where the item's brand is sold — but only when the item has a
+     * brand and no rule says where it is sold yet. An existing rule is the
+     * owner's earlier decision and a shopping trip does not overrule it; that
+     * is done at the foot of the list page.
+     */
+    public ShoppingEntry addFromItem(ContainerId container, SlotId slotId, int itemIndex,
+                                     String store, String qty, String note, boolean rememberBrand) {
         Item item = item(container, slotId, itemIndex);
+        if (rememberBrand && store != null && !store.isBlank() && item.brand() != null
+                && ruleFor(item.brand()).isEmpty()) {
+            setBrand(item.brand(), store);
+        }
         if (store == null || store.isBlank()) store = storeFor(item).map(StoreHint::store).orElse(null);
         String what = item.name() != null && !item.name().isBlank() ? item.name() : item.description();
         if (what == null || what.isBlank()) what = "Item from " + container.value() + "/" + slotId.value();
@@ -110,8 +126,26 @@ public class Shopping {
         return items.get(itemIndex);
     }
 
-    /** Where to buy another, and the words on the item that say so. */
-    public record StoreHint(String store, String because) {}
+    /**
+     * Where to buy another, and the words on the item that say so.
+     * {@code unplacedBrand} is the item's recorded brand when no rule says
+     * where that brand is sold — what the panel offers to remember once the
+     * person names the shop. Null when there is no brand or it is placed.
+     */
+    public record StoreHint(String store, String because, String unplacedBrand) {
+        public StoreHint(String store, String because) {
+            this(store, because, null);
+        }
+    }
+
+    public Optional<StoreHint> hintFor(ContainerId container, SlotId slot, int itemIndex) {
+        Item item = item(container, slot, itemIndex);
+        String unplaced = item.brand() != null && ruleFor(item.brand()).isEmpty() ? item.brand() : null;
+        Optional<StoreHint> hint = storeFor(item);
+        if (unplaced == null) return hint;
+        return Optional.of(hint.map(h -> new StoreHint(h.store(), h.because(), unplaced))
+            .orElse(new StoreHint(null, null, unplaced)));
+    }
 
     public Optional<StoreHint> storeFor(ContainerId container, SlotId slot, int itemIndex) {
         return storeFor(item(container, slot, itemIndex));
@@ -125,8 +159,18 @@ public class Shopping {
      * a description must not be found inside some longer word.
      */
     Optional<StoreHint> storeFor(Item item) {
+        // The brand the extractor read off the box, when it recorded one, is
+        // the strongest evidence there is: it was read as a brand, where a word
+        // in the description might be anything.
+        if (item.brand() != null) {
+            Optional<BrandStore> rule = ruleFor(item.brand());
+            if (rule.isPresent()) {
+                return Optional.of(new StoreHint(rule.get().store(),
+                    item.brand() + " is sold at " + rule.get().store()));
+            }
+        }
         String text = String.join(" ", nonNull(item.name()), nonNull(item.description()), nonNull(item.partNumber()),
-            item.tags() == null ? "" : String.join(" ", item.tags()));
+            nonNull(item.brand()), item.tags() == null ? "" : String.join(" ", item.tags()));
         for (BrandStore rule : list.brands()) {
             if (mentions(text, rule.brand())) {
                 return Optional.of(new StoreHint(rule.store(), rule.brand() + " is sold at " + rule.store()));
@@ -137,6 +181,22 @@ public class Shopping {
         list.all().forEach(e -> { if (e.store() != null) stores.add(e.store()); });
         for (String store : stores) {
             if (mentions(text, store)) return Optional.of(new StoreHint(store, "the item names " + store));
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The rule for a recorded brand: the same brand ignoring case, or a rule's
+     * brand standing as a whole word in it — "Anslut" covers a box reading
+     * "Anslut Pro".
+     */
+    private Optional<BrandStore> ruleFor(String brand) {
+        List<BrandStore> rules = list.brands();
+        for (BrandStore rule : rules) {
+            if (rule.brand().equalsIgnoreCase(brand.strip())) return Optional.of(rule);
+        }
+        for (BrandStore rule : rules) {
+            if (mentions(brand, rule.brand())) return Optional.of(rule);
         }
         return Optional.empty();
     }

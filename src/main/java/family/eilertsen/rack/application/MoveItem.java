@@ -50,6 +50,7 @@ public class MoveItem {
             original.name(),
             original.description(),
             original.partNumber(),
+            original.brand(),
             original.category(),
             original.qtyEstimate(),
             original.confidence(),

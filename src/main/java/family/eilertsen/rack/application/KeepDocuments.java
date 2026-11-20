@@ -157,7 +157,7 @@ public class KeepDocuments {
     }
 
     private static Item withDocuments(Item i, List<Document> docs) {
-        return new Item(i.name(), i.description(), i.partNumber(), i.category(), i.qtyEstimate(),
+        return new Item(i.name(), i.description(), i.partNumber(), i.brand(), i.category(), i.qtyEstimate(),
             i.confidence(), i.tags(), i.qa(), i.sourcePhoto(), i.seenIn(), docs);
     }
 

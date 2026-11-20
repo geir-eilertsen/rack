@@ -32,7 +32,7 @@ final class FilingNote {
         String description = item.description() == null || item.description().isBlank()
             ? said
             : item.description().strip() + " — " + said;
-        Item told = new Item(item.name(), description, item.partNumber(), item.category(), item.qtyEstimate(),
+        Item told = new Item(item.name(), description, item.partNumber(), item.brand(), item.category(), item.qtyEstimate(),
             item.confidence(), item.tags(), item.qa(), item.sourcePhoto(), item.seenIn(), item.documents());
         return List.of(new Extraction(told, only.imageIndexes()));
     }

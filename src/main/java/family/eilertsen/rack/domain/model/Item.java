@@ -17,6 +17,15 @@ public record Item(
     String name,
     String description,
     String partNumber,
+    /**
+     * Who made it, as printed on the thing or its packaging — "Anslut",
+     * "Wago", "Panasonic". Null when nothing legible says. Kept apart from the
+     * description because it is the one word that says which shop sells
+     * another: a house brand is a store. Absent from every item filed before
+     * this, and nothing back-fills it; the shopping list still reads the old
+     * items' text for a brand.
+     */
+    String brand,
     String category,
     Integer qtyEstimate,
     double confidence,
@@ -34,6 +43,15 @@ public record Item(
 ) {
     public Item {
         documents = documents == null ? List.of() : List.copyOf(documents);
+        brand = brand == null || brand.isBlank() ? null : brand.strip();
+    }
+
+    /** An item with no brand recorded — what everything was before there was one. */
+    public Item(String name, String description, String partNumber, String category, Integer qtyEstimate,
+                double confidence, List<String> tags, List<QA> qa, String sourcePhoto, List<String> seenIn,
+                List<Document> documents) {
+        this(name, description, partNumber, null, category, qtyEstimate, confidence, tags, qa, sourcePhoto,
+            seenIn, documents);
     }
 
     public record QA(String question, String answer, Instant at) {}

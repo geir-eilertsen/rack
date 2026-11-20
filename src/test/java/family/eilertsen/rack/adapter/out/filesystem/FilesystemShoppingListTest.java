@@ -208,6 +208,55 @@ class FilesystemShoppingListTest {
     }
 
     @Test
+    void theRecordedBrandNamesTheStoreWhenTheWordsDoNot() throws IOException {
+        // The extractor read "Anslut" off the box; the name and description it
+        // wrote do not say it again.
+        index.put(GARAGE, new Slot(A1, List.of(
+            branded("GU10 LED bulb", "Dimmable reflector lamp, 5W", "Anslut Pro"),
+            branded("Wall plugs", "Grey nylon, 6mm", "Fischer")), null, null));
+        Shopping shopping = new Shopping(store(), index, images);
+        shopping.setBrand("anslut", "Jula");
+
+        assertThat(shopping.storeFor(GARAGE, A1, 0)).map(Shopping.StoreHint::store).contains("Jula");
+        assertThat(shopping.hintFor(GARAGE, A1, 0)).map(Shopping.StoreHint::unplacedBrand).isEmpty();
+        // A brand with no shop yet is offered to be remembered, and not guessed.
+        assertThat(shopping.hintFor(GARAGE, A1, 1))
+            .hasValueSatisfying(h -> {
+                assertThat(h.store()).isNull();
+                assertThat(h.unplacedBrand()).isEqualTo("Fischer");
+            });
+    }
+
+    @Test
+    void namingTheShopForAnUnplacedBrandRemembersIt() throws IOException {
+        index.put(GARAGE, new Slot(A1, List.of(
+            branded("Wall plugs", "Grey nylon, 6mm", "Fischer"),
+            branded("Wall plugs", "Grey nylon, 8mm", "Fischer")), null, null));
+        Shopping shopping = new Shopping(store(), index, images);
+
+        shopping.addFromItem(GARAGE, A1, 0, "Biltema", null, null, true);
+        assertThat(shopping.brands()).containsExactly(new family.eilertsen.rack.domain.model.BrandStore("Fischer", "Biltema"));
+        assertThat(shopping.addFromItem(GARAGE, A1, 1, null, null, null).store()).isEqualTo("Biltema");
+
+        // An existing rule is the owner's decision; one trip elsewhere does not overrule it.
+        shopping.addFromItem(GARAGE, A1, 0, "Jula", null, null, true);
+        assertThat(shopping.brands()).containsExactly(new family.eilertsen.rack.domain.model.BrandStore("Fischer", "Biltema"));
+    }
+
+    @Test
+    void withoutAskingNothingIsRemembered() throws IOException {
+        index.put(GARAGE, new Slot(A1, List.of(branded("Wall plugs", "6mm", "Fischer")), null, null));
+        Shopping shopping = new Shopping(store(), index, images);
+        shopping.addFromItem(GARAGE, A1, 0, "Biltema", null, null);
+        assertThat(shopping.brands()).isEmpty();
+    }
+
+    private static Item branded(String name, String description, String brand) {
+        return new Item(name, description, null, brand, null, 3, 0.9, List.of(), List.of(), "b.jpg",
+            List.of("b.jpg"), List.of());
+    }
+
+    @Test
     void brandRulesSurviveARestartAndCanBeCorrected() throws IOException {
         Shopping shopping = new Shopping(store(), index, images);
         shopping.setBrand("Anslut", "Clas Ohlson");

@@ -55,6 +55,7 @@ public class ForgetAnswer {
             current.name(),
             current.description(),
             current.partNumber(),
+            current.brand(),
             current.category(),
             current.qtyEstimate(),
             current.confidence(),

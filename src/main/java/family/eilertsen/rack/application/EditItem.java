@@ -35,6 +35,10 @@ public class EditItem {
             blankToNull(update.name()),
             blankToNull(update.description()),
             blankToNull(update.partNumber()),
+            // Absent is unchanged, blank is cleared: the page's quantity stepper
+            // sends the item back as it last drew it, and a page drawn before
+            // there was a brand must not erase one by not knowing about it.
+            update.brand() == null ? current.brand() : blankToNull(update.brand()),
             blankToNull(update.category()),
             update.qtyEstimate(),
             1.0,
@@ -64,6 +68,12 @@ public class EditItem {
         String partNumber,
         String category,
         Integer qtyEstimate,
-        List<String> tags
-    ) {}
+        List<String> tags,
+        String brand
+    ) {
+        public Fields(String name, String description, String partNumber, String category,
+                      Integer qtyEstimate, List<String> tags) {
+            this(name, description, partNumber, category, qtyEstimate, tags, null);
+        }
+    }
 }

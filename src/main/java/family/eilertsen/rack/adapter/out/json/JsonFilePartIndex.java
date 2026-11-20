@@ -215,6 +215,9 @@ public class JsonFilePartIndex implements PartIndex {
         if (contains(item.partNumber(), term)) score += 3;
         if (contains(item.name(), term)) score += 3;
         if (contains(item.description(), term)) score += 2;
+        // A brand is a word somebody reads off the box, as deliberate as a
+        // description and as short as a tag: searching "Anslut" means them all.
+        if (contains(item.brand(), term)) score += 2;
         if (contains(item.category(), term)) score += 1;
         if (item.tags() != null) {
             for (String tag : item.tags()) if (contains(tag, term)) { score += 1; break; }
