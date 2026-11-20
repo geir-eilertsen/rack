@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -93,10 +92,11 @@ public class MqttHouseInbox implements HouseInbox {
     }
 
     /**
-     * How Vaier's own app logs in. Over TLS the broker is a stream behind the
-     * proxy, routed by the name in the handshake — and Paho's hostname check
-     * re-sets the socket's parameters after naming the host, which can drop
-     * that name; the HTTPS verifier runs after the handshake instead.
+     * Over TLS the broker is a stream behind Vaier's proxy, routed by the name
+     * in the handshake, and Paho's own hostname check is kept. The Vaier app
+     * swaps it for {@code HttpsURLConnection}'s default verifier, which on
+     * Android checks the name — on a desktop JVM that default is a fallback
+     * that refuses every host, and the first deploy could not connect.
      */
     static MqttConnectOptions options(String url, String username, String password, boolean cleanSession) {
         MqttConnectOptions o = new MqttConnectOptions();
@@ -107,8 +107,7 @@ public class MqttHouseInbox implements HouseInbox {
         if (password != null && !password.isEmpty()) o.setPassword(password.toCharArray());
         if (url.startsWith("ssl://")) {
             o.setSocketFactory(SSLSocketFactory.getDefault());
-            o.setHttpsHostnameVerificationEnabled(false);
-            o.setSSLHostnameVerifier(HttpsURLConnection.getDefaultHostnameVerifier());
+            o.setHttpsHostnameVerificationEnabled(true);
         }
         return o;
     }

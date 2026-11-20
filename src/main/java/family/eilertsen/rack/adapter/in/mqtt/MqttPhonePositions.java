@@ -16,7 +16,6 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -169,7 +168,7 @@ public class MqttPhonePositions {
         }
     }
 
-    /** As {@code MqttHouseInbox} logs in — see there for why the hostname check is moved. */
+    /** As {@code MqttHouseInbox} logs in — see there for why Paho's own hostname check is kept. */
     private MqttConnectOptions options() {
         MqttConnectOptions o = new MqttConnectOptions();
         o.setMqttVersion(MqttConnectOptions.MQTT_VERSION_3_1_1);
@@ -179,8 +178,7 @@ public class MqttPhonePositions {
         if (password != null && !password.isEmpty()) o.setPassword(password.toCharArray());
         if (url.startsWith("ssl://")) {
             o.setSocketFactory(SSLSocketFactory.getDefault());
-            o.setHttpsHostnameVerificationEnabled(false);
-            o.setSSLHostnameVerifier(HttpsURLConnection.getDefaultHostnameVerifier());
+            o.setHttpsHostnameVerificationEnabled(true);
         }
         return o;
     }
