@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rack — shops</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/rack.svg">
+  <link rel="apple-touch-icon" href="/assets/rack.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#d97747">
+  <link rel="stylesheet" href="/assets/rack.css">
+  <script src="/assets/shopping.js"></script>
+  <script src="/assets/brands.js"></script>
+  <script src="/assets/dialog.js"></script>
+  <style>
+    /* Setting the shops up, kept off the list itself: the list is for the
+       aisle, this is for the evening before. */
+    .setup { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
+      box-shadow: var(--shadow); padding: .9rem 1rem; margin-bottom: 1.1rem; }
+    .setup h2 { margin: 0 0 .3rem; font-size: 1.1rem; }
+    .setup p { font-size: .85rem; color: var(--muted); margin: .3rem 0 .6rem; }
+    .setup ul { list-style: none; padding: 0; margin: .5rem 0; }
+    .setup li { display: flex; align-items: center; gap: .5rem; padding: .4rem 0; border-top: 1px solid var(--border); }
+    .setup li:first-child { border-top: none; }
+    .setup li > span { flex: 1; min-width: 0; }
+    .setup li .kind { flex: none; width: 1.4rem; text-align: center; }
+    .setup li .sub { display: block; font-size: .78rem; color: var(--muted); overflow-wrap: anywhere; }
+    .setup li .edit { cursor: pointer; }
+    .setup li .sold { display: inline-flex; align-items: center; white-space: nowrap; margin-right: .35rem; }
+    .setup li .sold button { font-size: 1rem; padding: 0 .3rem 0 .1rem; }
+    .setup li button { border: none; background: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; }
+    .setup .quiet { color: var(--muted); font-size: .85rem; }
+    .setup form { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .4rem; }
+    .setup form input[type=text] { flex: 1; min-width: 7rem; font-size: 1rem; padding: .5rem .6rem; }
+    .setup form .wide { flex-basis: 100%; }
+    .setup form label.online { display: flex; align-items: center; gap: .35rem; font-size: .9rem; }
+    .setup form label.online input { width: auto; }
+    .empty { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="app-header">
+      <a class="back" href="/">← Home</a>
+      <a class="brand" href="/">
+        <img class="logo" src="/assets/rack.svg" alt="">
+        <span class="name">rack</span>
+      </a>
+    </header>
+
+    <h1>Shops</h1>
+    <p class="subtitle">Where each shop is, which ones you order from, and which shops sell which brand — what the <a href="/shopping.html">shopping list</a> uses to put each line under the right shops.</p>
+    <p class="status" id="status"></p>
+    <datalist id="storeList"></datalist>
+
+    <!-- Learned from inside each shop, and matched on the phone: the phone's
+         position is never sent anywhere, only the spots you chose to save. -->
+    <section class="setup" id="places">
+      <h2>Where the shops are</h2>
+      <p>Standing in a shop, save the spot once — from here, or with <em>I'm at … — save this spot</em> on the list — or paste where it is, for a shop you are not in. After that, opening the list there shows that shop's things. Your position is only compared on the phone; the shop spots are all rack keeps.</p>
+      <p class="quiet" id="notifyLine" hidden></p>
+      <ul id="placeList"></ul>
+      <form id="placeForm">
+        <input id="pStore" type="text" placeholder="Which shop?" list="storeList" autocomplete="off" required>
+        <button class="btn" type="submit" id="placeBtn">📍 Save my location</button>
+        <input id="pWhere" class="wide" type="text" placeholder="Not there now? Paste coordinates or a Google Maps link" autocomplete="off">
+      </form>
+    </section>
+
+    <!-- Shops you order from, and how to search any shop. -->
+    <section class="setup" id="online">
+      <h2>Online shops and searches</h2>
+      <p>Mark a shop as online and its lines are ordered, then arrive, instead of being picked off a shelf — and it gets no spot to save or message on arrival. Give any shop its search address and every line for it gets a button that searches the shop for the name, or the part number. To find the address, search the shop's site for anything and copy what the browser shows, putting <code>{q}</code> where your words were — e.g. <code>https://www.amazon.de/s?k={q}</code>. Tap a shop to change it.</p>
+      <ul id="shopList"></ul>
+      <form id="shopForm">
+        <input id="sName" type="text" placeholder="Shop (e.g. Amazon)" list="storeList" autocomplete="off" required>
+        <label class="online"><input id="sOnline" type="checkbox"> Online</label>
+        <button class="btn" type="submit">Save</button>
+        <input id="sSearch" class="wide" type="text" inputmode="url" placeholder="Search address with {q}, optional" autocomplete="off">
+      </form>
+    </section>
+
+    <!-- The item says its brand; this says which shop the brand means. -->
+    <section class="setup" id="brands">
+      <h2>Which shops sell which brand</h2>
+      <p>A line for something of that brand goes on the list for every shop that sells it — lines already on the list too. Add the brand again with another shop to list a second one. An item that names a shop outright (e.g. "Farnell 876-7670") needs no rule.</p>
+      <ul id="brandList"></ul>
+      <form id="brandForm">
+        <input id="bBrand" type="text" placeholder="Brand (e.g. Anslut)" list="rack-brands" autocomplete="off" required>
+        <input id="bStore" type="text" placeholder="Shop (e.g. Jula)" list="storeList" autocomplete="off" required>
+        <button class="btn" type="submit">Add</button>
+      </form>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      const $ = id => document.getElementById(id);
+      const status = $('status');
+      const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const key = s => (s || '').trim().toLowerCase();
+
+      function say(kind, text) {
+        status.className = 'status' + (kind ? ' ' + kind : '');
+        status.textContent = text || '';
+      }
+
+      async function answer(request) {
+        const res = await request;
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+        return res.json();
+      }
+
+      // Every shop rack knows of, offered in each shop box.
+      function fillStores() {
+        fetch('/shopping/stores').then(r => r.ok ? r.json() : []).catch(() => []).then(names => {
+          $('storeList').innerHTML = names.map(n => '<option value="' + esc(n) + '">').join('');
+        });
+      }
+
+      // ---- Where the shops are ------------------------------------------
+      let places = [];
+
+      async function loadPlaces(request) {
+        try {
+          const body = await answer(request || fetch('/shopping/places'));
+          // Saving answers with the one spot saved, forgetting with the whole list.
+          places = Array.isArray(body) ? body : await answer(fetch('/shopping/places'));
+          if (request) fillStores();
+        } catch (e) {
+          say('error', 'Shop spots: ' + e.message);
+          return false;
+        }
+        drawPlaces();
+        return true;
+      }
+
+      function drawPlaces() {
+        const byShop = new Map();
+        places.forEach(p => {
+          if (!byShop.has(key(p.store))) byShop.set(key(p.store), []);
+          byShop.get(key(p.store)).push(p);
+        });
+        $('placeList').innerHTML = places.length
+          ? places.map(p => '<li><span><b>' + esc(p.store) + '</b>' +
+              (byShop.get(key(p.store)).length > 1 ? ' <span class="quiet">' + p.lat.toFixed(4) + ', ' + p.lon.toFixed(4) + '</span>' : '') +
+              '</span><button type="button" data-id="' + esc(p.id) + '" title="Forget this spot">&times;</button></li>').join('')
+          : '<li><span class="empty">No shops saved yet.</span></li>';
+        $('placeList').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+          if (!rackDialog.really(b)) return;
+          loadPlaces(fetch('/shopping/places/' + encodeURIComponent(b.dataset.id), { method: 'DELETE' }));
+        }));
+      }
+
+      function position() {
+        return new Promise((resolve, reject) => {
+          if (!navigator.geolocation) return reject(new Error('this browser cannot tell where it is'));
+          navigator.geolocation.getCurrentPosition(
+            p => resolve({ lat: p.coords.latitude, lon: p.coords.longitude, accuracy: p.coords.accuracy }),
+            e => reject(new Error(e.code === 1 ? 'location permission was refused' : 'no position (' + e.message + ')')),
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+        });
+      }
+
+      $('pWhere').addEventListener('input', () => {
+        $('placeBtn').textContent = $('pWhere').value.trim() ? '📍 Save this spot' : '📍 Save my location';
+      });
+
+      $('placeForm').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const store = $('pStore').value.trim();
+        const text = $('pWhere').value.trim();
+        let p;
+        if (text) {
+          // Pasted rather than measured: the shop is somewhere else, so there
+          // is no fix and no accuracy to keep — the spot is as good as the pin.
+          p = rackShopping.parsePlace(text);
+          if (!p) {
+            say('error', /goo\.gl/.test(text)
+              ? 'A short maps.app.goo.gl link has no position in it — open it, then copy the full address from the browser bar (or long-press the pin and copy the numbers).'
+              : 'No position in that — paste numbers like 36.7181, -4.4627 or a Google Maps link.');
+            return;                                     // keep what was typed, to fix
+          }
+        } else {
+          say('', 'Finding where you are…');
+          try {
+            p = await position();
+          } catch (e) {
+            say('error', 'Could not save the spot: ' + e.message);
+            return;
+          }
+        }
+        const ok = await loadPlaces(fetch('/shopping/places', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ store, lat: p.lat, lon: p.lon, accuracy: p.accuracy })
+        }));
+        if (!ok) return;
+        say('', text
+          ? 'Saved: ' + store + ' at ' + p.lat.toFixed(5) + ', ' + p.lon.toFixed(5) + '.'
+          : 'Saved: this is ' + store + (p.accuracy ? ' (to within ' + Math.round(p.accuracy) + ' m)' : '') + '.');
+        $('pStore').value = '';
+        $('pWhere').value = '';
+        $('placeBtn').textContent = '📍 Save my location';
+      });
+
+      // Said here because it is the one thing that works with the list closed:
+      // Vaier's app reports the phone's position to Vaier's broker, and rack
+      // listens there.
+      fetch('/shopping/notify').then(r => r.ok ? r.json() : null).catch(() => null).then(n => {
+        if (!n) return;
+        const line = $('notifyLine');
+        line.textContent = n.on
+          ? 'Your phone also gets a message in the Vaier app when it arrives at a saved shop with things on the list for it — with the list closed. Each branch is its own spot: save one in every Leroy you use.'
+          : 'Messages on arrival are off: rack has no login to Vaier\'s broker.';
+        line.hidden = false;
+      });
+
+      // ---- Online shops and searches ------------------------------------
+      let shops = [];
+
+      async function loadShops(request) {
+        try {
+          shops = await answer(request || fetch('/shopping/shops'));
+          if (request) fillStores();
+        } catch (e) {
+          say('error', 'Shops: ' + e.message);
+          return false;
+        }
+        drawShops();
+        return true;
+      }
+
+      function drawShops() {
+        $('shopList').innerHTML = shops.length
+          ? shops.map(s => '<li><span class="kind">' + (s.online ? '🌐' : '🏬') + '</span>' +
+              '<span class="edit" data-name="' + esc(s.name) + '"><b>' + esc(s.name) + '</b>' + (s.online ? ' · online' : '') +
+              (s.search_url ? '<span class="sub">' + esc(s.search_url) + '</span>' : '') + '</span>' +
+              '<button type="button" data-name="' + esc(s.name) + '" title="Forget this">&times;</button></li>').join('')
+          : '<li><span class="empty">Nothing said about any shop yet.</span></li>';
+        $('shopList').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+          if (!rackDialog.really(b)) return;
+          loadShops(fetch('/shopping/shops?name=' + encodeURIComponent(b.dataset.name), { method: 'DELETE' }));
+        }));
+        // Tap one to change it: the form is the editor.
+        $('shopList').querySelectorAll('.edit').forEach(el => el.addEventListener('click', () => {
+          const s = shops.find(x => key(x.name) === key(el.dataset.name));
+          $('sName').value = s.name;
+          $('sOnline').checked = !!s.online;
+          $('sSearch').value = s.search_url || '';
+          $('sSearch').focus();
+        }));
+      }
+
+      $('shopForm').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const ok = await loadShops(fetch('/shopping/shops', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: $('sName').value, online: $('sOnline').checked, search_url: $('sSearch').value })
+        }));
+        if (!ok) return;                                  // keep what was typed, to fix
+        say('', '');
+        $('sName').value = ''; $('sOnline').checked = false; $('sSearch').value = '';
+      });
+
+      // ---- Which shops sell which brand ---------------------------------
+      async function loadBrands(request) {
+        let rules;
+        try {
+          rules = await answer(request || fetch('/shopping/brands'));
+          if (request) fillStores();
+        } catch (e) {
+          say('error', 'Brand rules: ' + e.message);
+          return false;
+        }
+        // One row per brand, every shop that sells it on it; × forgets one
+        // shop for that brand and leaves the others.
+        const byBrand = new Map();
+        rules.forEach(r => {
+          if (!byBrand.has(key(r.brand))) byBrand.set(key(r.brand), { brand: r.brand, stores: [] });
+          byBrand.get(key(r.brand)).stores.push(r.store);
+        });
+        $('brandList').innerHTML = byBrand.size
+          ? [...byBrand.values()].map(g => '<li><span><b>' + esc(g.brand) + '</b> → ' +
+              g.stores.map(st => '<span class="sold">' + esc(st) +
+                '<button type="button" data-brand="' + esc(g.brand) + '" data-store="' + esc(st) + '" title="' +
+                esc(st) + ' does not sell ' + esc(g.brand) + '">&times;</button></span>').join('') +
+              '</span></li>').join('')
+          : '<li><span class="empty">No rules yet.</span></li>';
+        $('brandList').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+          if (!rackDialog.really(b)) return;
+          loadBrands(fetch('/shopping/brands?brand=' + encodeURIComponent(b.dataset.brand)
+            + '&store=' + encodeURIComponent(b.dataset.store), { method: 'DELETE' }));
+        }));
+        return true;
+      }
+
+      $('brandForm').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const brand = $('bBrand').value.trim(), store = $('bStore').value.trim();
+        const ok = await loadBrands(fetch('/shopping/brands', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brand, store })
+        }));
+        if (!ok) return;
+        say('', brand + ' → ' + store + ' saved. Lines for ' + brand + ' already on the list are on ' + store + '\'s list too.');
+        $('bBrand').value = ''; $('bStore').value = '';
+        rackBrands.refresh();
+      });
+
+      fillStores();
+      loadPlaces();
+      loadShops();
+      loadBrands();
+    })();
+  </script>
+  <script src="/assets/usage.js" defer></script>
+</body>
+</html>
