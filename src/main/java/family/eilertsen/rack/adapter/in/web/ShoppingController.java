@@ -84,6 +84,12 @@ public class ShoppingController {
             .orElse(new Shopping.StoreHint(null, null));
     }
 
+    /** Every store on a line, in a brand rule or at a saved spot, for a store box to offer. */
+    @GetMapping("/shopping/stores")
+    public List<String> stores() {
+        return shopping.stores();
+    }
+
     @GetMapping("/shopping/brands")
     public List<BrandStore> brands() {
         return shopping.brands();

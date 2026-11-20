@@ -273,6 +273,23 @@ class FilesystemShoppingListTest {
             .containsExactly("Anslut", "Lexman");
     }
 
+    @Test
+    void knownStoresComeFromLinesRulesAndSpotsOnceEach() throws IOException {
+        Shopping shopping = new Shopping(store(), index, images);
+        shopping.add(new Shopping.Text("Fuse", "Jula", null, null, null), null, null);
+        shopping.add(new Shopping.Text("Plug", "jula ", null, null, null), null, null);
+        shopping.setBrand("Anslut", "Jula");
+        shopping.setBrand("Lexman", "Leroy");
+        shopping.savePlace("Biltema", 59.9, 10.7, 20.0);
+        // Bought and cleared: the line goes, the store it named should not.
+        ShoppingEntry gone = shopping.add(new Shopping.Text("Solder", "Farnell", null, null, null), null, null);
+        shopping.setBought(gone.id(), true);
+        shopping.clearBought();
+        shopping.setBrand("Multicore", "Farnell");
+
+        assertThat(shopping.stores()).containsExactly("Biltema", "Farnell", "Jula", "Leroy");
+    }
+
     private static Item branded(String name, String description, String brand) {
         return new Item(name, description, null, brand, null, 3, 0.9, List.of(), List.of(), "b.jpg",
             List.of("b.jpg"), List.of());

@@ -387,7 +387,7 @@ Documents live flat in one folder with one owner, exactly like photographs: `Kee
 
 **Every branch is its own saved spot.** Leroy has many shops, and a chain's branches cannot be looked up reliably: Overpass, the one OpenStreetMap service that can list every shop of a brand in a country, answered *at capacity* and then timed out on a Norway-wide query, and asks automated clients to run their own instance; Nominatim and Photon search by text and returned fish farms and St Petersburg. Saving each branch once from inside it (*I'm at Leroy — save this spot* appears whenever the list is filtered to a store the phone is not near) is reliable and sends nothing anywhere. A branch you are not standing in — the Leroy in Spain, before the trip — is pasted instead: the spot form takes `36.7181, -4.4627` or a Google Maps link (`rackShopping.parsePlace` reads a dropped pin's `!3d…!4d…` before `@…`, which is only where the map was centred). A `maps.app.goo.gl` short link has no position in it and the page cannot follow it, so it says to open it and copy the full address. All the Places was also tried for the branch list: it has Leroy Merlin France and Poland and not Spain.
 
- (a `<datalist>`), grouped ignoring case — the same reasoning as container locations. No store list is maintained, and no model is involved.
+ (a `<datalist>`), grouped ignoring case — the same reasoning as container locations. No store list is maintained, and no model is involved. `GET /shopping/stores` is that list: every store on a line, in a brand rule or at a saved spot, grouped ignoring case under the spelling used most — read from all three because clearing bought lines would otherwise forget a store that a rule or a spot still names.
 
 ### Resyncing a drawer
 

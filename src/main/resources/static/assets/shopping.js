@@ -10,13 +10,13 @@
       c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  // One fetch per page, shared by every panel: the stores already used, so
-  // the second trip to Leroy goes under "Leroy" and not "leroy ".
+  // One fetch per page, shared by every panel: every store the list knows —
+  // on a line, in a brand rule, at a saved spot — so the second trip to Leroy
+  // goes under "Leroy" and not "leroy ".
   let stores = null;
   function knownStores() {
     if (!stores) {
-      stores = fetch('/shopping').then(r => r.ok ? r.json() : []).catch(() => [])
-        .then(list => storesOf(list));
+      stores = fetch('/shopping/stores').then(r => r.ok ? r.json() : []).catch(() => []);
     }
     return stores;
   }

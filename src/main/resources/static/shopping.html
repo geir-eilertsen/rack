@@ -172,9 +172,19 @@
         }
       }
 
+      // Every store box offers every store the list knows — lines, brand rules
+      // and saved spots alike — not only the ones with a line on the list now.
+      // The chips stay the stores on the list: they filter it.
+      function fillStores() {
+        fetch('/shopping/stores').then(r => r.ok ? r.json() : []).catch(() => [])
+          .then(names => {
+            $('storeList').innerHTML = names.map(n => '<option value="' + esc(n) + '">').join('');
+          });
+      }
+
       function draw() {
         const stores = rackShopping.storesOf(entries);
-        $('storeList').innerHTML = stores.map(n => '<option value="' + esc(n) + '">').join('');
+        fillStores();
         drawChips(stores);
 
         const at = chosen();
@@ -350,6 +360,7 @@
           const res = await (request || fetch('/shopping/brands'));
           if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
           const rules = await res.json();
+          if (request) fillStores();
           $('brandList').innerHTML = rules.length
             ? rules.map(r => '<li><span><b>' + esc(r.brand) + '</b> → ' + esc(r.store) + '</span>' +
                 '<button type="button" data-brand="' + esc(r.brand) + '" title="Forget this rule">&times;</button></li>').join('')
@@ -405,6 +416,7 @@
           if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
           const body = await res.json();
           if (Array.isArray(body)) places = body;
+          if (request) fillStores();
         } catch (e) {
           status.className = 'status error';
           status.textContent = 'Shop spots: ' + e.message;

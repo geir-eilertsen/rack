@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -212,6 +214,35 @@ public class Shopping {
 
     public List<BrandStore> brands() {
         return list.brands();
+    }
+
+    /**
+     * Every store the list knows of: on a line, in a brand rule, or as a saved
+     * shop spot — grouped ignoring case under the spelling used most, sorted.
+     * Offered in every store box, so the next trip to Leroy goes under "Leroy"
+     * and not "leroy ". Read from all three because each forgets on its own:
+     * clearing what was bought takes its lines, and a rule or a spot may be
+     * the only place a store was ever written.
+     */
+    public List<String> stores() {
+        Map<String, Map<String, Integer>> spellings = new HashMap<>();
+        list.all().forEach(e -> countSpelling(spellings, e.store()));
+        list.brands().forEach(b -> countSpelling(spellings, b.store()));
+        list.places().forEach(p -> countSpelling(spellings, p.store()));
+        List<String> stores = new ArrayList<>();
+        for (Map<String, Integer> forms : spellings.values()) {
+            stores.add(forms.entrySet().stream()
+                .max(Map.Entry.<String, Integer>comparingByValue().thenComparing(Map.Entry.comparingByKey()))
+                .orElseThrow().getKey());
+        }
+        stores.sort(String.CASE_INSENSITIVE_ORDER);
+        return stores;
+    }
+
+    private static void countSpelling(Map<String, Map<String, Integer>> spellings, String name) {
+        if (name == null || name.isBlank()) return;
+        String n = name.strip();
+        spellings.computeIfAbsent(n.toLowerCase(Locale.ROOT), k -> new HashMap<>()).merge(n, 1, Integer::sum);
     }
 
     /** Adds a rule, or replaces the store for a brand already written down. */
