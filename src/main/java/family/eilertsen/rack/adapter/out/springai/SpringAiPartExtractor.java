@@ -42,7 +42,12 @@ public class SpringAiPartExtractor implements PartExtractor {
           punctuation, no colour or packaging detail; that belongs below.
         - description (string): a fuller line — packaging, markings, condition,
           what distinguishes this from a similar part in the same drawer
-        - part_number (string or null): printed markings if legible, otherwise null
+        - part_number (string or null): the maker's part or model number if
+          legible ("BC547B", "M705", "LM317T"), otherwise null. NOT a
+          certification or regulatory ID (FCC ID, IC, CE, UL file number), a
+          serial number, a barcode, or a date or batch code — those identify a
+          certificate or one unit, not what to buy, and belong in the
+          description. When the only code printed is one of those, null.
         - brand (string or null): the maker or brand as printed on the item, its
           bag, box or label — "Anslut", "Wago", "Panasonic", "Biltema". Spelled
           as printed, without "AB", "GmbH" or a product line. A shop's own name

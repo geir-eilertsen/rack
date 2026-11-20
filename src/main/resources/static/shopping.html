@@ -316,10 +316,19 @@
         const shop = shopOf(e.store);
         const acts = [];
         if (isOpen(e) && shop && shop.search_url) {
-          // The shop's own search, never a product page rack made up.
-          const q = e.part_number || e.what;
-          acts.push('<a class="btn" target="_blank" rel="noopener noreferrer" href="'
-            + esc(shop.search_url.split('{q}').join(encodeURIComponent(q))) + '">🔎 Search ' + esc(shop.name) + '</a>');
+          // The shop's own search, never a product page rack made up. By name
+          // first: a name always says what the thing is, where a part number
+          // read off it may be a certification ID or a batch code that no shop
+          // indexes — "DZLMRCJ134" is a Logitech mouse's FCC ID and found
+          // nothing. The part number is the second button, for the shops
+          // (Farnell) where it is exactly the right search.
+          const search = q => esc(shop.search_url.split('{q}').join(encodeURIComponent(q)));
+          acts.push('<a class="btn" target="_blank" rel="noopener noreferrer" href="' + search(e.what)
+            + '">🔎 Search ' + esc(shop.name) + '</a>');
+          if (e.part_number && key(e.part_number) !== key(e.what)) {
+            acts.push('<a class="btn" target="_blank" rel="noopener noreferrer" href="' + search(e.part_number)
+              + '">🔎 ' + esc(e.part_number) + '</a>');
+          }
         }
         if (isOrdered(e)) {
           acts.push('<button type="button" class="link reorder" data-id="' + esc(e.id) + '">' + (e.order_ref ? 'change order no.' : 'add order no.') + '</button>');
