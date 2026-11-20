@@ -61,6 +61,8 @@
     .brands li { display: flex; align-items: center; gap: .5rem; padding: .35rem 0; border-top: 1px solid var(--border); }
     .brands li:first-child { border-top: none; }
     .brands li span { flex: 1; }
+    .brands li .sold { display: inline-flex; align-items: center; white-space: nowrap; }
+    .brands li .sold button { font-size: 1rem; padding: 0 .3rem 0 .1rem; }
     .brands li button { border: none; background: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; }
     .brands form { display: flex; gap: .4rem; flex-wrap: wrap; }
     .brands form input { flex: 1; min-width: 7rem; font-size: 1rem; padding: .5rem .6rem; }
@@ -151,8 +153,8 @@
 
     <!-- The item says its brand; this says which shop the brand means. -->
     <details class="brands" id="brands">
-      <summary>Which store sells which brand</summary>
-      <p>House brands tell rack where to buy more: an item whose text says the brand gets that store filled in when you add it to the list. An item that names a store outright (e.g. "Farnell 876-7670") needs no rule.</p>
+      <summary>Which shops sell which brand</summary>
+      <p>Which shops sell a brand: an item of that brand gets the shop filled in when you add it to the list, and when several shops sell it, each is a tap away. Add the brand again with another shop to list a second one. An item that names a store outright (e.g. "Farnell 876-7670") needs no rule.</p>
       <ul id="brandList"></ul>
       <form id="brandForm">
         <input id="bBrand" type="text" placeholder="Brand (e.g. Anslut)" list="rack-brands" autocomplete="off" required>
@@ -508,12 +510,24 @@
           if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
           const rules = await res.json();
           if (request) fillStores();
-          $('brandList').innerHTML = rules.length
-            ? rules.map(r => '<li><span><b>' + esc(r.brand) + '</b> → ' + esc(r.store) + '</span>' +
-                '<button type="button" data-brand="' + esc(r.brand) + '" title="Forget this rule">&times;</button></li>').join('')
+          // One row per brand, every store that sells it on it; × forgets
+          // one store for that brand and leaves the others.
+          const byBrand = new Map();
+          rules.forEach(r => {
+            const k = key(r.brand);
+            if (!byBrand.has(k)) byBrand.set(k, { brand: r.brand, stores: [] });
+            byBrand.get(k).stores.push(r.store);
+          });
+          $('brandList').innerHTML = byBrand.size
+            ? [...byBrand.values()].map(g => '<li><span><b>' + esc(g.brand) + '</b> → ' +
+                g.stores.map(st => '<span class="sold">' + esc(st) +
+                  '<button type="button" data-brand="' + esc(g.brand) + '" data-store="' + esc(st) + '" title="' +
+                  esc(st) + ' does not sell ' + esc(g.brand) + '">&times;</button></span>').join(' ') +
+                '</span></li>').join('')
             : '<li><span class="empty">No rules yet.</span></li>';
           $('brandList').querySelectorAll('button').forEach(b => b.addEventListener('click', () =>
-            loadBrands(fetch('/shopping/brands?brand=' + encodeURIComponent(b.dataset.brand), { method: 'DELETE' }))));
+            loadBrands(fetch('/shopping/brands?brand=' + encodeURIComponent(b.dataset.brand)
+              + '&store=' + encodeURIComponent(b.dataset.store), { method: 'DELETE' }))));
         } catch (e) {
           status.className = 'status error';
           status.textContent = 'Brand rules: ' + e.message;

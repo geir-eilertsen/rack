@@ -122,8 +122,9 @@ public class ShoppingController {
     }
 
     @DeleteMapping("/shopping/brands")
-    public List<BrandStore> forgetBrand(@RequestParam("brand") String brand) {
-        return shopping.forgetBrand(brand);
+    public List<BrandStore> forgetBrand(@RequestParam("brand") String brand,
+                                        @RequestParam(value = "store", required = false) String store) {
+        return shopping.forgetBrand(brand, store);
     }
 
     @GetMapping("/shopping/places")

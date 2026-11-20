@@ -85,16 +85,16 @@ public class Shopping {
 
     /**
      * With {@code rememberBrand}, the store the person named is also written
-     * down as where the item's brand is sold — but only when the item has a
-     * brand and no rule says where it is sold yet. An existing rule is the
-     * owner's earlier decision and a shopping trip does not overrule it; that
-     * is done at the foot of the list page.
+     * down as one that sells the item's brand, when the item has a brand and
+     * the store is not among those already written down for it. Added beside
+     * them, never in place of them: Komplett selling Logitech does not stop
+     * Amazon selling it.
      */
     public ShoppingEntry addFromItem(ContainerId container, SlotId slotId, int itemIndex,
                                      String store, String qty, String note, boolean rememberBrand) {
         Item item = item(container, slotId, itemIndex);
         if (rememberBrand && store != null && !store.isBlank() && item.brand() != null
-                && ruleFor(item.brand()).isEmpty()) {
+                && !sells(item.brand(), store)) {
             setBrand(item.brand(), store);
         }
         if (store == null || store.isBlank()) store = storeFor(item).map(StoreHint::store).orElse(null);
@@ -131,23 +131,29 @@ public class Shopping {
 
     /**
      * Where to buy another, and the words on the item that say so.
-     * {@code unplacedBrand} is the item's recorded brand when no rule says
-     * where that brand is sold — what the panel offers to remember once the
-     * person names the shop. Null when there is no brand or it is placed.
+     *
+     * <p>{@code store} is the first suggestion and {@code stores} every store
+     * the brand rules name for it — a brand is usually sold in more than one
+     * place, and which is nearer, cheaper or quicker today is the person's
+     * call, so the panel offers them all. {@code brand} is the item's recorded
+     * brand, so the panel can offer to remember a store not yet among them.
      */
-    public record StoreHint(String store, String because, String unplacedBrand) {
+    public record StoreHint(String store, String because, String brand, List<String> stores) {
+        public StoreHint {
+            stores = stores == null ? List.of() : List.copyOf(stores);
+        }
+
         public StoreHint(String store, String because) {
-            this(store, because, null);
+            this(store, because, null, store == null ? List.of() : List.of(store));
         }
     }
 
     public Optional<StoreHint> hintFor(ContainerId container, SlotId slot, int itemIndex) {
         Item item = item(container, slot, itemIndex);
-        String unplaced = item.brand() != null && ruleFor(item.brand()).isEmpty() ? item.brand() : null;
         Optional<StoreHint> hint = storeFor(item);
-        if (unplaced == null) return hint;
-        return Optional.of(hint.map(h -> new StoreHint(h.store(), h.because(), unplaced))
-            .orElse(new StoreHint(null, null, unplaced)));
+        if (item.brand() == null) return hint;
+        return Optional.of(hint.map(h -> new StoreHint(h.store(), h.because(), item.brand(), h.stores()))
+            .orElse(new StoreHint(null, null, item.brand(), List.of())));
     }
 
     public Optional<StoreHint> storeFor(ContainerId container, SlotId slot, int itemIndex) {
@@ -166,17 +172,14 @@ public class Shopping {
         // the strongest evidence there is: it was read as a brand, where a word
         // in the description might be anything.
         if (item.brand() != null) {
-            Optional<BrandStore> rule = ruleFor(item.brand());
-            if (rule.isPresent()) {
-                return Optional.of(new StoreHint(rule.get().store(),
-                    item.brand() + " is sold at " + rule.get().store()));
-            }
+            List<String> stores = storesOf(rulesFor(item.brand()));
+            if (!stores.isEmpty()) return Optional.of(soldAt(item.brand(), stores));
         }
         String text = String.join(" ", nonNull(item.name()), nonNull(item.description()), nonNull(item.partNumber()),
             nonNull(item.brand()), item.tags() == null ? "" : String.join(" ", item.tags()));
         for (BrandStore rule : list.brands()) {
             if (mentions(text, rule.brand())) {
-                return Optional.of(new StoreHint(rule.store(), rule.brand() + " is sold at " + rule.store()));
+                return Optional.of(soldAt(rule.brand(), storesOf(rulesFor(rule.brand()))));
             }
         }
         Set<String> stores = new LinkedHashSet<>();
@@ -188,20 +191,41 @@ public class Shopping {
         return Optional.empty();
     }
 
+    private boolean sells(String brand, String store) {
+        return storesOf(rulesFor(brand)).stream().anyMatch(st -> st.equalsIgnoreCase(store.strip()));
+    }
+
+    private static StoreHint soldAt(String brand, List<String> stores) {
+        return new StoreHint(stores.get(0), brand + " is sold at " + and(stores), brand, stores);
+    }
+
+    private static String and(List<String> words) {
+        if (words.size() == 1) return words.get(0);
+        return String.join(", ", words.subList(0, words.size() - 1)) + " and " + words.get(words.size() - 1);
+    }
+
     /**
-     * The rule for a recorded brand: the same brand ignoring case, or a rule's
-     * brand standing as a whole word in it — "Anslut" covers a box reading
-     * "Anslut Pro".
+     * The rules for a recorded brand: the same brand ignoring case, or failing
+     * that, a rule's brand standing as a whole word in it — "Anslut" covers a
+     * box reading "Anslut Pro". In the order they were written down.
      */
-    private Optional<BrandStore> ruleFor(String brand) {
+    private List<BrandStore> rulesFor(String brand) {
         List<BrandStore> rules = list.brands();
+        List<BrandStore> same = rules.stream().filter(r -> r.brand().equalsIgnoreCase(brand.strip())).toList();
+        if (!same.isEmpty()) return same;
         for (BrandStore rule : rules) {
-            if (rule.brand().equalsIgnoreCase(brand.strip())) return Optional.of(rule);
+            if (mentions(brand, rule.brand())) {
+                return rules.stream().filter(r -> r.brand().equalsIgnoreCase(rule.brand())).toList();
+            }
         }
-        for (BrandStore rule : rules) {
-            if (mentions(brand, rule.brand())) return Optional.of(rule);
-        }
-        return Optional.empty();
+        return List.of();
+    }
+
+    /** Distinct ignoring case, first spelling kept. */
+    private static List<String> storesOf(List<BrandStore> rules) {
+        Map<String, String> seen = new java.util.LinkedHashMap<>();
+        rules.forEach(r -> seen.putIfAbsent(r.store().toLowerCase(Locale.ROOT), r.store()));
+        return List.copyOf(seen.values());
     }
 
     private static boolean mentions(String text, String word) {
@@ -247,28 +271,36 @@ public class Shopping {
         spellings.computeIfAbsent(n.toLowerCase(Locale.ROOT), k -> new HashMap<>()).merge(n, 1, Integer::sum);
     }
 
-    /** Adds a rule, or replaces the store for a brand already written down. */
+    /**
+     * Writes down that {@code store} sells {@code brand}, beside any other
+     * stores already written down for it. Saying it twice, in any spelling,
+     * changes nothing; the brand keeps the spelling it already has.
+     */
     public List<BrandStore> setBrand(String brand, String store) {
         BrandStore rule = new BrandStore(brand, store);
-        List<BrandStore> next = new ArrayList<>();
-        boolean replaced = false;
-        for (BrandStore b : list.brands()) {
-            if (b.brand().toLowerCase(Locale.ROOT).equals(rule.brand().toLowerCase(Locale.ROOT))) {
-                next.add(rule);
-                replaced = true;
-            } else {
-                next.add(b);
-            }
-        }
-        if (!replaced) next.add(rule);
+        List<BrandStore> current = list.brands();
+        boolean known = current.stream().anyMatch(b ->
+            b.brand().equalsIgnoreCase(rule.brand()) && b.store().equalsIgnoreCase(rule.store()));
+        if (known) return current;
+        String spelled = current.stream().map(BrandStore::brand).filter(b -> b.equalsIgnoreCase(rule.brand()))
+            .findFirst().orElse(rule.brand());
+        List<BrandStore> next = new ArrayList<>(current);
+        next.add(new BrandStore(spelled, rule.store()));
         list.saveBrands(next);
         return list.brands();
     }
 
-    public List<BrandStore> forgetBrand(String brand) {
+    /** One store for a brand, or with {@code store} null every store for it. */
+    public List<BrandStore> forgetBrand(String brand, String store) {
+        String b = brand == null ? "" : brand.trim();
         list.saveBrands(list.brands().stream()
-            .filter(b -> !b.brand().equalsIgnoreCase(brand == null ? "" : brand.trim())).toList());
+            .filter(r -> !(r.brand().equalsIgnoreCase(b) && (store == null || r.store().equalsIgnoreCase(store.trim()))))
+            .toList());
         return list.brands();
+    }
+
+    public List<BrandStore> forgetBrand(String brand) {
+        return forgetBrand(brand, null);
     }
 
     /**

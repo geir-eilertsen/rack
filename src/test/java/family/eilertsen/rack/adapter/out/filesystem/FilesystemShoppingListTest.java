@@ -218,12 +218,13 @@ class FilesystemShoppingListTest {
         shopping.setBrand("anslut", "Jula");
 
         assertThat(shopping.storeFor(GARAGE, A1, 0)).map(Shopping.StoreHint::store).contains("Jula");
-        assertThat(shopping.hintFor(GARAGE, A1, 0)).map(Shopping.StoreHint::unplacedBrand).isEmpty();
+        assertThat(shopping.hintFor(GARAGE, A1, 0)).map(Shopping.StoreHint::stores).contains(List.of("Jula"));
         // A brand with no shop yet is offered to be remembered, and not guessed.
         assertThat(shopping.hintFor(GARAGE, A1, 1))
             .hasValueSatisfying(h -> {
                 assertThat(h.store()).isNull();
-                assertThat(h.unplacedBrand()).isEqualTo("Fischer");
+                assertThat(h.stores()).isEmpty();
+                assertThat(h.brand()).isEqualTo("Fischer");
             });
     }
 
@@ -238,9 +239,13 @@ class FilesystemShoppingListTest {
         assertThat(shopping.brands()).containsExactly(new family.eilertsen.rack.domain.model.BrandStore("Fischer", "Biltema"));
         assertThat(shopping.addFromItem(GARAGE, A1, 1, null, null, null).store()).isEqualTo("Biltema");
 
-        // An existing rule is the owner's decision; one trip elsewhere does not overrule it.
+        // A second shop is added beside the first, never in its place; naming
+        // one already known writes nothing twice.
         shopping.addFromItem(GARAGE, A1, 0, "Jula", null, null, true);
-        assertThat(shopping.brands()).containsExactly(new family.eilertsen.rack.domain.model.BrandStore("Fischer", "Biltema"));
+        shopping.addFromItem(GARAGE, A1, 0, "biltema", null, null, true);
+        assertThat(shopping.brands()).containsExactly(
+            new family.eilertsen.rack.domain.model.BrandStore("Fischer", "Biltema"),
+            new family.eilertsen.rack.domain.model.BrandStore("Fischer", "Jula"));
     }
 
     @Test
@@ -351,6 +356,26 @@ class FilesystemShoppingListTest {
         assertThat(shopping.setOrdered(e.id(), false, null).orderRef()).isNull();
     }
 
+    @Test
+    void aBrandSoldInSeveralShopsOffersThemAll() throws IOException {
+        index.put(GARAGE, new Slot(A1, List.of(
+            branded("Logitech wireless mouse", "laser, nano receiver", "Logitech")), null, null));
+        Shopping shopping = new Shopping(store(), index, images);
+        shopping.setBrand("Logitech", "Komplett");
+        shopping.setBrand("logitech", "Amazon.es");
+        shopping.setBrand("Logitech", "komplett");          // already known: nothing new
+
+        assertThat(shopping.brands()).hasSize(2);
+        assertThat(shopping.hintFor(GARAGE, A1, 0)).hasValueSatisfying(h -> {
+            assertThat(h.store()).isEqualTo("Komplett");
+            assertThat(h.stores()).containsExactly("Komplett", "Amazon.es");
+            assertThat(h.because()).isEqualTo("Logitech is sold at Komplett and Amazon.es");
+        });
+        // With nothing typed, the line goes to the first; typed, to what was typed.
+        assertThat(shopping.addFromItem(GARAGE, A1, 0, null, null, null).store()).isEqualTo("Komplett");
+        assertThat(shopping.addFromItem(GARAGE, A1, 0, "Amazon.es", null, null).store()).isEqualTo("Amazon.es");
+    }
+
     private static Item branded(String name, String description, String brand) {
         return new Item(name, description, null, brand, null, 3, 0.9, List.of(), List.of(), "b.jpg",
             List.of("b.jpg"), List.of());
@@ -363,9 +388,10 @@ class FilesystemShoppingListTest {
         shopping.setBrand("anslut", "Jula");
         shopping.setBrand("Lexman", "Leroy");
         shopping.forgetBrand("LEXMAN");
+        shopping.forgetBrand("anslut", "clas ohlson");
 
         assertThat(new Shopping(store(), index, images).brands())
-            .containsExactly(new family.eilertsen.rack.domain.model.BrandStore("anslut", "Jula"));
+            .containsExactly(new family.eilertsen.rack.domain.model.BrandStore("Anslut", "Jula"));
     }
 
     private static Item item(String name, String description, String partNumber, String photo) {

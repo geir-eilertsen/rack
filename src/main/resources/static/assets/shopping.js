@@ -47,9 +47,10 @@
       +     '<input class="shop-qty" type="text" placeholder="How many">'
       +   '</div>'
       +   '<datalist id="' + list + '"></datalist>'
+      +   '<div class="shop-choices" hidden></div>'
       +   '<input class="shop-note" type="text" placeholder="Anything to remember? (e.g. the 6mm, not 8)">'
       +   '<label class="shop-remember" hidden><input type="checkbox" checked> '
-      +     'Remember that <b class="shop-brand"></b> is sold at this store</label>'
+      +     'Remember that <b class="shop-brand"></b> is <span class="shop-also"></span>sold at <b class="shop-at"></b></label>'
       +   '<button type="button" class="btn primary shop-add">Add to list</button>'
       +   '<p class="shop-status"></p>'
       + '</div>'
@@ -71,6 +72,28 @@
     const status = panel.querySelector('.shop-status');
     const datalist = panel.querySelector('datalist');
     const remember = panel.querySelector('.shop-remember');
+    const choices = panel.querySelector('.shop-choices');
+    let brand = null;                        // the item's recorded brand
+    let brandStores = [];                    // every store the rules name for it
+
+    // Offered whenever the store typed is not one already written down for
+    // the brand — beside them, never instead: Komplett selling Logitech does
+    // not stop Amazon selling it.
+    function offerRemember() {
+      const typed = store.value.trim();
+      const known = brandStores.some(s => s.toLowerCase() === typed.toLowerCase());
+      remember.hidden = !brand || !typed || known;
+      if (remember.hidden) return;
+      remember.querySelector('.shop-brand').textContent = brand;
+      remember.querySelector('.shop-also').textContent = brandStores.length ? 'also ' : '';
+      remember.querySelector('.shop-at').textContent = typed;
+    }
+    store.addEventListener('input', () => { offerRemember(); markChoice(); });
+
+    function markChoice() {
+      choices.querySelectorAll('button').forEach(b =>
+        b.classList.toggle('on', b.dataset.store.toLowerCase() === store.value.trim().toLowerCase()));
+    }
 
     panel.addEventListener('click', ev => ev.stopPropagation());
     panel.addEventListener('keydown', ev => ev.stopPropagation());
@@ -91,15 +114,27 @@
         .then(r => r.ok ? r.json() : null).catch(() => null)
         .then(h => {
           if (!h) return;
-          // A brand nobody has said a shop for yet: once the person names
-          // the shop, offer to remember it, so the next one fills itself in.
-          if (h.unplaced_brand) {
-            remember.querySelector('.shop-brand').textContent = h.unplaced_brand;
-            remember.hidden = false;
+          brand = h.brand || null;
+          brandStores = h.stores || [];
+          // Sold in more than one place: which today is the person's call,
+          // so every one is a tap away, the first filled in.
+          if (brandStores.length > 1) {
+            choices.innerHTML = brandStores.map(s =>
+              '<button type="button" class="chip" data-store="' + esc(s) + '">' + esc(s) + '</button>').join('');
+            choices.hidden = false;
+            choices.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+              store.value = b.dataset.store;
+              offerRemember();
+              markChoice();
+            }));
           }
-          if (!h.store || store.value) return;
-          store.value = h.store;
-          hint.textContent = 'Store filled in because ' + h.because + '. Keeps this item\'s photo and part number on the list.';
+          if (h.store && !store.value) {
+            store.value = h.store;
+            hint.textContent = (brandStores.length > 1 ? 'Pick a store: ' : 'Store filled in because ')
+              + h.because + '. Keeps this item\'s photo and part number on the list.';
+          }
+          offerRemember();
+          markChoice();
         });
     });
 
@@ -124,9 +159,9 @@
         status.innerHTML = 'On the list' + (entry.store ? ' for <b>' + esc(entry.store) + '</b>' : '')
           + '. <a href="/shopping.html' + (entry.store ? '#store=' + encodeURIComponent(entry.store) : '') + '">Open list</a>';
         if (!remember.hidden && store.value.trim() && remember.querySelector('input').checked) {
-          status.innerHTML += ' · Remembered ' + esc(remember.querySelector('.shop-brand').textContent)
-            + ' → ' + esc(store.value.trim()) + '.';
-          remember.hidden = true;            // the rule exists now
+          status.innerHTML += ' · Remembered ' + esc(brand) + ' → ' + esc(store.value.trim()) + '.';
+          brandStores = brandStores.concat([store.value.trim()]);   // the rule exists now
+          offerRemember();
         }
         note.value = '';
         qty.value = '';
