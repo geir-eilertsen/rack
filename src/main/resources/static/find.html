@@ -20,6 +20,7 @@
   <script src="/assets/itemdocs.js"></script>
   <script src="/assets/companions.js"></script>
   <script src="/assets/shopping.js"></script>
+  <script src="/assets/brands.js"></script>
   <style>
     .search { margin-bottom: 1rem; display: flex; gap: .4rem; }
     .search input { flex: 1; min-width: 0; font-size: 1.05rem; padding: .8rem 1rem; }
@@ -586,7 +587,7 @@
           '<label>Name</label><input class="f-name" type="text" value="' + esc(it.name || '') + '">' +
           '<label>Description</label><textarea class="f-description" rows="2">' + esc(it.description || '') + '</textarea>' +
           '<label>Part number</label><input class="f-part_number" type="text" value="' + esc(it.part_number || '') + '">' +
-          '<label>Brand</label><input class="f-brand" type="text" value="' + esc(it.brand || '') + '">' +
+          '<label>Brand</label><input class="f-brand" type="text" list="rack-brands" autocomplete="off" value="' + esc(it.brand || '') + '">' +
           '<label>Category</label><input class="f-category" type="text" value="' + esc(it.category || '') + '">' +
           '<label>Quantity</label><input class="f-qty_estimate" type="number" min="0" value="' + qty + '">' +
           '<label>Tags (comma separated)</label><input class="f-tags" type="text" value="' + esc(tagsCsv) + '">' +
@@ -972,6 +973,7 @@
         });
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         runSearch();
+        if (payload.brand.trim()) rackBrands.refresh();
       } catch (e) {
         status.className = 'status error';
         status.textContent = 'Save failed: ' + e.message;

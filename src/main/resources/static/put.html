@@ -19,6 +19,7 @@
   <script src="/assets/itemdocs.js"></script>
   <script src="/assets/companions.js"></script>
   <script src="/assets/shopping.js"></script>
+  <script src="/assets/brands.js"></script>
   <style>
     .current { list-style: none; padding: 0; margin: .5rem 0 0; }
     .current li { padding: .75rem .9rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: .5rem; background: var(--card); cursor: pointer; transition: background .12s ease, border-color .12s ease; }
@@ -978,7 +979,7 @@
           '<label>Name</label><input class="f-name" type="text" value="' + esc(it.name || '') + '">' +
           '<label>Description</label><textarea class="f-description" rows="2">' + esc(it.description || '') + '</textarea>' +
           '<label>Part number</label><input class="f-part_number" type="text" value="' + esc(it.part_number || '') + '">' +
-          '<label>Brand</label><input class="f-brand" type="text" value="' + esc(it.brand || '') + '">' +
+          '<label>Brand</label><input class="f-brand" type="text" list="rack-brands" autocomplete="off" value="' + esc(it.brand || '') + '">' +
           '<label>Category</label><input class="f-category" type="text" value="' + esc(it.category || '') + '">' +
           '<label>Quantity</label><input class="f-qty_estimate" type="number" min="0" value="' + qty + '">' +
           '<label>Tags (comma separated)</label><input class="f-tags" type="text" value="' + esc(tagsCsv) + '">' +
@@ -1141,6 +1142,7 @@
         if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
         const slot = await res.json();
         renderCurrent(slot.items || []);
+        if (payload.brand.trim()) rackBrands.refresh();
       } catch (e) {
         setStatus('error', 'Save failed: ' + e.message);
       }

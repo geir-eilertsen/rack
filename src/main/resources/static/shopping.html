@@ -12,6 +12,7 @@
   <script src="/assets/camera.js"></script>
   <script src="/assets/route.js"></script>
   <script src="/assets/shopping.js"></script>
+  <script src="/assets/brands.js"></script>
   <style>
     /* At the store, the store is the filter: tap "Leroy" and the page is what
        to pick up there, plus what can be bought anywhere. */
@@ -129,7 +130,7 @@
       <p>House brands tell rack where to buy more: an item whose text says the brand gets that store filled in when you add it to the list. An item that names a store outright (e.g. "Farnell 876-7670") needs no rule.</p>
       <ul id="brandList"></ul>
       <form id="brandForm">
-        <input id="bBrand" type="text" placeholder="Brand (e.g. Anslut)" required>
+        <input id="bBrand" type="text" placeholder="Brand (e.g. Anslut)" list="rack-brands" autocomplete="off" required>
         <input id="bStore" type="text" placeholder="Store (e.g. Jula)" list="storeList" required>
         <button class="btn" type="submit">Add</button>
       </form>
@@ -367,6 +368,7 @@
           body: JSON.stringify({ brand: $('bBrand').value, store: $('bStore').value })
         }));
         $('bBrand').value = ''; $('bStore').value = '';
+        rackBrands.refresh();
       });
       loadBrands();
 

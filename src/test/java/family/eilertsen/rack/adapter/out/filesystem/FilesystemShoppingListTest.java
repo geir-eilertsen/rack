@@ -251,6 +251,28 @@ class FilesystemShoppingListTest {
         assertThat(shopping.brands()).isEmpty();
     }
 
+    @Test
+    void knownBrandsAreWhatItemsAndRulesSayOnceEachInTheCommonSpelling() throws IOException {
+        index.put(GARAGE, new Slot(A1, List.of(
+            branded("GU10 bulb", "5W", "Anslut"),
+            branded("E27 bulb", "8W", "Anslut"),
+            branded("Plug", "6mm", " anslut "),
+            branded("Fuse", "10A", null)), null, null));
+        FilesystemShoppingList list = store();
+        new Shopping(list, index, images).setBrand("Lexman", "Leroy");
+        var registry = new family.eilertsen.rack.application.ContainerRegistry(
+            new family.eilertsen.rack.domain.port.ContainerStore() {
+                @Override public List<family.eilertsen.rack.domain.model.Container> loadAll() {
+                    return List.of(new family.eilertsen.rack.domain.model.Container(GARAGE, "Garage",
+                        family.eilertsen.rack.domain.model.ContainerLayout.linear(1, null), 1.0f, null, null, null));
+                }
+                @Override public void saveAll(List<family.eilertsen.rack.domain.model.Container> c) {}
+            });
+
+        assertThat(new family.eilertsen.rack.application.KnownBrands(registry, index, list).all())
+            .containsExactly("Anslut", "Lexman");
+    }
+
     private static Item branded(String name, String description, String brand) {
         return new Item(name, description, null, brand, null, 3, 0.9, List.of(), List.of(), "b.jpg",
             List.of("b.jpg"), List.of());
