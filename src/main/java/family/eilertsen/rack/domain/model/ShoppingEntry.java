@@ -37,6 +37,10 @@ import java.util.List;
  * it is on its way from Amazon, Komplett is no longer where it comes from.
  * {@code store} stays the first, so a line written before there was a choice
  * reads exactly as it did.
+ *
+ * <p>{@code brand} is the item's brand, copied with the rest, so a brand
+ * rule written after the line still reaches it: say Energizer is sold at
+ * Leroy and the batteries already on the list go on Leroy's list too.
  */
 public record ShoppingEntry(
     String id,
@@ -52,7 +56,8 @@ public record ShoppingEntry(
     Instant boughtAt,
     Instant orderedAt,
     String orderRef,
-    List<String> alsoAt
+    List<String> alsoAt,
+    String brand
 ) {
     public static final int MAX_TEXT = 2000;
 
@@ -67,6 +72,7 @@ public record ShoppingEntry(
         container = clean(container);
         slot = clean(slot);
         orderRef = clean(orderRef);
+        brand = clean(brand);
         List<String> rest = new ArrayList<>();
         if (alsoAt != null) {
             for (String other : alsoAt) {
@@ -84,13 +90,20 @@ public record ShoppingEntry(
                          String photo, String container, String slot, Instant addedAt, Instant boughtAt,
                          Instant orderedAt, String orderRef) {
         this(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, boughtAt, orderedAt,
-            orderRef, List.of());
+            orderRef, List.of(), null);
+    }
+
+    public ShoppingEntry(String id, String what, String store, String partNumber, String details, String qty,
+                         String photo, String container, String slot, Instant addedAt, Instant boughtAt,
+                         Instant orderedAt, String orderRef, List<String> alsoAt) {
+        this(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, boughtAt, orderedAt,
+            orderRef, alsoAt, null);
     }
 
     /** A line written before anything could be ordered. */
     public ShoppingEntry(String id, String what, String store, String partNumber, String details, String qty,
                          String photo, String container, String slot, Instant addedAt, Instant boughtAt) {
-        this(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, boughtAt, null, null, List.of());
+        this(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, boughtAt, null, null, List.of(), null);
     }
 
     private static String clean(String s) {
@@ -131,26 +144,35 @@ public record ShoppingEntry(
     /** Bought from, or ordered from, this one: the others no longer matter. */
     public ShoppingEntry narrowedTo(String shop) {
         return new ShoppingEntry(id, what, shop, partNumber, details, qty, photo, container, slot, addedAt, boughtAt,
-            orderedAt, orderRef, List.of());
+            orderedAt, orderRef, List.of(), brand);
+    }
+
+    /** Also to be had at {@code shop}, beside wherever it was to be had already. */
+    public ShoppingEntry alsoSoldAt(String shop) {
+        if (soldAt(shop)) return this;
+        List<String> more = new ArrayList<>(alsoAt);
+        if (store != null) more.add(shop);
+        return new ShoppingEntry(id, what, store == null ? shop : store, partNumber, details, qty, photo, container,
+            slot, addedAt, boughtAt, orderedAt, orderRef, more, brand);
     }
 
     public ShoppingEntry withBought(Instant at) {
         return new ShoppingEntry(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, at,
-            orderedAt, orderRef, alsoAt);
+            orderedAt, orderRef, alsoAt, brand);
     }
 
     public ShoppingEntry withOrdered(Instant at, String ref) {
         return new ShoppingEntry(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, boughtAt,
-            at, at == null ? null : ref, alsoAt);
+            at, at == null ? null : ref, alsoAt, brand);
     }
 
     public ShoppingEntry withPhoto(String name) {
         return new ShoppingEntry(id, what, store, partNumber, details, qty, name, container, slot, addedAt, boughtAt,
-            orderedAt, orderRef, alsoAt);
+            orderedAt, orderRef, alsoAt, brand);
     }
 
     public ShoppingEntry withText(String what, String store, String partNumber, String details, String qty) {
         return new ShoppingEntry(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, boughtAt,
-            orderedAt, orderRef, alsoAt);
+            orderedAt, orderRef, alsoAt, brand);
     }
 }

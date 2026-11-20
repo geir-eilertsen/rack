@@ -381,7 +381,8 @@ class FilesystemShoppingListTest {
 
         // Survives a restart, and every one of them is a known store.
         Shopping reopened = new Shopping(store(), index, images);
-        assertThat(reopened.all().get(0).stores()).containsExactly("Komplett", "Amazon.es");
+        // Elkjøp, learned on the second line, reached the first one too.
+        assertThat(reopened.all().get(0).stores()).containsExactly("Komplett", "Amazon.es", "Elkjøp");
         assertThat(reopened.stores()).contains("Amazon.es", "Elkjøp", "Komplett");
 
         // Ordered from one, it narrows to that one.
@@ -398,6 +399,32 @@ class FilesystemShoppingListTest {
         assertThat(e.alsoAt()).containsExactly("Amazon.es");
         assertThat(e.soldAt("amazon.es ")).isTrue();
         assertThat(e.soldAt("Jula")).isFalse();
+    }
+
+    @Test
+    void aBrandRuleWrittenAfterTheLineStillReachesIt() throws IOException {
+        // Filed before brands were read: the brand is only in the description.
+        index.put(GARAGE, new Slot(A1, List.of(
+            item("CR2016 coin cell batteries", "Energizer CR2016 lithium 3V coin cells", null, "cr.jpg"),
+            branded("AA batteries", "alkaline, 4-pack", "Energizer"),
+            item("Wall plugs", "6mm nylon", null, "wp.jpg")), null, null));
+        Shopping shopping = new Shopping(store(), index, images);
+        ShoppingEntry coins = shopping.addFromItem(GARAGE, A1, 0, "Jula", null, null);
+        ShoppingEntry aa = shopping.addFromItem(GARAGE, A1, 1, null, null, null);
+        ShoppingEntry plugs = shopping.addFromItem(GARAGE, A1, 2, null, null, null);
+        ShoppingEntry typed = shopping.add(new Shopping.Text("Energizer 9V", null, null, null, null), null, null);
+        ShoppingEntry gone = shopping.addFromItem(GARAGE, A1, 1, "Biltema", null, null);
+        shopping.setBought(gone.id(), true);
+
+        shopping.setBrand("energizer", "Leroy");
+
+        Map<String, ShoppingEntry> now = new HashMap<>();
+        shopping.all().forEach(e -> now.put(e.id(), e));
+        assertThat(now.get(coins.id()).stores()).containsExactly("Jula", "Leroy");   // beside, not instead
+        assertThat(now.get(aa.id()).stores()).containsExactly("Leroy");              // anywhere, now Leroy
+        assertThat(now.get(typed.id()).stores()).containsExactly("Leroy");           // typed in, named in its text
+        assertThat(now.get(plugs.id()).stores()).isEmpty();                          // not of the brand
+        assertThat(now.get(gone.id()).stores()).containsExactly("Biltema");          // already bought
     }
 
     private static Item branded(String name, String description, String brand) {

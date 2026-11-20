@@ -123,7 +123,7 @@ public class Shopping {
 
         String details = join(note, item.name() != null && !item.name().isBlank() ? item.description() : null);
         ShoppingEntry entry = new ShoppingEntry(newId(), what, store, item.partNumber(), details, qty,
-            null, container.value(), slotId.value(), Instant.now(clock), null, null, null, alsoAt);
+            null, container.value(), slotId.value(), Instant.now(clock), null, null, null, alsoAt, item.brand());
 
         String source = item.sourcePhoto();
         if (source != null) {
@@ -300,6 +300,7 @@ public class Shopping {
         List<BrandStore> current = list.brands();
         boolean known = current.stream().anyMatch(b ->
             b.brand().equalsIgnoreCase(rule.brand()) && b.store().equalsIgnoreCase(rule.store()));
+        reachOpenLines(rule);
         if (known) return current;
         String spelled = current.stream().map(BrandStore::brand).filter(b -> b.equalsIgnoreCase(rule.brand()))
             .findFirst().orElse(rule.brand());
@@ -307,6 +308,26 @@ public class Shopping {
         next.add(new BrandStore(spelled, rule.store()));
         list.saveBrands(next);
         return list.brands();
+    }
+
+    /**
+     * A rule written after a line was added still reaches it: every line not
+     * yet bought or ordered that is of this brand — by the brand copied from
+     * its item, or the brand named as a whole word in its own text, for lines
+     * typed in and items filed before brands were read — is also to be had at
+     * the rule's store. Added beside its other stores, never instead; a line
+     * for anywhere becomes a line for this store, since now it is known where.
+     */
+    private void reachOpenLines(BrandStore rule) {
+        for (ShoppingEntry e : list.all()) {
+            if (!e.open() || e.soldAt(rule.store()) || !ofBrand(e, rule.brand())) continue;
+            list.save(e.alsoSoldAt(rule.store()));
+        }
+    }
+
+    private static boolean ofBrand(ShoppingEntry e, String brand) {
+        if (e.brand() != null && (e.brand().equalsIgnoreCase(brand) || mentions(e.brand(), brand))) return true;
+        return mentions(String.join(" ", nonNull(e.what()), nonNull(e.details()), nonNull(e.partNumber())), brand);
     }
 
     /** One store for a brand, or with {@code store} null every store for it. */
