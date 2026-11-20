@@ -415,7 +415,15 @@
           const res = await (request || fetch('/shopping/places'));
           if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
           const body = await res.json();
-          if (Array.isArray(body)) places = body;
+          // Saving answers with the one spot saved, forgetting with the whole
+          // list; either way the list drawn is the list the server now holds.
+          if (Array.isArray(body)) {
+            places = body;
+          } else {
+            const all = await fetch('/shopping/places');
+            if (!all.ok) throw new Error(all.statusText);
+            places = await all.json();
+          }
           if (request) fillStores();
         } catch (e) {
           status.className = 'status error';
