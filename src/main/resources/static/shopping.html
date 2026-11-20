@@ -63,6 +63,7 @@
     .brands li button { border: none; background: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; }
     .brands form { display: flex; gap: .4rem; flex-wrap: wrap; }
     .brands form input { flex: 1; min-width: 7rem; font-size: 1rem; padding: .5rem .6rem; }
+    .brands form #pWhere { flex-basis: 100%; order: 1; }
     .here { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin: 0 0 .7rem; font-size: .95rem; }
     .here .btn { padding: .35rem .7rem; font-size: .85rem; }
     .here .quiet { color: var(--muted); font-size: .85rem; }
@@ -112,10 +113,12 @@
          position is never sent anywhere, only the spots you chose to save. -->
     <details class="brands" id="placesBox">
       <summary>Shops and where they are</summary>
-      <p>Standing in a shop, save the spot once. After that, opening the list there shows that shop's things. Your position is only compared on this phone; the shop spots are all rack keeps.</p>
+      <p>Standing in a shop, save the spot once — or paste where it is, for a shop you are not in. After that, opening the list there shows that shop's things. Your position is only compared on this phone; the shop spots are all rack keeps.</p>
+      <p class="quiet" id="notifyLine" hidden></p>
       <ul id="placeList"></ul>
       <form id="placeForm">
-        <input id="pStore" type="text" placeholder="Which shop are you in?" list="storeList" required>
+        <input id="pStore" type="text" placeholder="Which shop?" list="storeList" required>
+        <input id="pWhere" type="text" placeholder="Not there now? Paste coordinates or a Google Maps link" autocomplete="off">
         <button class="btn" type="submit" id="placeBtn">📍 Save my location</button>
       </form>
     </details>
@@ -493,13 +496,58 @@
         }
       }
 
+      // Pasted rather than measured: the shop is somewhere else, so there is
+      // no fix and no accuracy to keep — the spot is as good as the pin.
+      async function savePastedPlace(store, text) {
+        const p = rackShopping.parsePlace(text);
+        if (!p) {
+          status.className = 'status error';
+          status.textContent = /goo\.gl/.test(text)
+            ? 'A short maps.app.goo.gl link has no position in it — open it, then copy the full address from the browser bar (or long-press the pin and copy the numbers).'
+            : 'No position in that — paste numbers like 36.7181, -4.4627 or a Google Maps link.';
+          return false;
+        }
+        await loadPlaces(fetch('/shopping/places', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ store, lat: p.lat, lon: p.lon })
+        }));
+        status.className = 'status';
+        status.textContent = 'Saved: ' + store + ' at ' + p.lat.toFixed(5) + ', ' + p.lon.toFixed(5) + '.';
+        decide();
+        return true;
+      }
+
+      $('pWhere').addEventListener('input', () => {
+        $('placeBtn').textContent = $('pWhere').value.trim() ? '📍 Save this spot' : '📍 Save my location';
+      });
+
       $('placeForm').addEventListener('submit', async ev => {
         ev.preventDefault();
-        await savePlace($('pStore').value.trim());
+        const store = $('pStore').value.trim();
+        const where = $('pWhere').value.trim();
+        if (where) {
+          if (!(await savePastedPlace(store, where))) return;   // keep what was typed, to fix
+        } else {
+          await savePlace(store);
+        }
         $('pStore').value = '';
+        $('pWhere').value = '';
+        $('placeBtn').textContent = '📍 Save my location';
       });
 
       loadPlaces().then(locate);
+
+      // Said on the page because it is the one thing here that works with the
+      // page closed: Vaier's app reports the phone's position to Vaier's broker,
+      // and rack listens there.
+      fetch('/shopping/notify').then(r => r.ok ? r.json() : null).catch(() => null).then(n => {
+        if (!n) return;
+        const line = $('notifyLine');
+        line.textContent = n.on
+          ? 'Your phone also gets a message in the Vaier app when it arrives at a saved shop with things on the list for it — with this page closed. Each branch is its own spot: save one in every Leroy you use.'
+          : 'Messages on arrival are off: rack has no login to Vaier\'s broker.';
+        line.hidden = false;
+      });
 
       rackRoute.onChange(() => { autoPicked = false; draw(); drawHere(); });
       load();

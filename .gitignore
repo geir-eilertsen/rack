@@ -16,3 +16,6 @@ data/
 .env
 .env.*
 !.env.example
+
+# Vaier broker login for arrival messages (RACK_MQTT_*), read by the deploy
+notify.env

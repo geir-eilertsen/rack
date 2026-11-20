@@ -44,6 +44,12 @@ rack:
     # Only used to prefer suppliers that can actually deliver here. Which shops
     # is read off the inventory's own descriptions, never hardcoded.
     region: ${RACK_SHOPPING_REGION:Norway}
+  notify:
+    # Vaier's MQTT broker, e.g. ssl://mqtt.example.org:443, and a broker login
+    # made in Vaier's Settings. Blank: no phone positions, no messages.
+    mqtt-url: ${RACK_MQTT_URL:}
+    mqtt-username: ${RACK_MQTT_USERNAME:}
+    mqtt-password: ${RACK_MQTT_PASSWORD:}
   data-dir: ${RACK_DATA_DIR:./data}
   public-base-url: ${RACK_PUBLIC_BASE_URL:}
   ai:

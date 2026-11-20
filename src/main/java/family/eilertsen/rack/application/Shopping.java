@@ -179,8 +179,9 @@ public class Shopping {
     }
 
     /**
-     * The saved shop spots. Which one the phone is at is worked out on the
-     * phone, so its position never has to reach the server.
+     * The saved shop spots. The page works out which one it is at on the
+     * phone; {@link ShopArrivals} does the same with what Vaier's broker
+     * hears, and keeps none of it.
      */
     public List<ShopPlace> places() {
         return list.places();

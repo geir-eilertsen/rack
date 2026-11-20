@@ -121,5 +121,30 @@
     });
   }
 
-  window.rackShopping = { render, wire, storesOf };
+  /**
+   * A position typed or pasted by hand — for a shop you are not standing in,
+   * such as the Leroy in Spain before the trip. Takes "36.72, -4.42" and the
+   * links Google Maps shares: a dropped pin's "!3d…!4d…" first, because "@…"
+   * is only where the map was centred. Null when there is nothing to read.
+   */
+  function parsePlace(text) {
+    const t = String(text || '').trim();
+    if (!t) return null;
+    const num = '(-?\\d{1,3}(?:\\.\\d+)?)';
+    const tries = [
+      new RegExp('!3d' + num + '!4d' + num),
+      new RegExp('[?&](?:q|query|ll|center|destination)=' + num + '(?:,|%2C)\\s*' + num, 'i'),
+      new RegExp('@' + num + ',' + num),
+      new RegExp('^' + num + '\\s*[,;\\s]\\s*' + num + '$')
+    ];
+    for (const re of tries) {
+      const m = t.match(re);
+      if (!m) continue;
+      const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+      if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) return { lat, lon };
+    }
+    return null;
+  }
+
+  window.rackShopping = { render, wire, storesOf, parsePlace };
 })();

@@ -24,4 +24,13 @@ public record ShopPlace(String id, String store, double lat, double lon, Double 
         }
         if (accuracy != null && !(accuracy >= 0)) accuracy = null;
     }
+
+    /** How far a position is from this spot, in metres, along the ground. */
+    public double metresTo(double lat2, double lon2) {
+        double rad = Math.PI / 180;
+        double dLat = (lat2 - lat) * rad, dLon = (lon2 - lon) * rad;
+        double h = Math.pow(Math.sin(dLat / 2), 2)
+            + Math.cos(lat * rad) * Math.cos(lat2 * rad) * Math.pow(Math.sin(dLon / 2), 2);
+        return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
+    }
 }

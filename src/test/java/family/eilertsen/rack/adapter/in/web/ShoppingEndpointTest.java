@@ -3,7 +3,9 @@ package family.eilertsen.rack.adapter.in.web;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import family.eilertsen.rack.adapter.out.filesystem.FilesystemShoppingList;
+import family.eilertsen.rack.application.ShopArrivals;
 import family.eilertsen.rack.application.Shopping;
+import family.eilertsen.rack.domain.port.HouseInbox;
 import family.eilertsen.rack.domain.port.ImageStore;
 import family.eilertsen.rack.domain.port.PartIndex;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,12 +38,21 @@ class ShoppingEndpointTest {
     void setUp() throws Exception {
         mapper = new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
         mapper.findAndRegisterModules();
-        Shopping shopping = new Shopping(new FilesystemShoppingList(dataDir.toString(), mapper),
-            unused(PartIndex.class), unused(ImageStore.class));
-        mvc = MockMvcBuilders.standaloneSetup(new ShoppingController(shopping))
+        FilesystemShoppingList list = new FilesystemShoppingList(dataDir.toString(), mapper);
+        Shopping shopping = new Shopping(list, unused(PartIndex.class), unused(ImageStore.class));
+        ShopArrivals arrivals = new ShopArrivals(list, new HouseInbox() {
+            public boolean available() { return false; }
+            public boolean tell(String owner, String text) { return false; }
+        });
+        mvc = MockMvcBuilders.standaloneSetup(new ShoppingController(shopping, arrivals))
             .setControllerAdvice(new DomainErrors())
             .setMessageConverters(new org.springframework.http.converter.ByteArrayHttpMessageConverter(), new MappingJackson2HttpMessageConverter(mapper))
             .build();
+    }
+
+    @Test
+    void saysWhetherArrivalsAreTold() throws Exception {
+        mvc.perform(get("/shopping/notify")).andExpect(status().isOk()).andExpect(jsonPath("$.on").value(false));
     }
 
     @Test

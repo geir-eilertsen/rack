@@ -1,5 +1,6 @@
 package family.eilertsen.rack.adapter.in.web;
 
+import family.eilertsen.rack.application.ShopArrivals;
 import family.eilertsen.rack.application.Shopping;
 import family.eilertsen.rack.domain.model.BrandStore;
 import family.eilertsen.rack.domain.model.ShopPlace;
@@ -33,8 +34,19 @@ public class ShoppingController {
 
     private final Shopping shopping;
 
-    public ShoppingController(Shopping shopping) {
+    private final ShopArrivals arrivals;
+
+    public ShoppingController(Shopping shopping, ShopArrivals arrivals) {
         this.shopping = shopping;
+        this.arrivals = arrivals;
+    }
+
+    public record Notify(boolean on) {}
+
+    /** Whether rack can tell a phone it has arrived at a shop (through Vaier). */
+    @GetMapping("/shopping/notify")
+    public Notify notifyStatus() {
+        return new Notify(arrivals.on());
     }
 
     @GetMapping("/shopping")

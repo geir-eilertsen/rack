@@ -52,6 +52,12 @@
             <artifactId>pdfbox</artifactId>
             <version>3.0.5</version>
         </dependency>
+        <!-- Vaier's MQTT broker: phone positions in, house messages out. -->
+        <dependency>
+            <groupId>org.eclipse.paho</groupId>
+            <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
+            <version>1.2.5</version>
+        </dependency>
         <dependency>
             <groupId>com.google.zxing</groupId>
             <artifactId>core</artifactId>
