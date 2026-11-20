@@ -3,6 +3,7 @@ package family.eilertsen.rack.adapter.in.web;
 import family.eilertsen.rack.application.ShopArrivals;
 import family.eilertsen.rack.application.Shopping;
 import family.eilertsen.rack.domain.model.BrandStore;
+import family.eilertsen.rack.domain.model.Shop;
 import family.eilertsen.rack.domain.model.ShopPlace;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Framing;
@@ -90,6 +91,26 @@ public class ShoppingController {
         return shopping.stores();
     }
 
+    @GetMapping("/shopping/shops")
+    public List<Shop> shops() {
+        return shopping.shops();
+    }
+
+    /** Online or not, and the store's search address with {q} where the words go. */
+    // A plain body rather than a Shop, so a bad address is refused by Shop's
+    // own constructor with its own words instead of as an unreadable request.
+    public record NewShop(String name, Boolean online, String searchUrl) {}
+
+    @PostMapping("/shopping/shops")
+    public List<Shop> setShop(@RequestBody NewShop shop) {
+        return shopping.setShop(shop.name(), Boolean.TRUE.equals(shop.online()), shop.searchUrl());
+    }
+
+    @DeleteMapping("/shopping/shops")
+    public List<Shop> forgetShop(@RequestParam("name") String name) {
+        return shopping.forgetShop(name);
+    }
+
     @GetMapping("/shopping/brands")
     public List<BrandStore> brands() {
         return shopping.brands();
@@ -124,7 +145,9 @@ public class ShoppingController {
     }
 
     /** Any of the text fields, and {@code bought}; absent means unchanged. */
-    public record Patch(String what, String store, String partNumber, String details, String qty, Boolean bought) {}
+    /** {@code ordered} with {@code orderRef}: on its way; {@code bought}: in hand, or arrived. */
+    public record Patch(String what, String store, String partNumber, String details, String qty, Boolean bought,
+                        Boolean ordered, String orderRef) {}
 
     @PatchMapping("/shopping/{id}")
     public ShoppingEntry update(@PathVariable String id, @RequestBody Patch body) {
@@ -133,6 +156,7 @@ public class ShoppingController {
             || body.details() != null || body.qty() != null) {
             e = shopping.edit(id, new Shopping.Text(body.what(), body.store(), body.partNumber(), body.details(), body.qty()));
         }
+        if (body.ordered() != null) e = shopping.setOrdered(id, body.ordered(), body.orderRef());
         if (body.bought() != null) e = shopping.setBought(id, body.bought());
         if (e == null) throw new IllegalArgumentException("Nothing to change");
         return e;

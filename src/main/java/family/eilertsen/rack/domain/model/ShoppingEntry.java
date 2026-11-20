@@ -22,6 +22,12 @@ import java.time.Instant;
  *
  * <p>{@code store} is free text ("Leroy", "Biltema"), grouped on ignoring case.
  * Null means anywhere.
+ *
+ * <p>{@code orderedAt} is for a line bought where nothing is in your hands at
+ * the till: ordered online, it is on its way, and the line stays on the list
+ * as <em>ordered</em> until it arrives — which is {@code boughtAt}, the same
+ * moment a shop line is ticked off. {@code orderRef} is whatever identifies
+ * the order, typed by the person: an order number or a tracking link.
  */
 public record ShoppingEntry(
     String id,
@@ -34,7 +40,9 @@ public record ShoppingEntry(
     String container,
     String slot,
     Instant addedAt,
-    Instant boughtAt
+    Instant boughtAt,
+    Instant orderedAt,
+    String orderRef
 ) {
     public static final int MAX_TEXT = 2000;
 
@@ -48,6 +56,13 @@ public record ShoppingEntry(
         qty = clean(qty);
         container = clean(container);
         slot = clean(slot);
+        orderRef = clean(orderRef);
+    }
+
+    /** A line written before anything could be ordered. */
+    public ShoppingEntry(String id, String what, String store, String partNumber, String details, String qty,
+                         String photo, String container, String slot, Instant addedAt, Instant boughtAt) {
+        this(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, boughtAt, null, null);
     }
 
     private static String clean(String s) {
@@ -62,15 +77,33 @@ public record ShoppingEntry(
         return boughtAt != null;
     }
 
+    /** Ordered and not yet here: off the list of things to go and get, still on the list. */
+    public boolean ordered() {
+        return orderedAt != null && boughtAt == null;
+    }
+
+    /** Still to be got: neither in hand nor on its way. */
+    public boolean open() {
+        return boughtAt == null && orderedAt == null;
+    }
+
     public ShoppingEntry withBought(Instant at) {
-        return new ShoppingEntry(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, at);
+        return new ShoppingEntry(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, at,
+            orderedAt, orderRef);
+    }
+
+    public ShoppingEntry withOrdered(Instant at, String ref) {
+        return new ShoppingEntry(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, boughtAt,
+            at, at == null ? null : ref);
     }
 
     public ShoppingEntry withPhoto(String name) {
-        return new ShoppingEntry(id, what, store, partNumber, details, qty, name, container, slot, addedAt, boughtAt);
+        return new ShoppingEntry(id, what, store, partNumber, details, qty, name, container, slot, addedAt, boughtAt,
+            orderedAt, orderRef);
     }
 
     public ShoppingEntry withText(String what, String store, String partNumber, String details, String qty) {
-        return new ShoppingEntry(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, boughtAt);
+        return new ShoppingEntry(id, what, store, partNumber, details, qty, photo, container, slot, addedAt, boughtAt,
+            orderedAt, orderRef);
     }
 }

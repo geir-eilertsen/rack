@@ -65,6 +65,18 @@
     .brands form { display: flex; gap: .4rem; flex-wrap: wrap; }
     .brands form input { flex: 1; min-width: 7rem; font-size: 1rem; padding: .5rem .6rem; }
     .brands form #pWhere { flex-basis: 100%; order: 1; }
+    .entry .acts { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .4rem; }
+    .entry .acts .btn { padding: .3rem .65rem; font-size: .82rem; }
+    .entry .acts .link { border: none; background: none; padding: 0; font-size: .8rem; color: var(--muted);
+      text-decoration: underline; cursor: pointer; }
+    .entry.ordered { border-style: dashed; }
+    .entry .ref { overflow-wrap: anywhere; }
+    .shops li .kind { width: 1.4rem; text-align: center; }
+    .shops li .sub { display: block; font-size: .78rem; color: var(--muted); overflow-wrap: anywhere; }
+    .shops li span.edit { cursor: pointer; }
+    .shops form label.online { display: flex; align-items: center; gap: .35rem; font-size: .9rem; }
+    .shops form label.online input { flex: none; min-width: 0; width: auto; }
+    .shops form #sSearch { flex-basis: 100%; }
     .here { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin: 0 0 .7rem; font-size: .95rem; }
     .here .btn { padding: .35rem .7rem; font-size: .85rem; }
     .here .quiet { color: var(--muted); font-size: .85rem; }
@@ -124,6 +136,19 @@
       </form>
     </details>
 
+    <!-- Shops you order from, and how to search any shop. -->
+    <details class="brands shops" id="shopsBox">
+      <summary>Online shops and searches</summary>
+      <p>Mark a shop as online and its lines are ordered, then arrive, instead of being picked off a shelf — and it gets no spot to save or message on arrival. Give any shop its search address and every line for it gets a button that searches the shop for the part number, or the name. To find the address, search the shop's site for anything and copy what the browser shows, putting <code>{q}</code> where your words were — e.g. <code>https://www.amazon.de/s?k={q}</code>.</p>
+      <ul id="shopList"></ul>
+      <form id="shopForm">
+        <input id="sName" type="text" placeholder="Shop (e.g. Amazon)" list="storeList" autocomplete="off" required>
+        <label class="online"><input id="sOnline" type="checkbox"> Online</label>
+        <input id="sSearch" type="text" inputmode="url" placeholder="Search address with {q}, optional" autocomplete="off">
+        <button class="btn" type="submit">Save</button>
+      </form>
+    </details>
+
     <!-- The item says its brand; this says which shop the brand means. -->
     <details class="brands" id="brands">
       <summary>Which store sells which brand</summary>
@@ -141,6 +166,7 @@
     (function () {
       const ANYWHERE = '';            // the chip for lines with no store
       let entries = [];
+      let shops = [];                 // what is said about each store: online, search address
       let photo = null;               // the one picture for the line being typed
 
       const $ = id => document.getElementById(id);
@@ -151,6 +177,11 @@
           c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       }
       const key = s => (s || '').trim().toLowerCase();
+      const shopOf = store => store ? shops.find(s => key(s.name) === key(store)) : undefined;
+      const isOnline = store => !!(shopOf(store) || {}).online;
+      // Still to get: not in hand, not on its way.
+      const isOpen = e => !e.bought_at && !e.ordered_at;
+      const isOrdered = e => !e.bought_at && !!e.ordered_at;
 
       // The store you are at is in the address, so a home-screen shortcut or a
       // reload in the aisle comes back to the same filter.
@@ -188,7 +219,8 @@
         drawChips(stores);
 
         const at = chosen();
-        const open = entries.filter(e => !e.bought_at);
+        const open = entries.filter(isOpen);
+        const ordered = entries.filter(isOrdered);
         const bought = entries.filter(e => e.bought_at);
         // At a store: that store's lines, then whatever has no store at all.
         const here = e => at === null || key(e.store) === key(at) || !e.store;
@@ -196,25 +228,32 @@
         const host = $('list');
         let html = '';
         const shown = open.filter(here);
+        const coming = ordered.filter(here);
         if (!entries.length) {
           html = '<p class="empty">Nothing on the list.</p>';
         } else if (!shown.length) {
-          html = '<p class="empty">Nothing left to get' + (at ? ' at ' + esc(at) : '') + '.</p>';
+          html = '<p class="empty">Nothing left to ' + (at && isOnline(at) ? 'order' : 'get') + (at ? ' at ' + esc(at) : '') + '.</p>';
         } else {
           groups(shown, at).forEach(g => {
             html += '<div class="group-title">' + esc(g.title) + '</div>'
               + '<ul class="entries">' + g.items.map(entry).join('') + '</ul>';
           });
         }
+        if (coming.length) {
+          html += '<div class="group-title">On its way (' + coming.length + ')</div>'
+            + '<ul class="entries">' + coming.map(entry).join('') + '</ul>';
+        }
         const boughtHere = bought.filter(here);
         if (boughtHere.length) {
-          html += '<div class="done-bar"><div class="group-title">In the basket (' + boughtHere.length + ')</div>'
+          html += '<div class="done-bar"><div class="group-title">Got it (' + boughtHere.length + ')</div>'
             + '<button type="button" class="btn" id="clear">Clear bought</button></div>'
             + '<ul class="entries">' + boughtHere.map(entry).join('') + '</ul>';
         }
         host.innerHTML = html;
 
         host.querySelectorAll('.tick').forEach(cb => cb.addEventListener('change', () => tick(cb.dataset.id, cb.checked)));
+        host.querySelectorAll('.entry .unorder').forEach(b => b.addEventListener('click', () => unorder(b.dataset.id)));
+        host.querySelectorAll('.entry .reorder').forEach(b => b.addEventListener('click', () => orderRef(b.dataset.id)));
         host.querySelectorAll('.entry .drop').forEach(b => b.addEventListener('click', () => drop(b.dataset.id)));
         const clear = $('clear');
         if (clear) clear.addEventListener('click', clearBought);
@@ -222,7 +261,7 @@
 
       function drawChips(stores) {
         const host = $('stores');
-        const open = entries.filter(e => !e.bought_at);
+        const open = entries.filter(isOpen);
         const count = name => open.filter(e => key(e.store) === key(name)).length;
         const anywhere = open.filter(e => !e.store).length;
         if (!stores.length) { host.hidden = true; return; }
@@ -232,7 +271,7 @@
           '" data-store="' + (value === null ? '' : esc(value)) + '" data-all="' + (value === null) + '">' +
           esc(label) + (n != null ? '<span class="n">' + n + '</span>' : '') + '</button>';
         host.innerHTML = chip('All', null, open.length)
-          + stores.slice().sort((a, b) => a.localeCompare(b)).map(s => chip(s, s, count(s))).join('')
+          + stores.slice().sort((a, b) => a.localeCompare(b)).map(s => chip((isOnline(s) ? '🌐 ' : '') + s, s, count(s))).join('')
           + (anywhere ? chip('Anywhere', ANYWHERE, anywhere) : '');
         host.hidden = false;
         host.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
@@ -261,27 +300,78 @@
           ? '<a class="pic" href="/shopping/photos/' + encodeURIComponent(e.photo) + '" target="_blank">' +
               '<img loading="lazy" alt="" src="/shopping/photos/' + encodeURIComponent(e.photo) + '?w=320"></a>'
           : '';
-        const from = e.container
-          ? 'Same as in <a href="' + rackRoute.slotHref(e.container, e.slot) + '">' + esc(e.container) + (e.slot ? '/' + esc(e.slot) : '') + '</a>'
-          : '';
+        const where = e.container ? esc(e.container) + (e.slot ? '/' + esc(e.slot) : '') : '';
+        const href = e.container ? rackRoute.slotHref(e.container, e.slot) : '';
+        // Once it is in hand, the drawer it came from is where it goes: the
+        // step where a parcel gets opened and the index is never told.
+        const from = !e.container ? ''
+          : e.bought_at ? '' : 'Same as in <a href="' + href + '">' + where + '</a>';
         const added = e.added_at ? 'added ' + new Date(e.added_at).toLocaleDateString() : '';
-        return '<li class="entry' + (e.bought_at ? ' bought' : '') + '">' +
-          '<input type="checkbox" class="tick" data-id="' + esc(e.id) + '"' + (e.bought_at ? ' checked' : '') + ' title="Got it">' +
+        const sent = e.ordered_at ? 'ordered ' + new Date(e.ordered_at).toLocaleDateString() : '';
+        const ref = e.order_ref
+          ? (/^https?:\/\//i.test(e.order_ref)
+              ? '<a class="ref" href="' + esc(e.order_ref) + '" target="_blank" rel="noopener noreferrer">track</a>'
+              : '<span class="ref">order ' + esc(e.order_ref) + '</span>')
+          : '';
+        const shop = shopOf(e.store);
+        const acts = [];
+        if (isOpen(e) && shop && shop.search_url) {
+          // The shop's own search, never a product page rack made up.
+          const q = e.part_number || e.what;
+          acts.push('<a class="btn" target="_blank" rel="noopener noreferrer" href="'
+            + esc(shop.search_url.split('{q}').join(encodeURIComponent(q))) + '">🔎 Search ' + esc(shop.name) + '</a>');
+        }
+        if (isOrdered(e)) {
+          acts.push('<button type="button" class="link reorder" data-id="' + esc(e.id) + '">' + (e.order_ref ? 'change order no.' : 'add order no.') + '</button>');
+          acts.push('<button type="button" class="link unorder" data-id="' + esc(e.id) + '">not ordered after all</button>');
+        }
+        if (e.bought_at && e.container) {
+          acts.push('<a class="btn primary" href="' + href + '">Put it in ' + where + '</a>');
+        }
+        const online = isOnline(e.store);
+        const tickTitle = e.bought_at ? 'Got it' : isOrdered(e) ? 'Arrived' : online ? 'Ordered' : 'Got it';
+        return '<li class="entry' + (e.bought_at ? ' bought' : '') + (isOrdered(e) ? ' ordered' : '') + '">' +
+          '<input type="checkbox" class="tick" data-id="' + esc(e.id) + '"' + (e.bought_at ? ' checked' : '') + ' title="' + tickTitle + '" aria-label="' + tickTitle + '">' +
           pic +
           '<div class="body">' +
             '<div class="what">' + esc(e.what) + (e.qty ? ' <span class="qty">× ' + esc(e.qty) + '</span>' : '') + '</div>' +
             (e.part_number ? '<div class="pn">' + esc(e.part_number) + '</div>' : '') +
             (e.details ? '<div class="details">' + esc(e.details) + '</div>' : '') +
-            '<div class="meta">' + [from, added].filter(Boolean).join(' · ') + '</div>' +
+            '<div class="meta">' + [from, sent || added, ref].filter(Boolean).join(' · ') + '</div>' +
+            (acts.length ? '<div class="acts">' + acts.join('') + '</div>' : '') +
           '</div>' +
           '<button type="button" class="drop" data-id="' + esc(e.id) + '" title="Remove from the list">&times;</button>' +
         '</li>';
       }
 
-      async function tick(id, bought) {
-        await change(fetch('/shopping/' + encodeURIComponent(id), {
+      // One box, three meanings. A line for an online shop is ticked once when
+      // it is ordered and again when it arrives; unticking an arrived line puts
+      // it back on its way, since it was ordered all the same.
+      async function tick(id, checked) {
+        const e = entries.find(x => x.id === id);
+        if (checked && e && isOpen(e) && isOnline(e.store)) {
+          const ref = prompt('Ordered from ' + e.store + '. Order number or tracking link? (optional)', '');
+          if (ref === null) { draw(); return; }        // cancelled: leave it as it was
+          return patch(id, { ordered: true, order_ref: ref.trim() || null });
+        }
+        await patch(id, { bought: checked });
+      }
+
+      async function orderRef(id) {
+        const e = entries.find(x => x.id === id);
+        const ref = prompt('Order number or tracking link', (e && e.order_ref) || '');
+        if (ref === null) return;
+        await patch(id, { ordered: true, order_ref: ref.trim() || null });
+      }
+
+      async function unorder(id) {
+        await patch(id, { ordered: false });
+      }
+
+      function patch(id, body) {
+        return change(fetch('/shopping/' + encodeURIComponent(id), {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bought })
+          body: JSON.stringify(body)
         }));
       }
 
@@ -354,6 +444,54 @@
           btn.disabled = false;
         }
       });
+
+      async function loadShops(request) {
+        try {
+          const res = await (request || fetch('/shopping/shops'));
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+          shops = await res.json();
+          if (request) fillStores();
+        } catch (e) {
+          status.className = 'status error';
+          status.textContent = 'Shops: ' + e.message;
+          return false;
+        }
+        drawShops();
+        draw();
+        drawHere();
+        return true;
+      }
+
+      function drawShops() {
+        $('shopList').innerHTML = shops.length
+          ? shops.map(s => '<li><span class="kind">' + (s.online ? '🌐' : '🏬') + '</span>' +
+              '<span class="edit" data-name="' + esc(s.name) + '"><b>' + esc(s.name) + '</b>' + (s.online ? ' · online' : '') +
+              (s.search_url ? '<span class="sub">' + esc(s.search_url) + '</span>' : '') + '</span>' +
+              '<button type="button" data-name="' + esc(s.name) + '" title="Forget this">&times;</button></li>').join('')
+          : '<li><span class="empty">Nothing said about any shop yet.</span></li>';
+        $('shopList').querySelectorAll('button').forEach(b => b.addEventListener('click', () =>
+          loadShops(fetch('/shopping/shops?name=' + encodeURIComponent(b.dataset.name), { method: 'DELETE' }))));
+        // Tap one to change it: the form is the editor.
+        $('shopList').querySelectorAll('.edit').forEach(el => el.addEventListener('click', () => {
+          const s = shopOf(el.dataset.name);
+          $('sName').value = s.name;
+          $('sOnline').checked = !!s.online;
+          $('sSearch').value = s.search_url || '';
+          $('sSearch').focus();
+        }));
+      }
+
+      $('shopForm').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const ok = await loadShops(fetch('/shopping/shops', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: $('sName').value, online: $('sOnline').checked, search_url: $('sSearch').value })
+        }));
+        if (!ok) return;                                  // keep what was typed, to fix
+        status.className = 'status'; status.textContent = '';
+        $('sName').value = ''; $('sOnline').checked = false; $('sSearch').value = '';
+      });
+      loadShops();
 
       async function loadBrands(request) {
         try {
@@ -483,7 +621,9 @@
       function drawHere() {
         const host = $('here');
         const at = chosen();
-        if (near && at !== null && key(at) === key(near.store)) {
+        if (at && isOnline(at)) {
+          host.innerHTML = '🌐 <b>' + esc(at) + '</b> is online — tick a line when you order it, and again when it arrives.';
+        } else if (near && at !== null && key(at) === key(near.store)) {
           host.innerHTML = '📍 You\'re at <b>' + esc(near.store) + '</b>';
         } else if (fix && at) {
           // Filtered to a shop the phone is not near any saved spot of: the

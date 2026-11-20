@@ -4,6 +4,7 @@ import family.eilertsen.rack.domain.model.BrandStore;
 import family.eilertsen.rack.domain.model.ContainerId;
 import family.eilertsen.rack.domain.model.Framing;
 import family.eilertsen.rack.domain.model.Item;
+import family.eilertsen.rack.domain.model.Shop;
 import family.eilertsen.rack.domain.model.ShopPlace;
 import family.eilertsen.rack.domain.model.ShoppingEntry;
 import family.eilertsen.rack.domain.model.Slot;
@@ -229,6 +230,7 @@ public class Shopping {
         list.all().forEach(e -> countSpelling(spellings, e.store()));
         list.brands().forEach(b -> countSpelling(spellings, b.store()));
         list.places().forEach(p -> countSpelling(spellings, p.store()));
+        list.shops().forEach(s -> countSpelling(spellings, s.name()));
         List<String> stores = new ArrayList<>();
         for (Map<String, Integer> forms : spellings.values()) {
             stores.add(forms.entrySet().stream()
@@ -280,6 +282,9 @@ public class Shopping {
 
     /** "I'm at Jula": the phone's position, saved as one of Jula's spots. */
     public ShopPlace savePlace(String store, double lat, double lon, Double accuracy) {
+        shop(store).filter(Shop::online).ifPresent(s -> {
+            throw new IllegalArgumentException(s.name() + " is an online shop — there is nowhere to stand in it");
+        });
         ShopPlace place = new ShopPlace(newId(), store, lat, lon, accuracy, Instant.now(clock));
         List<ShopPlace> next = new ArrayList<>(list.places());
         next.add(place);
@@ -290,6 +295,58 @@ public class Shopping {
     public List<ShopPlace> forgetPlace(String id) {
         list.savePlaces(list.places().stream().filter(p -> !p.id().equals(id)).toList());
         return list.places();
+    }
+
+    public List<Shop> shops() {
+        return list.shops();
+    }
+
+    /** What is said about {@code store}, matched ignoring case; empty for a store nobody has described. */
+    public Optional<Shop> shop(String store) {
+        if (store == null || store.isBlank()) return Optional.empty();
+        return list.shops().stream().filter(s -> s.named(store)).findFirst();
+    }
+
+    /**
+     * Says whether a store is online and how to search it, replacing what was
+     * said before under any spelling. Keeps the spelling already in use when
+     * there is one, so "amazon" typed in a hurry does not rename "Amazon".
+     */
+    public List<Shop> setShop(String name, boolean online, String searchUrl) {
+        Shop given = new Shop(name, online, searchUrl);
+        List<Shop> next = new ArrayList<>();
+        boolean replaced = false;
+        for (Shop s : list.shops()) {
+            if (s.named(given.name())) {
+                next.add(new Shop(s.name(), given.online(), given.searchUrl()));
+                replaced = true;
+            } else {
+                next.add(s);
+            }
+        }
+        if (!replaced) next.add(given);
+        next.sort((a, b) -> a.name().compareToIgnoreCase(b.name()));
+        list.saveShops(next);
+        return list.shops();
+    }
+
+    public List<Shop> forgetShop(String name) {
+        list.saveShops(list.shops().stream().filter(s -> !s.named(name == null ? "" : name)).toList());
+        return list.shops();
+    }
+
+    /**
+     * Ordered, with whatever identifies the order — or, with {@code ordered}
+     * false, not ordered after all. Arriving is {@link #setBought}: an ordered
+     * line that arrives is in hand exactly as a ticked-off one is.
+     */
+    public ShoppingEntry setOrdered(String id, boolean ordered, String ref) {
+        ShoppingEntry e = get(id);
+        ShoppingEntry next = ordered
+            ? e.withOrdered(e.orderedAt() != null ? e.orderedAt() : Instant.now(clock), ref != null ? ref : e.orderRef())
+            : e.withOrdered(null, null);
+        list.save(next);
+        return next;
     }
 
     public ShoppingEntry edit(String id, Text text) {

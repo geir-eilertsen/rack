@@ -75,6 +75,16 @@ class ShopArrivalsTest {
     }
 
     @Test
+    void aLineAlreadyOrderedIsNotOneToPickUp() {
+        need("GU10 bulb", "Leroy", null);
+        list.save(new ShoppingEntry("ordered1", "Wall plugs", "Leroy", null, null, null, null, null, null,
+            Instant.EPOCH, null, Instant.EPOCH, "Order 4411"));
+
+        assertThat(arrivals.position("pixel", "geir", LEROY_A_LAT, LEROY_A_LON, 10.0))
+            .contains("At Leroy: 1 thing on the list — GU10 bulb.");
+    }
+
+    @Test
     void anyBranchSavedUnderTheNameCounts() {
         need("GU10 bulb", "Leroy", null);
         arrivals.position("pixel", "geir", LEROY_B_LAT, LEROY_B_LON, 15.0);

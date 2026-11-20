@@ -2,6 +2,7 @@ package family.eilertsen.rack.domain.port;
 
 import family.eilertsen.rack.domain.model.BrandStore;
 import family.eilertsen.rack.domain.model.Framing;
+import family.eilertsen.rack.domain.model.Shop;
 import family.eilertsen.rack.domain.model.ShopPlace;
 import family.eilertsen.rack.domain.model.ShoppingEntry;
 
@@ -42,4 +43,9 @@ public interface ShoppingList {
     List<ShopPlace> places();
 
     void savePlaces(List<ShopPlace> places);
+
+    /** What is known about each store beyond its name: online or not, how to search it. */
+    List<Shop> shops();
+
+    void saveShops(List<Shop> shops);
 }

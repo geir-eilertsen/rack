@@ -290,6 +290,67 @@ class FilesystemShoppingListTest {
         assertThat(shopping.stores()).containsExactly("Biltema", "Farnell", "Jula", "Leroy");
     }
 
+    @Test
+    void anOnlineShopAndItsSearchSurviveARestartUnderTheSpellingInUse() throws IOException {
+        Shopping shopping = new Shopping(store(), index, images);
+        shopping.setShop("Amazon", true, null);
+        shopping.setShop("amazon", true, "https://www.amazon.de/s?k={q}");
+        shopping.setShop("Jula", false, "https://www.jula.no/search?query={q}");
+
+        Shopping reopened = new Shopping(store(), index, images);
+        assertThat(reopened.shops()).containsExactly(
+            new family.eilertsen.rack.domain.model.Shop("Amazon", true, "https://www.amazon.de/s?k={q}"),
+            new family.eilertsen.rack.domain.model.Shop("Jula", false, "https://www.jula.no/search?query={q}"));
+        assertThat(reopened.stores()).containsExactly("Amazon", "Jula");
+
+        reopened.forgetShop("JULA");
+        assertThat(reopened.shops()).extracting(family.eilertsen.rack.domain.model.Shop::name).containsExactly("Amazon");
+    }
+
+    @Test
+    void aSearchAddressIsAWebAddressWithSomewhereForTheWords() throws IOException {
+        Shopping shopping = new Shopping(store(), index, images);
+        assertThatThrownBy(() -> shopping.setShop("Evil", true, "javascript:alert('{q}')"))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> shopping.setShop("Amazon", true, "https://www.amazon.de/"))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("{q}");
+        assertThat(shopping.shops()).isEmpty();
+    }
+
+    @Test
+    void anOnlineShopHasNoSpotToSave() throws IOException {
+        Shopping shopping = new Shopping(store(), index, images);
+        shopping.setShop("Amazon", true, null);
+        assertThatThrownBy(() -> shopping.savePlace("amazon", 59.9, 10.7, 10.0))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("online");
+        assertThat(shopping.savePlace("Jula", 59.9, 10.7, 10.0).store()).isEqualTo("Jula");
+    }
+
+    @Test
+    void anOrderIsOnItsWayUntilItArrives() throws IOException {
+        Shopping shopping = new Shopping(store(), index, images);
+        ShoppingEntry e = shopping.add(new Shopping.Text("Flux pen", "Amazon", null, null, null), null, null);
+        assertThat(e.open()).isTrue();
+
+        ShoppingEntry ordered = shopping.setOrdered(e.id(), true, "302-1234567");
+        assertThat(ordered.ordered()).isTrue();
+        assertThat(ordered.open()).isFalse();
+        // Saying it again — adding a tracking link — keeps when it was ordered.
+        ShoppingEntry again = shopping.setOrdered(e.id(), true, "https://track.example/302");
+        assertThat(again.orderedAt()).isEqualTo(ordered.orderedAt());
+        assertThat(again.orderRef()).isEqualTo("https://track.example/302");
+
+        ShoppingEntry arrived = shopping.setBought(e.id(), true);
+        assertThat(arrived.ordered()).isFalse();
+        assertThat(arrived.bought()).isTrue();
+
+        ShoppingEntry back = new Shopping(store(), index, images).all().get(0);
+        assertThat(back.orderedAt()).isEqualTo(ordered.orderedAt());
+        assertThat(back.orderRef()).isEqualTo("https://track.example/302");
+
+        assertThat(shopping.setOrdered(e.id(), false, null).orderRef()).isNull();
+    }
+
     private static Item branded(String name, String description, String brand) {
         return new Item(name, description, null, brand, null, 3, 0.9, List.of(), List.of(), "b.jpg",
             List.of("b.jpg"), List.of());

@@ -108,7 +108,8 @@ public class ShopArrivals {
      * walking into Jula is not news.
      */
     Optional<String> message(String store) {
-        List<ShoppingEntry> open = list.all().stream().filter(e -> !e.bought()).toList();
+        // An ordered line is on its way, not something to pick up here.
+        List<ShoppingEntry> open = list.all().stream().filter(ShoppingEntry::open).toList();
         List<ShoppingEntry> here = open.stream().filter(e -> e.store() != null && key(e.store()).equals(key(store))).toList();
         if (here.isEmpty()) return Optional.empty();
         long anywhere = open.stream().filter(e -> e.store() == null).count();
